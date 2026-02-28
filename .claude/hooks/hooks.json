@@ -1,0 +1,29 @@
+{
+  "description": "Slopworks development hooks: session context + C# validation",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash $CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "You are validating a file write/edit in the Slopworks Unity game project. Check the file path and content for these critical mistakes:\n\n1. Is a ScriptableObject field being SET at runtime (e.g., `someSO.itemId = ...`)? SOs are read-only. Mutation should happen on ItemInstance struct instead.\n2. Is GetComponent, FindObjectOfType, or FindObjectsOfType being called inside Update() or FixedUpdate() without caching? Cache in Awake/Start.\n3. Is belt item data being stored as spawned NetworkObjects (one per item) instead of a SyncList<BeltItem>?\n4. Is simulation logic (belt tick, machine tick, power calculation) running without an `if (!IsServerInitialized) return;` guard?\n5. Is there a direct reference to a GameObject or Component in another scene (different .unity file)? Use GameEventSO instead.\n6. Is an RPC being used to sync persistent state that a late-joining player needs? Use SyncVar/NetworkList instead.\n\nIf the file is not a C# file, or if none of these issues are present, respond: APPROVE\nIf an issue is found, respond: WARN: [brief description of the specific problem and what to do instead]",
+            "timeout": 20
+          }
+        ]
+      }
+    ]
+  }
+}
