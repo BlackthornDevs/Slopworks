@@ -35,21 +35,21 @@ public class BuildingPlacementService
     /// Place a machine on the grid. Creates the Machine simulation object, registers
     /// port nodes at the rotated port positions, and auto-wires compatible neighbors.
     /// </summary>
-    public PlacementResult PlaceMachine(MachineDefinitionSO def, Vector2Int cell, int rotation)
+    public PlacementResult PlaceMachine(MachineDefinitionSO def, Vector2Int cell, int rotation, int level = 0)
     {
         var effectiveSize = GetEffectiveSize(def.size, rotation);
 
-        if (!_grid.CanPlace(cell, effectiveSize))
+        if (!_grid.CanPlace(cell, effectiveSize, level))
             return null;
 
-        var buildingData = new BuildingData(def.machineId, cell, effectiveSize, rotation);
-        _grid.Place(cell, effectiveSize, buildingData);
+        var buildingData = new BuildingData(def.machineId, cell, effectiveSize, rotation, level);
+        _grid.Place(cell, effectiveSize, level, buildingData);
 
         var machine = new Machine(def);
         _simulation.RegisterMachine(machine);
         _simulationObjects[buildingData] = machine;
 
-        var ports = CreatePortNodes(def.ports, cell, rotation, PortOwnerType.Machine, machine);
+        var ports = CreatePortNodes(def.ports, cell, rotation, PortOwnerType.Machine, machine, level);
         RegisterAndResolve(ports);
 
         return new PlacementResult(buildingData, machine, ports);
@@ -58,21 +58,21 @@ public class BuildingPlacementService
     /// <summary>
     /// Place a storage container on the grid.
     /// </summary>
-    public PlacementResult PlaceStorage(StorageDefinitionSO def, Vector2Int cell, int rotation)
+    public PlacementResult PlaceStorage(StorageDefinitionSO def, Vector2Int cell, int rotation, int level = 0)
     {
         var effectiveSize = GetEffectiveSize(def.size, rotation);
 
-        if (!_grid.CanPlace(cell, effectiveSize))
+        if (!_grid.CanPlace(cell, effectiveSize, level))
             return null;
 
-        var buildingData = new BuildingData(def.storageId, cell, effectiveSize, rotation);
-        _grid.Place(cell, effectiveSize, buildingData);
+        var buildingData = new BuildingData(def.storageId, cell, effectiveSize, rotation, level);
+        _grid.Place(cell, effectiveSize, level, buildingData);
 
         var storage = new StorageContainer(def.slotCount, def.maxStackSize);
         _simulationObjects[buildingData] = storage;
 
         var ports = def.ports != null
-            ? CreatePortNodes(def.ports, cell, rotation, PortOwnerType.Storage, storage)
+            ? CreatePortNodes(def.ports, cell, rotation, PortOwnerType.Storage, storage, level)
             : new List<PortNode>();
 
         RegisterAndResolve(ports);
@@ -84,7 +84,7 @@ public class BuildingPlacementService
     /// Place a belt on the grid from startCell to endCell. Must be a straight line
     /// (same X or same Z). Creates a BeltSegment with port nodes at both endpoints.
     /// </summary>
-    public PlacementResult PlaceBelt(Vector2Int startCell, Vector2Int endCell)
+    public PlacementResult PlaceBelt(Vector2Int startCell, Vector2Int endCell, int level = 0)
     {
         if (startCell == endCell)
             return null;
@@ -104,16 +104,16 @@ public class BuildingPlacementService
         for (int i = 0; i <= lengthInTiles; i++)
         {
             var checkCell = startCell + direction * i;
-            if (!_grid.CanPlace(checkCell, Vector2Int.one))
+            if (!_grid.CanPlace(checkCell, Vector2Int.one, level))
                 return null;
         }
 
         // Place all cells on the grid
-        var buildingData = new BuildingData("belt", startCell, new Vector2Int(1, 1), 0);
+        var buildingData = new BuildingData("belt", startCell, new Vector2Int(1, 1), 0, level);
         for (int i = 0; i <= lengthInTiles; i++)
         {
             var placeCell = startCell + direction * i;
-            _grid.Place(placeCell, Vector2Int.one, buildingData);
+            _grid.Place(placeCell, Vector2Int.one, level, buildingData);
         }
 
         var belt = new BeltSegment(lengthInTiles);
@@ -124,8 +124,8 @@ public class BuildingPlacementService
         // Output port at end, facing forward (items exit ahead)
         var ports = new List<PortNode>
         {
-            new PortNode(startCell, -direction, PortType.Input, PortOwnerType.Belt, belt),
-            new PortNode(endCell, direction, PortType.Output, PortOwnerType.Belt, belt)
+            new PortNode(startCell, -direction, PortType.Input, PortOwnerType.Belt, belt, level: level),
+            new PortNode(endCell, direction, PortType.Output, PortOwnerType.Belt, belt, level: level)
         };
 
         RegisterAndResolve(ports);
@@ -159,7 +159,7 @@ public class BuildingPlacementService
             _simulation.UnregisterBelt(belt);
 
         // Remove from grid
-        _grid.Remove(data.Origin, data.Size);
+        _grid.Remove(data.Origin, data.Size, data.Level);
         _simulationObjects.Remove(data);
     }
 
@@ -168,7 +168,8 @@ public class BuildingPlacementService
         Vector2Int buildingOrigin,
         int rotation,
         PortOwnerType ownerType,
-        object owner)
+        object owner,
+        int level = 0)
     {
         var ports = new List<PortNode>();
         if (portDefs == null)
@@ -186,7 +187,7 @@ public class BuildingPlacementService
                 : CountPortsBefore(portDefs, i, PortType.Output);
 
             ports.Add(new PortNode(
-                worldCell, rotatedDir, def.type, ownerType, owner, slotIndex));
+                worldCell, rotatedDir, def.type, ownerType, owner, slotIndex, level));
         }
 
         return ports;

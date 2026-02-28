@@ -12,6 +12,7 @@ public class FoundationDefinitionSO : ScriptableObject, IPlaceableDefinition
     public Vector2Int size = new Vector2Int(1, 1);
     public GameObject prefab;
     public Sprite icon;
+    public bool generatesSnapPoints = true;
 
     public string PlaceableId => foundationId;
     Vector2Int IPlaceableDefinition.Size => size;

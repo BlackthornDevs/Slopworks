@@ -2,27 +2,38 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// Spatial lookup for port nodes on the factory grid. Stores ports by grid cell
+/// Spatial lookup for port nodes on the factory grid. Stores ports by (cell, level)
 /// for O(1) neighbor queries when resolving connections.
 /// </summary>
 public class PortNodeRegistry
 {
-    private readonly Dictionary<Vector2Int, List<PortNode>> _portsByCell = new();
+    private readonly Dictionary<Vector3Int, List<PortNode>> _portsByCell = new();
 
     /// <summary>
     /// Total number of registered port nodes.
     /// </summary>
     public int Count { get; private set; }
 
+    private static Vector3Int GetKey(PortNode node)
+    {
+        return new Vector3Int(node.Cell.x, node.Cell.y, node.Level);
+    }
+
+    private static Vector3Int GetKey(Vector2Int cell, int level)
+    {
+        return new Vector3Int(cell.x, cell.y, level);
+    }
+
     /// <summary>
-    /// Register a port node at its grid cell.
+    /// Register a port node at its grid cell and level.
     /// </summary>
     public void Register(PortNode node)
     {
-        if (!_portsByCell.TryGetValue(node.Cell, out var list))
+        var key = GetKey(node);
+        if (!_portsByCell.TryGetValue(key, out var list))
         {
             list = new List<PortNode>();
-            _portsByCell[node.Cell] = list;
+            _portsByCell[key] = list;
         }
         list.Add(node);
         Count++;
@@ -33,31 +44,42 @@ public class PortNodeRegistry
     /// </summary>
     public void Unregister(PortNode node)
     {
-        if (_portsByCell.TryGetValue(node.Cell, out var list))
+        var key = GetKey(node);
+        if (_portsByCell.TryGetValue(key, out var list))
         {
             if (list.Remove(node))
             {
                 Count--;
                 if (list.Count == 0)
-                    _portsByCell.Remove(node.Cell);
+                    _portsByCell.Remove(key);
             }
         }
     }
 
     /// <summary>
-    /// Get all port nodes at a specific grid cell. Returns empty list if none.
+    /// Get all port nodes at a specific grid cell on level 0.
+    /// Backward-compatible wrapper.
     /// </summary>
     public IReadOnlyList<PortNode> GetPortsAt(Vector2Int cell)
     {
-        if (_portsByCell.TryGetValue(cell, out var list))
+        return GetPortsAt(cell, 0);
+    }
+
+    /// <summary>
+    /// Get all port nodes at a specific grid cell and level.
+    /// </summary>
+    public IReadOnlyList<PortNode> GetPortsAt(Vector2Int cell, int level)
+    {
+        var key = GetKey(cell, level);
+        if (_portsByCell.TryGetValue(key, out var list))
             return list;
         return System.Array.Empty<PortNode>();
     }
 
     /// <summary>
     /// Find a port that is compatible with the given port for connection.
-    /// A compatible port is at cell + direction, faces the opposite direction,
-    /// and has the complementary type (Input matches Output).
+    /// A compatible port is at cell + direction on the same level, faces the
+    /// opposite direction, and has the complementary type (Input matches Output).
     /// Returns null if no compatible port found.
     /// </summary>
     public PortNode FindCompatiblePort(PortNode node)
@@ -66,7 +88,7 @@ public class PortNodeRegistry
         var oppositeDir = -node.Direction;
         var complementaryType = node.Type == PortType.Input ? PortType.Output : PortType.Input;
 
-        var portsAtTarget = GetPortsAt(targetCell);
+        var portsAtTarget = GetPortsAt(targetCell, node.Level);
         for (int i = 0; i < portsAtTarget.Count; i++)
         {
             var candidate = portsAtTarget[i];

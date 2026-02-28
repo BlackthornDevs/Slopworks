@@ -41,6 +41,11 @@ public class PortNode
     public int SlotIndex { get; }
 
     /// <summary>
+    /// The floor level this port exists on.
+    /// </summary>
+    public int Level { get; }
+
+    /// <summary>
     /// The active connection on this port (Inserter or BeltNetwork connection).
     /// Null if unconnected.
     /// </summary>
@@ -52,7 +57,8 @@ public class PortNode
         PortType type,
         PortOwnerType ownerType,
         object owner,
-        int slotIndex = -1)
+        int slotIndex = -1,
+        int level = 0)
     {
         Cell = cell;
         Direction = direction;
@@ -60,5 +66,6 @@ public class PortNode
         OwnerType = ownerType;
         Owner = owner;
         SlotIndex = slotIndex;
+        Level = level;
     }
 }

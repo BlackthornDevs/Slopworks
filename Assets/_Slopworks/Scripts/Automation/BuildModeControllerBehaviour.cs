@@ -74,6 +74,16 @@ public class BuildModeControllerBehaviour : MonoBehaviour
             _controller.RotatePreview();
         }
 
+        if (Input.GetKeyDown(KeyCode.PageUp))
+        {
+            _controller.SetLevel(_controller.CurrentLevel + 1);
+        }
+
+        if (Input.GetKeyDown(KeyCode.PageDown))
+        {
+            _controller.SetLevel(_controller.CurrentLevel - 1);
+        }
+
         if (Input.GetMouseButtonDown(0))
         {
             if (_controller.TryPlace(_factoryGrid.Grid))
@@ -124,7 +134,7 @@ public class BuildModeControllerBehaviour : MonoBehaviour
         if (_previewGhost == null)
             return;
 
-        var worldPos = _factoryGrid.Grid.CellToWorld(_controller.SnappedCell);
+        var worldPos = _factoryGrid.Grid.CellToWorld(_controller.SnappedCell, _controller.CurrentLevel);
         var effectiveSize = _controller.EffectiveSize;
 
         // Position the ghost at the center of the footprint
