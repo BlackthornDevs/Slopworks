@@ -246,7 +246,7 @@ A basic ground enemy that wanders, detects the player, chases, attacks, takes da
 
 ## TASK J-006: Wave defense system
 
-**Priority:** Medium -- needed for vertical slice gameplay loop
+**Status:** Complete (2026-02-28)
 **Branch:** `joe/main`
 **Ownership:** `Scripts/Combat/`
 **Depends on:** J-003, J-005
