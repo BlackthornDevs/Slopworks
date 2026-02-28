@@ -13,4 +13,16 @@ public class FaunaDefinitionSO : ScriptableObject
     public float sightAngle = 120f;
     public float hearingRange = 8f;
     public DamageType attackDamageType = DamageType.Kinetic;
+
+    [Header("Pack behavior")]
+    public float alertRange = 20f;
+    public float strafeSpeed = 2.5f;
+    public float strafeRadius = 3f;
+
+    [Header("Morale")]
+    public float baseBravery = 0.5f;
+    public float fleeConfidenceThreshold = 0.3f;
+
+    [Header("Cover")]
+    public float coverSearchRadius = 10f;
 }

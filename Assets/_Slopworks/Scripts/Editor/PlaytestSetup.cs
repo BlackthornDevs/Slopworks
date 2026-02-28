@@ -74,6 +74,14 @@ public static class PlaytestSetup
         def.hearingRange = 8f;
         def.attackDamageType = DamageType.Kinetic;
 
+        // pack behavior
+        def.alertRange = 20f;
+        def.strafeSpeed = 2.5f;
+        def.strafeRadius = 3f;
+        def.baseBravery = 0.5f;
+        def.fleeConfidenceThreshold = 0.3f;
+        def.coverSearchRadius = 10f;
+
         AssetDatabase.CreateAsset(def, path);
         Debug.Log("created fauna definition at " + path);
         return def;
@@ -105,8 +113,25 @@ public static class PlaytestSetup
         so.FindProperty("_camera").objectReferenceValue = fpsCam.GetComponent<Camera>();
         so.ApplyModifiedProperties();
 
+        // camera effects
+        var camObj = fpsCam.gameObject;
+        if (camObj.GetComponent<CameraRecoil>() == null)
+            camObj.AddComponent<CameraRecoil>();
+        if (camObj.GetComponent<CameraShake>() == null)
+            camObj.AddComponent<CameraShake>();
+
+        // muzzle flash as child of camera
+        var muzzle = camObj.transform.Find("MuzzleFlashPoint");
+        if (muzzle == null)
+        {
+            var muzzleObj = new GameObject("MuzzleFlashPoint");
+            muzzleObj.transform.SetParent(camObj.transform);
+            muzzleObj.transform.localPosition = new Vector3(0f, -0.1f, 0.5f);
+            muzzleObj.AddComponent<MuzzleFlash>();
+        }
+
         EditorUtility.SetDirty(player);
-        Debug.Log("player weapon wired");
+        Debug.Log("player weapon and effects wired");
     }
 
     private static void WirePlayerHealth()
@@ -176,8 +201,14 @@ public static class PlaytestSetup
             healthSo.ApplyModifiedProperties();
         }
 
+        // enemy hit effects
+        if (enemy.GetComponent<EnemyHitFlash>() == null)
+            enemy.AddComponent<EnemyHitFlash>();
+        if (enemy.GetComponent<EnemyKnockback>() == null)
+            enemy.AddComponent<EnemyKnockback>();
+
         EditorUtility.SetDirty(enemy);
-        Debug.Log("enemy fauna definition wired");
+        Debug.Log("enemy fauna definition and effects wired");
     }
 
     private static GameObject SaveEnemyPrefab()
@@ -306,13 +337,16 @@ public static class PlaytestSetup
         if (hud == null)
         {
             canvas.AddComponent<PlayerHUD>();
-            EditorUtility.SetDirty(canvas);
             Debug.Log("added PlayerHUD to HUD_Canvas");
         }
-        else
+
+        if (canvas.GetComponent<HitMarkerUI>() == null)
         {
-            Debug.Log("PlayerHUD already on HUD_Canvas");
+            canvas.AddComponent<HitMarkerUI>();
+            Debug.Log("added HitMarkerUI to HUD_Canvas");
         }
+
+        EditorUtility.SetDirty(canvas);
     }
 
     private static void FixGround()
