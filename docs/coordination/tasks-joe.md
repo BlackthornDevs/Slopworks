@@ -98,72 +98,70 @@ Built WaveController (plain C#), WaveControllerBehaviour (wrapper), ThreatMeter,
 
 ---
 
-## Pending tasks
+## Code review fixes (2026-02-28)
 
-### Code review fixes (2026-02-28)
-
-Lead developer reviewed J-003 through J-006 commits on master. Issues logged in `contradictions.md` as C-004 through C-007. **These must be fixed before Phase 3 is considered complete.**
+Lead developer reviewed J-003 through J-006 commits on master. Issues logged in `contradictions.md` as C-004 through C-007. **All four fixed.**
 
 ### TASK J-007: Fix server authority violations (C-004)
 
-**Status:** Pending
+**Status:** Complete (2026-02-28)
 **Priority:** Critical
 **Branch:** `joe/main`
 **Ownership:** `Scripts/Combat/`
 
-Add `if (!IsServerInitialized) return;` guards to:
-- `EnemySpawner` -- all spawn/destroy methods
-- `WaveControllerBehaviour` -- wave start, enemy tracking
-- `FaunaController` -- AI tick, attack execution
-
-Route damage through a `ServerRpc` in `WeaponBehaviour` instead of calling `TakeDamage()` directly on the client.
-
-**Acceptance criteria:** No NetworkObject spawning, destroying, or state mutation happens without a server authority check. WeaponBehaviour damage goes through ServerRpc. All existing tests still pass.
+Added `if (!IsServerInitialized) return;` guards to EnemySpawner, WaveControllerBehaviour, FaunaController. Converted all four combat MonoBehaviours to NetworkBehaviour (required adding FishNet.Runtime to Slopworks.Runtime.asmdef). WeaponBehaviour now validates damage server-side via `[ServerRpc] ServerFireWeapon(Vector3 origin, Vector3 direction)` — client does raycast for visual feedback only, server re-validates and applies damage.
 
 ### TASK J-008: Extract FaunaAI from FaunaController (C-005)
 
-**Status:** Pending
+**Status:** Complete (2026-02-28)
 **Priority:** High
 **Branch:** `joe/main`
 **Ownership:** `Scripts/Combat/`
 
-`FaunaController` violates D-004. Split into:
-- `FaunaAI` (plain C#) -- threat evaluation, attack timing, state transitions, pack coordination
-- `FaunaController` (thin MonoBehaviour) -- owns `FaunaAI`, feeds it perception data, executes movement
-
-**Acceptance criteria:** `FaunaAI` is testable in EditMode. New EditMode tests cover threat evaluation and attack timing without MonoBehaviour dependencies. `FaunaController` is a thin wrapper only. All existing tests still pass.
+Created `FaunaAI.cs` (plain C#) with attack timing, threat evaluation, pack coordination, alert evaluation, aggression management, and strafe direction. FaunaController is now a thin wrapper delegating to FaunaAI. 23 EditMode tests in `FaunaAITests.cs` cover all simulation logic.
 
 ### TASK J-009: Remove GameObject.Find usage (C-006)
 
-**Status:** Pending
+**Status:** Complete (2026-02-28)
 **Priority:** Medium
 **Branch:** `joe/main`
 **Ownership:** `Scripts/Combat/`, `Scripts/UI/`
 
-Replace `FindAnyObjectByType<HealthComponent>()` in `PlayerHUD` and `GameObject.Find` patterns in `WeaponBehaviour` with proper dependency injection or `GameEventSO` event bus wiring. Player should receive its own references through spawn setup, not global search.
-
-**Acceptance criteria:** Zero `GameObject.Find`, `FindObjectOfType`, or `FindAnyObjectByType` calls in combat or UI code. References wired through spawn setup or event bus.
+PlayerHUD now uses `[SerializeField]` references for HealthBehaviour, WeaponBehaviour, WaveControllerBehaviour, CameraShake (wired at editor time via PlaytestSetup). WeaponBehaviour's `_hitMarker` is now a `[SerializeField]`. EnemyKnockback uses `damage.sourcePosition` (new field on DamageData) instead of `GameObject.Find(sourceId)`. Zero Find calls remain in combat or UI code.
 
 ### TASK J-010: Cache GetComponent in FaunaController (C-007)
 
-**Status:** Pending
+**Status:** Complete (2026-02-28)
 **Priority:** Low
 **Branch:** `joe/main`
 **Ownership:** `Scripts/Combat/`
 
-Cache the target's `HealthComponent` when target is acquired, clear on target change. Currently calls `GetComponent<HealthComponent>()` on every melee attack.
-
-**Acceptance criteria:** `GetComponent` called once per target acquisition, not per attack. Cached reference cleared when target changes or dies.
+Added `_cachedTargetHealth` field. UpdatePerception caches HealthBehaviour once on target change, clears on target loss. MeleeAttack uses the cached reference. GetComponent called once per target acquisition, not per attack.
 
 ---
 
-## Task order
+## Phase 3 completion notes
 
-Current priority sequence (auto-pickup follows this):
+**All tasks (J-003 through J-006) complete and merged to master** (2026-02-28, commit `7bdb704`).
+**Code review fixes (J-007 through J-010) complete** (2026-02-28, commit `9b71b82`). Merged to master.
 
-1. **J-007** (Critical) -- server authority guards
-2. **J-008** (High) -- FaunaAI extraction (D-004)
-3. **J-009** (Medium) -- remove GameObject.Find
-4. **J-010** (Low) -- cache GetComponent
+### Additional work beyond task specs
 
-After all fixes: merge `joe/main` to `master`. Phase 3 is not complete until these are resolved.
+**Pack-coordinated group AI** — extends J-005's FaunaController with three new systems:
+- `PackCoordinator.cs` — singleton-per-fauna-type, shared NPBehave blackboard for alert propagation, confidence-based morale, distributed flank angles
+- `CombatMovement.cs` — static utility for strafe, flank, and cover-seeking position calculations
+- Behavior tree expanded from 4 to 6 priority branches: hurt > ally death reaction > flee (cover-seeking) > combat (melee/strafe/flank/chase) > alert investigation > wander
+- 24 EditMode tests across `PackCoordinatorTests.cs` and `CombatMovementTests.cs`
+
+**Combat effects** — CameraRecoil, CameraShake, MuzzleFlash, ProjectileTracer, EnemyHitFlash, EnemyKnockback, HitMarkerUI
+
+**Dev_Test arena** — playable test scene with cover structures, spawn points, environment materials, and EnvironmentSetup editor tool
+
+### Interfaces available for Phase 4
+
+Kevin's turret system can use:
+- `HealthComponent` / `HealthBehaviour` — attach to anything that takes damage
+- `DamageData` / `DamageType` — pass to `HealthComponent.TakeDamage()`
+- `FaunaDefinitionSO` — define new enemy types with pack behavior fields
+- `GameEventSO` (EnemyDied) — listen for enemy deaths
+- `PhysicsLayers` constants — layer masks for raycasts
