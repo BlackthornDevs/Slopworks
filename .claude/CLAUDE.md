@@ -95,7 +95,7 @@ Short, factual log messages. `Debug.Log("belt tick: {0} items", count)` not `Deb
 Assets/_Slopworks/
   Scripts/
     Automation/    — belt, machine, grid, power
-    Combat/        — weapons, damage, health, projectiles
+    Combat/        — weapons, damage, health, fauna AI, pack coordination, wave defense
     Network/       — FishNet setup, Supabase client, save system
     Player/        — character controller, camera rig, input
     World/         — terrain gen, BIM import, chunk loading
@@ -109,10 +109,12 @@ Assets/_Slopworks/
   Materials/
     BIM_Standard.mat  — base material for all Revit-imported geometry
     Decals/           — wear, damage, rust decal materials
+    Environment/      — arena materials (ground, wall, crate, barrel, etc.)
   Prefabs/
     Machines/
     Belt/
     Player/
+    Enemies/          — Enemy_Basic prefab (capsule + NavMeshAgent + FaunaController)
     UI/
 ```
 
@@ -202,7 +204,7 @@ All major architectural decisions are documented in `docs/reference/`. Check her
 | `input-system.md` | New Input System, two Action Maps (Factory/Exploration), generated C# class, camera toggle |
 | `audio.md` | FMOD Studio, adaptive factory audio parameters, machine loops, two-dev ownership |
 | `addressables.md` | Group structure, async scene loading, address constants, remote catalog for DLC |
-| `fauna-ai.md` | NPBehave behavior trees, server-only AI, perception system, wave controller |
+| `fauna-ai.md` | NPBehave behavior trees, server-only AI, perception system, wave controller, pack coordination |
 | `physics-layers.md` | Layer assignments (slots 8–19), collision matrix, raycast mask constants |
 | `testing.md` | EditMode for simulation logic, PlayMode for FishNet, testable C# patterns |
 | `service-architecture.md` | VContainer DI, scope hierarchy, registration, MonoBehaviour injection |

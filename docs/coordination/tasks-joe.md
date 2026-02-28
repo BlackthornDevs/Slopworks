@@ -29,6 +29,7 @@ Assigned by lead. Work on `joe/main`. Merge `master` first to pick up the projec
 
 ## TASK J-003: Health and damage system
 
+**Status:** Complete (2026-02-28)
 **Priority:** High -- foundation for weapons, enemies, and turrets
 **Branch:** `joe/main`
 **Ownership:** `Scripts/Combat/`
@@ -308,3 +309,30 @@ Build these in sequence:
 4. **J-006** last (wave controller) -- orchestrates J-005 enemies
 
 After J-006, merge joe/main to master. Kevin's turret system (Phase 4) will use your HealthComponent and DamageData -- keep the interfaces clean.
+
+---
+
+## Phase 3 completion notes
+
+**All tasks (J-003 through J-006) complete and merged to master** (2026-02-28, commit `7bdb704`).
+
+### Additional work beyond task specs
+
+**Pack-coordinated group AI** — extends J-005's FaunaController with three new systems:
+- `PackCoordinator.cs` — singleton-per-fauna-type, shared NPBehave blackboard for alert propagation, confidence-based morale, distributed flank angles
+- `CombatMovement.cs` — static utility for strafe, flank, and cover-seeking position calculations
+- Behavior tree expanded from 4 to 6 priority branches: hurt > ally death reaction > flee (cover-seeking) > combat (melee/strafe/flank/chase) > alert investigation > wander
+- 24 EditMode tests across `PackCoordinatorTests.cs` and `CombatMovementTests.cs`
+
+**Combat effects** — CameraRecoil, CameraShake, MuzzleFlash, ProjectileTracer, EnemyHitFlash, EnemyKnockback, HitMarkerUI
+
+**Dev_Test arena** — playable test scene with cover structures, spawn points, environment materials, and EnvironmentSetup editor tool
+
+### Interfaces available for Phase 4
+
+Kevin's turret system can use:
+- `HealthComponent` / `HealthBehaviour` — attach to anything that takes damage
+- `DamageData` / `DamageType` — pass to `HealthComponent.TakeDamage()`
+- `FaunaDefinitionSO` — define new enemy types with pack behavior fields
+- `GameEventSO` (EnemyDied) — listen for enemy deaths
+- `PhysicsLayers` constants — layer masks for raycasts
