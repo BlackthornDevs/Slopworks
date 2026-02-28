@@ -17,6 +17,24 @@ Before starting any session, read:
 2. `docs/coordination/ownership.md` -- who owns what
 3. `docs/coordination/contradictions.md` -- open questions needing resolution
 
+### Joe's session workflow (auto-pickup)
+
+Joe's Claude follows the auto-pickup protocol in `docs/coordination/tasks-joe.md`. Every session:
+
+1. Merge master: `git fetch origin master && git merge origin/master`
+2. Read `docs/coordination/handoff-joe.md` for context from the last session
+3. Read `docs/coordination/tasks-joe.md` and pick the next task by priority rules (Critical > High > Medium > Low, lowest J-number first within same priority)
+4. Work the task to completion, mark it `Complete` with date and commit hash
+5. Update `handoff-joe.md` with what was done, what's next, and any blockers
+6. Run all EditMode tests, commit, push to `joe/main`
+7. Pick up the next task (repeat from step 3)
+
+No need to wait for Kevin to assign work. Tasks are pre-assigned in `tasks-joe.md`. Kevin adds new tasks by pushing to master. Joe picks them up on the next merge.
+
+### Kevin's session workflow
+
+Kevin reads `docs/coordination/handoff-kevin.md` at session start. Uses the `slopworks-handoff` skill at session end to write handoff notes.
+
 ---
 
 ## Hard rules
