@@ -67,30 +67,67 @@ EXPAND   -- Scout next building, repeat with escalating difficulty.
 
 ---
 
-## Automation System (Two Layers)
+## Automation System (Distributed Production Network)
 
-### Building Level
+Every reclaimed building is a production node in a supply chain. Buildings process raw materials into ingots, parts, and components. Those outputs ship to your home base OR to other buildings that need them as inputs for higher-tier production. The whole network is a distributed factory.
 
-Each reclaimed building produces resources based on its type and which systems you restore:
+### Building Nodes (Managed from Overworld)
 
-- Power plant: generates electricity
-- Warehouse: processes and sorts salvage
-- Water treatment: supplies water
-- Hospital: produces medical supplies
+Each reclaimed building becomes a configurable production facility. You manage them from the isometric overworld UI -- set recipes, assign output destinations, monitor throughput. You go inside buildings to clear and restore them, not to lay conveyors.
+
+**Building types and example outputs:**
+- Power plant: generates electricity (required by other buildings)
+- Foundry: smelts raw scrap into iron/copper/steel ingots
+- Warehouse: sorts and distributes raw salvage to other buildings
+- Machine shop: turns ingots into mechanical components
+- Water treatment: supplies clean water (required by some processes)
+- Electronics lab: produces circuit boards from copper ingots + components
+- Hospital: produces medical supplies from chemicals + water
 - Office building: generates research points
 
-Optimize throughput with basic in-building automation: auto-feeds, sorting lines, routing switches.
+**Per-building configuration (overworld UI):**
+- Set production recipe (what to make)
+- Set output destinations (which buildings/hub receive the product)
+- Set output ratios (e.g., 60% to Machine Shop, 40% to Hub)
+- View throughput rates and bottleneck warnings
+- Upgrade production capacity
 
-### Hub Level (Home Base)
+### Supply Lines (Inter-Building Logistics)
 
-Your factory receives raw materials via supply lines from connected buildings. This is the Satisfactory layer:
+Supply lines connect buildings and carry specific products between them:
 
-- Design conveyor routes between machines
-- Multi-step crafting chains (raw scrap -> plates -> components -> equipment)
-- Splitters and mergers for parallel processing
-- Assembly lines for weapons, tools, armor, advanced MEP parts
+- Each supply line carries one product type
+- Throughput rate based on line capacity and distance
+- Longer supply lines are more vulnerable to fauna attacks
+- Can be upgraded for higher throughput
+- Configurable from overworld: click a line to see what it carries, reroute, or upgrade
+
+**Example supply chain:**
+```
+Warehouse (raw scrap) ---> Foundry (smelts into ingots)
+                              |
+                              +--> Machine Shop (ingots -> components)
+                              |       |
+                              |       +--> Home Base (components -> weapons/armor)
+                              |       +--> Electronics Lab (components + copper -> circuits)
+                              |                |
+                              |                +--> Home Base (circuits -> turrets/advanced gear)
+                              |
+                              +--> Home Base (ingots -> plates -> building materials)
+```
+
+### Home Base Factory (Satisfactory-Style Building)
+
+Your home base is one node among many -- it can smelt, process, and assemble just like any building. But it's also where you live, defend, and do personal crafting. The key difference: inside your home base, you get full Satisfactory-style freeform factory building.
+
+- Foundations, machines, conveyors, splitters, mergers on a snap grid
+- Place smelters, assemblers, workbenches wherever you want
+- Route conveyors between machines for multi-step crafting
+- Receives intermediate products from the network (ingots, components, circuits)
+- Also receives raw materials if you want to process locally
+- Final assembly for weapons, tools, armor, turrets, advanced MEP parts
 - Research/tech tree unlocks new machines and recipes
-- Your factory, your design
+- You COULD do everything at the hub, or distribute it across your network
 
 ---
 
