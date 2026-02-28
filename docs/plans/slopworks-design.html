@@ -1,0 +1,1502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Slopworks - Game Design Document</title>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0c0b0a;
+      --surface: #161412;
+      --surface-raised: #1e1b18;
+      --surface-deep: #0a0908;
+      --border: rgba(255, 180, 80, 0.08);
+      --border-strong: rgba(255, 180, 80, 0.15);
+
+      --text: #e8e0d4;
+      --text-dim: #9a8e7e;
+      --text-muted: #5c5347;
+
+      --font-body: 'Barlow', system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', 'Menlo', monospace;
+
+      --rust: #c4622a;
+      --rust-dim: rgba(196, 98, 42, 0.12);
+      --rust-glow: rgba(196, 98, 42, 0.25);
+      --amber: #d4a04e;
+      --amber-dim: rgba(212, 160, 78, 0.10);
+      --steel: #6a8899;
+      --steel-dim: rgba(106, 136, 153, 0.10);
+      --concrete: #7a7568;
+      --concrete-dim: rgba(122, 117, 104, 0.10);
+      --danger: #c44a4a;
+      --danger-dim: rgba(196, 74, 74, 0.12);
+      --power: #4a9c6a;
+      --power-dim: rgba(74, 156, 106, 0.12);
+    }
+
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #f2ede6;
+        --surface: #ffffff;
+        --surface-raised: #f8f4ee;
+        --surface-deep: #e8e2da;
+        --border: rgba(140, 80, 20, 0.10);
+        --border-strong: rgba(140, 80, 20, 0.18);
+
+        --text: #1c1810;
+        --text-dim: #6a5f50;
+        --text-muted: #9a8e7e;
+
+        --rust: #a04e1a;
+        --rust-dim: rgba(160, 78, 26, 0.08);
+        --rust-glow: rgba(160, 78, 26, 0.15);
+        --amber: #9a7020;
+        --amber-dim: rgba(154, 112, 32, 0.08);
+        --steel: #4a6a7a;
+        --steel-dim: rgba(74, 106, 122, 0.08);
+        --concrete: #5a5548;
+        --concrete-dim: rgba(90, 85, 72, 0.08);
+        --danger: #a03030;
+        --danger-dim: rgba(160, 48, 48, 0.08);
+        --power: #2a7a4a;
+        --power-dim: rgba(42, 122, 74, 0.08);
+      }
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; min-width: 0; }
+
+    body {
+      font-family: var(--font-body);
+      background: var(--bg);
+      background-image:
+        repeating-linear-gradient(
+          0deg,
+          transparent,
+          transparent 60px,
+          var(--border) 60px,
+          var(--border) 61px
+        ),
+        repeating-linear-gradient(
+          90deg,
+          transparent,
+          transparent 60px,
+          var(--border) 60px,
+          var(--border) 61px
+        );
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    /* --- Navigation --- */
+    .wrap {
+      display: grid;
+      grid-template-columns: 180px 1fr;
+      gap: 2rem;
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+
+    .toc {
+      position: sticky;
+      top: 2rem;
+      align-self: start;
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+      max-height: calc(100vh - 4rem);
+      overflow-y: auto;
+    }
+
+    .toc-link {
+      display: block;
+      padding: 0.45rem 0.75rem;
+      font-size: 0.78rem;
+      font-weight: 500;
+      color: var(--text-dim);
+      text-decoration: none;
+      border-left: 2px solid transparent;
+      border-radius: 0 4px 4px 0;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      letter-spacing: 0.01em;
+    }
+
+    .toc-link:hover {
+      color: var(--text);
+      background: var(--rust-dim);
+    }
+
+    .toc-link.active {
+      color: var(--rust);
+      border-left-color: var(--rust);
+      background: var(--rust-dim);
+      font-weight: 600;
+    }
+
+    .main {
+      min-width: 0;
+    }
+
+    /* --- Hero --- */
+    .hero {
+      position: relative;
+      background: var(--surface);
+      border: 1px solid var(--border-strong);
+      border-radius: 16px;
+      padding: 3rem;
+      margin-bottom: 2.5rem;
+      overflow: hidden;
+      opacity: 0;
+      animation: fadeUp 0.5s ease forwards;
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--rust), var(--amber), var(--rust));
+    }
+
+    .hero::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 300px;
+      height: 300px;
+      background: radial-gradient(circle, var(--rust-glow), transparent 70%);
+      pointer-events: none;
+    }
+
+    .hero-title {
+      font-size: 3.2rem;
+      font-weight: 900;
+      letter-spacing: -0.03em;
+      text-transform: uppercase;
+      line-height: 1;
+      margin-bottom: 0.3rem;
+      background: linear-gradient(135deg, var(--text) 0%, var(--amber) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-sub {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--rust);
+      margin-bottom: 1.5rem;
+    }
+
+    .hero-pitch {
+      font-size: 1.05rem;
+      color: var(--text-dim);
+      max-width: 700px;
+      line-height: 1.7;
+    }
+
+    .hero-stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+      margin-top: 2rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--border);
+    }
+
+    .stat {
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: var(--amber);
+      line-height: 1;
+    }
+
+    .stat-label {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      margin-top: 0.3rem;
+    }
+
+    /* --- Section headers --- */
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 1.25rem;
+      margin-top: 0.5rem;
+    }
+
+    .section-header h2 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      text-transform: uppercase;
+    }
+
+    .section-header::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: linear-gradient(90deg, var(--border-strong), transparent);
+    }
+
+    .section-tag {
+      font-family: var(--font-mono);
+      font-size: 0.6rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--rust);
+      background: var(--rust-dim);
+      padding: 0.2rem 0.6rem;
+      border-radius: 4px;
+      border: 1px solid rgba(196, 98, 42, 0.2);
+      white-space: nowrap;
+    }
+
+    section {
+      margin-bottom: 3rem;
+      scroll-margin-top: 2rem;
+    }
+
+    /* --- Cards --- */
+    .node {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem 1.5rem;
+      opacity: 0;
+      animation: fadeUp 0.4s ease forwards;
+      animation-delay: calc(var(--i, 0) * 60ms);
+      overflow-wrap: break-word;
+      word-break: break-word;
+    }
+
+    .node--hero {
+      background: var(--surface-raised);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    }
+
+    .node--rust { border-left: 3px solid var(--rust); }
+    .node--amber { border-left: 3px solid var(--amber); }
+    .node--steel { border-left: 3px solid var(--steel); }
+    .node--concrete { border-left: 3px solid var(--concrete); }
+    .node--danger { border-left: 3px solid var(--danger); }
+    .node--power { border-left: 3px solid var(--power); }
+
+    .label {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-dim);
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .label::before {
+      content: '';
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+    }
+
+    .label.rust::before { background: var(--rust); }
+    .label.amber::before { background: var(--amber); }
+    .label.steel::before { background: var(--steel); }
+    .label.concrete::before { background: var(--concrete); }
+    .label.danger::before { background: var(--danger); }
+    .label.power::before { background: var(--power); }
+
+    .node h3 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+
+    .node p, .node li {
+      font-size: 0.85rem;
+      color: var(--text-dim);
+      line-height: 1.6;
+    }
+
+    .node ul { list-style: none; padding: 0; }
+
+    .node li {
+      position: relative;
+      padding-left: 1.4em;
+      margin-top: 0.3rem;
+    }
+
+    .node li::before {
+      content: '\25AA';
+      position: absolute;
+      left: 0;
+      color: var(--text-muted);
+      font-size: 0.6em;
+      top: 0.45em;
+    }
+
+    /* --- Grids --- */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .full { grid-column: 1 / -1; }
+
+    /* --- Core Loop Pipeline --- */
+    .loop-container {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .loop-step {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem 0.75rem;
+      text-align: center;
+      position: relative;
+      opacity: 0;
+      animation: fadeUp 0.4s ease forwards;
+      animation-delay: calc(var(--i, 0) * 80ms);
+    }
+
+    .loop-step .step-num {
+      font-family: var(--font-mono);
+      font-size: 0.6rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    .loop-step h4 {
+      font-size: 0.95rem;
+      font-weight: 700;
+      margin: 0.2rem 0;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+
+    .loop-step p {
+      font-size: 0.72rem;
+      color: var(--text-dim);
+      line-height: 1.4;
+    }
+
+    .loop-step.active {
+      border-color: var(--rust);
+      background: var(--surface-raised);
+      box-shadow: 0 0 20px var(--rust-dim);
+    }
+
+    .loop-step.active h4 { color: var(--rust); }
+
+    .loop-arrow-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .loop-arrow {
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 1rem;
+      line-height: 1;
+    }
+
+    /* --- Threat Meter --- */
+    .threat-meter {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1rem;
+      opacity: 0;
+      animation: fadeUp 0.4s ease forwards;
+      animation-delay: calc(var(--i, 0) * 60ms);
+    }
+
+    .meter-bar {
+      height: 28px;
+      background: var(--surface-deep);
+      border-radius: 14px;
+      overflow: hidden;
+      position: relative;
+      margin: 1rem 0;
+      border: 1px solid var(--border);
+    }
+
+    .meter-fill {
+      height: 100%;
+      width: 0%;
+      border-radius: 14px;
+      background: linear-gradient(90deg, var(--power), var(--amber) 50%, var(--danger));
+      animation: fillMeter 2s ease forwards 0.8s;
+      position: relative;
+    }
+
+    .meter-fill::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(255,255,255,0.08) 50%,
+        transparent 100%
+      );
+      animation: shimmer 2s infinite 2.8s;
+    }
+
+    @keyframes fillMeter {
+      to { width: 65%; }
+    }
+
+    @keyframes shimmer {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(200%); }
+    }
+
+    .meter-labels {
+      display: flex;
+      justify-content: space-between;
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .meter-labels span:last-child { color: var(--danger); }
+
+    /* --- Automation Layers --- */
+    .auto-layers {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 1rem;
+      align-items: stretch;
+      margin-bottom: 1rem;
+    }
+
+    .auto-connector {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      color: var(--text-muted);
+    }
+
+    .auto-connector .pipe {
+      width: 2px;
+      flex: 1;
+      background: repeating-linear-gradient(
+        to bottom,
+        var(--amber) 0px,
+        var(--amber) 6px,
+        transparent 6px,
+        transparent 12px
+      );
+    }
+
+    .auto-connector span {
+      font-family: var(--font-mono);
+      font-size: 0.6rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+      color: var(--amber);
+    }
+
+    /* --- World cards --- */
+    .world-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .world-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      text-align: center;
+      opacity: 0;
+      animation: fadeUp 0.4s ease forwards;
+      animation-delay: calc(var(--i, 0) * 60ms);
+      position: relative;
+    }
+
+    .world-card .icon {
+      font-size: 2rem;
+      margin-bottom: 0.75rem;
+      display: block;
+      filter: grayscale(0.3);
+    }
+
+    .world-card h3 {
+      font-size: 1rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+      margin-bottom: 0.5rem;
+    }
+
+    .world-card p {
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      line-height: 1.5;
+    }
+
+    .world-card .camera-tag {
+      font-family: var(--font-mono);
+      font-size: 0.6rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+      display: inline-block;
+      margin-top: 0.75rem;
+    }
+
+    .camera-tag.fps {
+      background: var(--rust-dim);
+      color: var(--rust);
+      border: 1px solid rgba(196, 98, 42, 0.2);
+    }
+
+    .camera-tag.iso {
+      background: var(--steel-dim);
+      color: var(--steel);
+      border: 1px solid rgba(106, 136, 153, 0.2);
+    }
+
+    .camera-tag.both {
+      background: var(--amber-dim);
+      color: var(--amber);
+      border: 1px solid rgba(212, 160, 78, 0.2);
+    }
+
+    /* --- Influence Table --- */
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      margin-bottom: 1rem;
+      opacity: 0;
+      animation: fadeUp 0.4s ease forwards;
+      animation-delay: calc(var(--i, 0) * 60ms);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+
+    thead {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: var(--surface-raised);
+    }
+
+    th {
+      padding: 0.75rem 1rem;
+      text-align: left;
+      font-weight: 600;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border-bottom: 2px solid var(--border-strong);
+      color: var(--text-dim);
+      white-space: nowrap;
+    }
+
+    td {
+      padding: 0.7rem 1rem;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-dim);
+    }
+
+    td:first-child {
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    tr:nth-child(even) td {
+      background: rgba(128, 128, 128, 0.03);
+    }
+
+    tr:hover td {
+      background: var(--rust-dim);
+    }
+
+    /* --- Team section --- */
+    .team-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .team-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      opacity: 0;
+      animation: fadeUp 0.4s ease forwards;
+      animation-delay: calc(var(--i, 0) * 60ms);
+    }
+
+    .team-name {
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin-bottom: 0.1rem;
+    }
+
+    .team-handle {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--rust);
+      margin-bottom: 0.75rem;
+    }
+
+    .team-card .skills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      margin-top: 0.75rem;
+    }
+
+    .skill-tag {
+      font-family: var(--font-mono);
+      font-size: 0.6rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 0.2rem 0.55rem;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+    }
+
+    /* --- Open questions --- */
+    .questions-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 0.75rem;
+    }
+
+    .q-card {
+      background: var(--surface);
+      border: 1px dashed var(--border-strong);
+      border-radius: 10px;
+      padding: 1rem 1.25rem;
+      opacity: 0;
+      animation: fadeUp 0.4s ease forwards;
+      animation-delay: calc(var(--i, 0) * 60ms);
+    }
+
+    .q-card .q-mark {
+      font-family: var(--font-mono);
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: var(--amber);
+      margin-bottom: 0.3rem;
+    }
+
+    .q-card p {
+      font-size: 0.82rem;
+      color: var(--text-dim);
+    }
+
+    /* --- Defense grid --- */
+    .defense-items {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+
+    .defense-item {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem 0.75rem;
+      text-align: center;
+      opacity: 0;
+      animation: fadeUp 0.4s ease forwards;
+      animation-delay: calc(var(--i, 0) * 60ms);
+    }
+
+    .defense-item .d-icon {
+      font-size: 1.4rem;
+      margin-bottom: 0.4rem;
+      display: block;
+      filter: grayscale(0.2);
+    }
+
+    .defense-item h4 {
+      font-size: 0.78rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+      margin-bottom: 0.3rem;
+    }
+
+    .defense-item p {
+      font-size: 0.68rem;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+
+    .power-badge {
+      font-family: var(--font-mono);
+      font-size: 0.55rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 0.1rem 0.4rem;
+      border-radius: 3px;
+      margin-top: 0.4rem;
+      display: inline-block;
+    }
+
+    .power-badge.needs-power {
+      background: var(--amber-dim);
+      color: var(--amber);
+      border: 1px solid rgba(212, 160, 78, 0.2);
+    }
+
+    .power-badge.passive {
+      background: var(--concrete-dim);
+      color: var(--concrete);
+      border: 1px solid rgba(122, 117, 104, 0.2);
+    }
+
+    /* --- Building types --- */
+    .building-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+
+    .building-type {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.85rem 0.75rem;
+      text-align: center;
+      opacity: 0;
+      animation: fadeUp 0.4s ease forwards;
+      animation-delay: calc(var(--i, 0) * 60ms);
+    }
+
+    .building-type h4 {
+      font-size: 0.78rem;
+      font-weight: 600;
+      margin-bottom: 0.15rem;
+    }
+
+    .building-type .output {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      color: var(--amber);
+    }
+
+    /* --- Unique badge --- */
+    .unique-banner {
+      background: linear-gradient(135deg, var(--rust-dim), var(--amber-dim));
+      border: 1px solid var(--border-strong);
+      border-radius: 12px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      opacity: 0;
+      animation: fadeUp 0.4s ease forwards;
+      animation-delay: calc(var(--i, 0) * 60ms);
+    }
+
+    .unique-banner .ub-icon {
+      font-size: 2rem;
+      flex-shrink: 0;
+    }
+
+    .unique-banner .ub-text {
+      font-size: 0.9rem;
+      color: var(--text-dim);
+      line-height: 1.6;
+    }
+
+    .unique-banner .ub-text strong {
+      color: var(--text);
+    }
+
+    /* --- Animations --- */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(14px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .node, .loop-step, .world-card, .defense-item, .building-type,
+      .team-card, .q-card, .hero, .table-wrap, .threat-meter,
+      .unique-banner {
+        opacity: 1;
+        animation: none;
+      }
+      .meter-fill {
+        width: 65%;
+        animation: none;
+      }
+      .meter-fill::after {
+        animation: none;
+      }
+    }
+
+    /* --- Responsive --- */
+    @media (max-width: 999px) {
+      .wrap {
+        grid-template-columns: 1fr;
+        gap: 0;
+        padding: 0;
+      }
+
+      .toc {
+        position: sticky;
+        top: 0;
+        z-index: 200;
+        flex-direction: row;
+        overflow-x: auto;
+        overflow-y: hidden;
+        background: var(--bg);
+        border-bottom: 1px solid var(--border);
+        padding: 0 1rem;
+        gap: 0;
+        max-height: none;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+      }
+      .toc::-webkit-scrollbar { display: none; }
+
+      .toc-link {
+        border-left: none;
+        border-bottom: 2px solid transparent;
+        border-radius: 0;
+        padding: 0.75rem;
+        flex-shrink: 0;
+      }
+
+      .toc-link.active {
+        border-left-color: transparent;
+        border-bottom-color: var(--rust);
+      }
+
+      .main { padding: 1.5rem; }
+    }
+
+    @media (max-width: 768px) {
+      .hero { padding: 2rem 1.5rem; }
+      .hero-title { font-size: 2.2rem; }
+      .hero-stats { grid-template-columns: repeat(2, 1fr); }
+      .grid-2, .grid-3, .world-grid, .team-grid { grid-template-columns: 1fr; }
+      .loop-container { grid-template-columns: 1fr 1fr; }
+      .loop-arrow-row { grid-template-columns: 1fr 1fr; }
+      .auto-layers { grid-template-columns: 1fr; }
+      .auto-connector {
+        flex-direction: row;
+        padding: 0.5rem 0;
+      }
+      .auto-connector .pipe {
+        width: auto;
+        height: 2px;
+        flex: 1;
+        background: repeating-linear-gradient(
+          to right,
+          var(--amber) 0px,
+          var(--amber) 6px,
+          transparent 6px,
+          transparent 12px
+        );
+      }
+      .auto-connector span {
+        writing-mode: horizontal-tb;
+      }
+      .defense-items { grid-template-columns: repeat(2, 1fr); }
+      .building-grid { grid-template-columns: repeat(2, 1fr); }
+      .section-header h2 { font-size: 1.1rem; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="wrap">
+  <nav class="toc" aria-label="Table of contents">
+    <a href="#overview" class="toc-link active">Overview</a>
+    <a href="#world" class="toc-link">World Structure</a>
+    <a href="#loop" class="toc-link">Core Loop</a>
+    <a href="#automation" class="toc-link">Automation</a>
+    <a href="#base" class="toc-link">Base Building</a>
+    <a href="#defense" class="toc-link">Defense</a>
+    <a href="#multiplayer" class="toc-link">Multiplayer</a>
+    <a href="#team" class="toc-link">Team</a>
+    <a href="#influences" class="toc-link">Influences</a>
+    <a href="#open" class="toc-link">Open Questions</a>
+  </nav>
+
+  <div class="main">
+
+    <!-- ===== OVERVIEW ===== -->
+    <section id="overview">
+      <div class="hero">
+        <div class="hero-title">Slopworks</div>
+        <div class="hero-sub">Game Design Document // 2026-02-27</div>
+        <p class="hero-pitch">
+          A post-apocalyptic base-building survival game where you reclaim real buildings by restoring their mechanical systems. Explore and clear hostile structures in first-person, switch to isometric view to design Satisfactory-style automation networks connecting your growing territory. Defend your factory base from escalating fauna waves. Play solo or drop-in/drop-out co-op.
+        </p>
+        <div class="hero-stats">
+          <div class="stat">
+            <div class="stat-value">1-4</div>
+            <div class="stat-label">Players</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value">Unity</div>
+            <div class="stat-label">Engine</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value">Desktop</div>
+            <div class="stat-label">Platform</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value">Co-op</div>
+            <div class="stat-label">Drop-in/out</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="unique-banner" style="--i: 2;">
+        <div class="ub-icon">&#9881;</div>
+        <div class="ub-text">
+          <strong>What makes it unique:</strong> Every reclaimable building is modeled from real BIM data -- real duct layouts, real pipe routing, real mechanical rooms. Thousands of source models. No other game can offer this level of environmental authenticity.
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== WORLD STRUCTURE ===== -->
+    <section id="world">
+      <div class="section-header">
+        <span class="section-tag">Spaces</span>
+        <h2>World Structure</h2>
+      </div>
+
+      <div class="world-grid">
+        <div class="world-card" style="--i: 1;">
+          <span class="icon">&#9878;</span>
+          <h3>Home Base</h3>
+          <p>Your factory and fortress. Separate loaded map. Satisfactory-style freeform building with foundation grid, conveyors, defenses.</p>
+          <span class="camera-tag both">FPS + ISO</span>
+        </div>
+        <div class="world-card" style="--i: 2;">
+          <span class="icon">&#9962;</span>
+          <h3>Reclaimed Buildings</h3>
+          <p>Real BIM building models as separate map levels. Each has its own fauna, hazards, and MEP systems to restore and connect.</p>
+          <span class="camera-tag fps">First-person</span>
+        </div>
+        <div class="world-card" style="--i: 3;">
+          <span class="icon">&#9730;</span>
+          <h3>Overworld Map</h3>
+          <p>Isometric territory view. Supply lines, connected buildings, threat levels, unexplored frontier. Scout and plan from here.</p>
+          <span class="camera-tag iso">Isometric</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== CORE LOOP ===== -->
+    <section id="loop">
+      <div class="section-header">
+        <span class="section-tag">Gameplay</span>
+        <h2>Core Loop</h2>
+      </div>
+
+      <div class="loop-container">
+        <div class="loop-step" style="--i: 1;">
+          <div class="step-num">Phase 1</div>
+          <h4>Scout</h4>
+          <p>Isometric overworld. ID building types and threat levels.</p>
+        </div>
+        <div class="loop-step active" style="--i: 2;">
+          <div class="step-num">Phase 2</div>
+          <h4>Breach</h4>
+          <p>Switch to first-person. Enter an unexplored building.</p>
+        </div>
+        <div class="loop-step" style="--i: 3;">
+          <div class="step-num">Phase 3</div>
+          <h4>Clear</h4>
+          <p>FPS combat against hostile fauna nested inside.</p>
+        </div>
+        <div class="loop-step" style="--i: 4;">
+          <div class="step-num">Phase 4</div>
+          <h4>Restore</h4>
+          <p>Fix MEP systems. Bring the building online.</p>
+        </div>
+      </div>
+
+      <div class="loop-arrow-row">
+        <div class="loop-arrow">&nbsp;</div>
+        <div class="loop-arrow">&nbsp;</div>
+        <div class="loop-arrow">&nbsp;</div>
+        <div class="loop-arrow" style="font-size:1.2rem; color: var(--rust);">&#8595;</div>
+      </div>
+
+      <div class="loop-container">
+        <div class="loop-step" style="--i: 8;">
+          <div class="step-num">Phase 8</div>
+          <h4>Expand</h4>
+          <p>Scout the next building. Escalating difficulty.</p>
+        </div>
+        <div class="loop-step" style="--i: 7;">
+          <div class="step-num">Phase 7</div>
+          <h4>Defend</h4>
+          <p>Protect your base and supply lines from fauna waves.</p>
+        </div>
+        <div class="loop-step" style="--i: 6;">
+          <div class="step-num">Phase 6</div>
+          <h4>Automate</h4>
+          <p>Optimize production at building and hub levels.</p>
+        </div>
+        <div class="loop-step" style="--i: 5;">
+          <div class="step-num">Phase 5</div>
+          <h4>Connect</h4>
+          <p>Build supply lines back to your network.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== AUTOMATION ===== -->
+    <section id="automation">
+      <div class="section-header">
+        <span class="section-tag">Systems</span>
+        <h2>Two-Layer Automation</h2>
+      </div>
+
+      <div class="auto-layers">
+        <div class="node node--amber" style="--i: 1;">
+          <div class="label amber">Building Level</div>
+          <h3>Resource Production</h3>
+          <p style="font-size:0.85rem; color: var(--text-dim); margin-bottom: 0.75rem;">Each reclaimed building produces resources based on type and restored systems. Optimize with basic in-building automation.</p>
+
+          <div class="building-grid">
+            <div class="building-type" style="--i: 2;">
+              <h4>Power Plant</h4>
+              <div class="output">Electricity</div>
+            </div>
+            <div class="building-type" style="--i: 3;">
+              <h4>Warehouse</h4>
+              <div class="output">Sorted Salvage</div>
+            </div>
+            <div class="building-type" style="--i: 4;">
+              <h4>Water Treat.</h4>
+              <div class="output">Clean Water</div>
+            </div>
+            <div class="building-type" style="--i: 5;">
+              <h4>Hospital</h4>
+              <div class="output">Med Supplies</div>
+            </div>
+            <div class="building-type" style="--i: 6;">
+              <h4>Office</h4>
+              <div class="output">Research Pts</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="auto-connector">
+          <div class="pipe"></div>
+          <span>Supply Lines</span>
+          <div class="pipe"></div>
+        </div>
+
+        <div class="node node--rust" style="--i: 3;">
+          <div class="label rust">Hub Level</div>
+          <h3>Factory Manufacturing</h3>
+          <p style="font-size:0.85rem; color: var(--text-dim); margin-bottom: 0.75rem;">Your home base receives raw materials via supply lines. This is the Satisfactory layer.</p>
+          <ul>
+            <li>Design conveyor routes between machines</li>
+            <li>Multi-step crafting chains: scrap &#8594; plates &#8594; components &#8594; equipment</li>
+            <li>Splitters and mergers for parallel processing</li>
+            <li>Assembly lines for weapons, tools, armor, MEP parts</li>
+            <li>Research / tech tree unlocks new machines and recipes</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== BASE BUILDING ===== -->
+    <section id="base">
+      <div class="section-header">
+        <span class="section-tag">Construction</span>
+        <h2>Base Building</h2>
+      </div>
+
+      <div class="grid-3">
+        <div class="node node--steel" style="--i: 1;">
+          <div class="label steel">Foundation</div>
+          <h3>Grid System</h3>
+          <ul>
+            <li>Lay foundation tiles on terrain</li>
+            <li>Everything snaps to foundation grid</li>
+            <li>Zoop-style batch placement</li>
+            <li>No structural integrity physics</li>
+          </ul>
+        </div>
+        <div class="node node--amber" style="--i: 2;">
+          <div class="label amber">Production</div>
+          <h3>Machines on Grid</h3>
+          <ul>
+            <li>Crafting stations snap to foundations</li>
+            <li>Conveyors, splitters, mergers</li>
+            <li>Storage bins and sorters</li>
+            <li>Factory layout IS your base design</li>
+          </ul>
+        </div>
+        <div class="node node--concrete" style="--i: 3;">
+          <div class="label concrete">Structure</div>
+          <h3>Walls and More</h3>
+          <ul>
+            <li>Walls, doorways, windows, ramps</li>
+            <li>Stack vertically for multi-story</li>
+            <li>Purely functional / aesthetic</li>
+            <li>No room bonuses</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== DEFENSE ===== -->
+    <section id="defense">
+      <div class="section-header">
+        <span class="section-tag">Combat</span>
+        <h2>Defense System</h2>
+      </div>
+
+      <div class="defense-items">
+        <div class="defense-item" style="--i: 1;">
+          <span class="d-icon">&#9932;</span>
+          <h4>Auto-Turrets</h4>
+          <p>Primary ranged defense. Snap to foundations and walls.</p>
+          <span class="power-badge needs-power">Power + Ammo</span>
+        </div>
+        <div class="defense-item" style="--i: 2;">
+          <span class="d-icon">&#10006;</span>
+          <h4>Spike Walls</h4>
+          <p>Passive contact damage. Slows enemy advances.</p>
+          <span class="power-badge passive">Passive</span>
+        </div>
+        <div class="defense-item" style="--i: 3;">
+          <span class="d-icon">&#9899;</span>
+          <h4>Reinforced Gates</h4>
+          <p>Controlled choke points. Upgradeable tiers.</p>
+          <span class="power-badge passive">Passive</span>
+        </div>
+        <div class="defense-item" style="--i: 4;">
+          <span class="d-icon">&#9889;</span>
+          <h4>Landmines</h4>
+          <p>One-time area denial. Crafted at fab shop.</p>
+          <span class="power-badge passive">Passive</span>
+        </div>
+        <div class="defense-item" style="--i: 5;">
+          <span class="d-icon">&#9728;</span>
+          <h4>Spotlights</h4>
+          <p>Reveal enemies at range. Early warning system.</p>
+          <span class="power-badge needs-power">Power</span>
+        </div>
+      </div>
+
+      <div class="threat-meter" style="--i: 6;">
+        <div class="label danger">Threat Meter</div>
+        <h3 style="font-size: 1rem; margin-bottom: 0.25rem;">Global Threat Level</h3>
+        <p style="font-size: 0.82rem; color: var(--text-dim);">Rises when you connect buildings, increase throughput, or expand territory. Higher threat means tougher fauna, multi-direction assaults, and boss spawns. Baseline waves prevent turtling.</p>
+        <div class="meter-bar">
+          <div class="meter-fill"></div>
+        </div>
+        <div class="meter-labels">
+          <span>Scouts probing</span>
+          <span>Medium swarms</span>
+          <span>Multi-front assault</span>
+          <span>Boss siege</span>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="node node--power" style="--i: 7;">
+          <div class="label power">Critical</div>
+          <h3>Power Dependency</h3>
+          <ul>
+            <li>Turrets and spotlights need electricity</li>
+            <li>Lose power = defenses go dark</li>
+            <li>Generators are high-value targets</li>
+            <li>Route power strategically under strain</li>
+          </ul>
+        </div>
+        <div class="node node--danger" style="--i: 8;">
+          <div class="label danger">Roadmap</div>
+          <h3>Future Threat Types</h3>
+          <ul>
+            <li>Environmental: collapsing structures, toxic leaks</li>
+            <li>Rival factions: competing survivors</li>
+            <li>Diplomacy or conflict options</li>
+            <li>Architecture prepped for expansion</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== MULTIPLAYER ===== -->
+    <section id="multiplayer">
+      <div class="section-header">
+        <span class="section-tag">Network</span>
+        <h2>Multiplayer</h2>
+      </div>
+
+      <div class="grid-2">
+        <div class="node node--hero node--steel" style="--i: 1;">
+          <div class="label steel">Co-op</div>
+          <h3>Shared World</h3>
+          <ul>
+            <li>1-4 players, solo or co-op</li>
+            <li>Drop-in/drop-out, Satisfactory style</li>
+            <li>Persistent world, shared progress</li>
+            <li>No restarts, no roguelike resets</li>
+          </ul>
+        </div>
+        <div class="node node--amber" style="--i: 2;">
+          <div class="label amber">Gameplay</div>
+          <h3>Split or Squad</h3>
+          <ul>
+            <li>Split across buildings and base simultaneously</li>
+            <li>Squad up for difficult breaches</li>
+            <li>One builds while another explores</li>
+            <li>Steam-based networking (P2P or dedicated TBD)</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== TEAM ===== -->
+    <section id="team">
+      <div class="section-header">
+        <span class="section-tag">People</span>
+        <h2>Team Contributions</h2>
+      </div>
+
+      <div class="team-grid">
+        <div class="team-card" style="--i: 1;">
+          <div class="team-name">Kevin</div>
+          <div class="team-handle">@kamditis</div>
+          <ul style="list-style:none; padding:0;">
+            <li style="position:relative; padding-left:1.4em; margin-top:0.3rem; font-size:0.85rem; color:var(--text-dim);"><span style="position:absolute;left:0;color:var(--text-muted);font-size:0.6em;top:0.45em;">&#9642;</span>Real BIM models as explorable game levels</li>
+            <li style="position:relative; padding-left:1.4em; margin-top:0.3rem; font-size:0.85rem; color:var(--text-dim);"><span style="position:absolute;left:0;color:var(--text-muted);font-size:0.6em;top:0.45em;">&#9642;</span>MEP restoration as core gameplay mechanic</li>
+            <li style="position:relative; padding-left:1.4em; margin-top:0.3rem; font-size:0.85rem; color:var(--text-dim);"><span style="position:absolute;left:0;color:var(--text-muted);font-size:0.6em;top:0.45em;">&#9642;</span>Fabrication workflow driving automation design</li>
+            <li style="position:relative; padding-left:1.4em; margin-top:0.3rem; font-size:0.85rem; color:var(--text-dim);"><span style="position:absolute;left:0;color:var(--text-muted);font-size:0.6em;top:0.45em;">&#9642;</span>Point cloud data for ruined building variants</li>
+          </ul>
+          <div class="skills">
+            <span class="skill-tag">C# / .NET</span>
+            <span class="skill-tag">Revit API</span>
+            <span class="skill-tag">Navisworks</span>
+            <span class="skill-tag">BIM</span>
+            <span class="skill-tag">MEP</span>
+          </div>
+        </div>
+        <div class="team-card" style="--i: 2;">
+          <div class="team-name">Brother</div>
+          <div class="team-handle">@jamditis</div>
+          <ul style="list-style:none; padding:0;">
+            <li style="position:relative; padding-left:1.4em; margin-top:0.3rem; font-size:0.85rem; color:var(--text-dim);"><span style="position:absolute;left:0;color:var(--text-muted);font-size:0.6em;top:0.45em;">&#9642;</span>AI-generated building dossiers and narrative</li>
+            <li style="position:relative; padding-left:1.4em; margin-top:0.3rem; font-size:0.85rem; color:var(--text-dim);"><span style="position:absolute;left:0;color:var(--text-muted);font-size:0.6em;top:0.45em;">&#9642;</span>Voice interface for in-game commands</li>
+            <li style="position:relative; padding-left:1.4em; margin-top:0.3rem; font-size:0.85rem; color:var(--text-dim);"><span style="position:absolute;left:0;color:var(--text-muted);font-size:0.6em;top:0.45em;">&#9642;</span>Territory mapping and overworld visualization</li>
+            <li style="position:relative; padding-left:1.4em; margin-top:0.3rem; font-size:0.85rem; color:var(--text-dim);"><span style="position:absolute;left:0;color:var(--text-muted);font-size:0.6em;top:0.45em;">&#9642;</span>Automation scripting and procedural generation</li>
+          </ul>
+          <div class="skills">
+            <span class="skill-tag">Python</span>
+            <span class="skill-tag">TypeScript</span>
+            <span class="skill-tag">AI / LLM</span>
+            <span class="skill-tag">Voice</span>
+            <span class="skill-tag">Maps</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== INFLUENCES ===== -->
+    <section id="influences">
+      <div class="section-header">
+        <span class="section-tag">DNA</span>
+        <h2>Key Influences</h2>
+      </div>
+
+      <div class="table-wrap" style="--i: 1;">
+        <table>
+          <caption class="visually-hidden">Game influences and what Slopworks takes from each</caption>
+          <thead>
+            <tr>
+              <th scope="col">Game</th>
+              <th scope="col">What We Take</th>
+              <th scope="col">What We Change</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Satisfactory</td>
+              <td>Factory building, conveyor automation, foundation grid, co-op</td>
+              <td>Post-apocalyptic setting, combat, real buildings</td>
+            </tr>
+            <tr>
+              <td>Riftbreaker</td>
+              <td>Base defense waves, turrets, action combat</td>
+              <td>Persistent progression (no restarts), expansion-driven threat</td>
+            </tr>
+            <tr>
+              <td>Stardew Valley</td>
+              <td>Relaxing progression, always something to do</td>
+              <td>Industrial scale, combat layer</td>
+            </tr>
+            <tr>
+              <td>Halo</td>
+              <td>FPS combat feel, co-op campaign</td>
+              <td>Survival context, base building</td>
+            </tr>
+            <tr>
+              <td>Diablo</td>
+              <td>Loot progression, enemy scaling</td>
+              <td>First-person perspective, factory systems</td>
+            </tr>
+            <tr>
+              <td>V Rising</td>
+              <td>Territory expansion, conquest feel</td>
+              <td>Satisfactory-style building instead of room-based</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ===== OPEN QUESTIONS ===== -->
+    <section id="open">
+      <div class="section-header">
+        <span class="section-tag">TBD</span>
+        <h2>Open Questions</h2>
+      </div>
+
+      <div class="questions-grid">
+        <div class="q-card" style="--i: 1;">
+          <div class="q-mark">?</div>
+          <p>Art style / visual direction: realistic, stylized, or low-poly?</p>
+        </div>
+        <div class="q-card" style="--i: 2;">
+          <div class="q-mark">?</div>
+          <p>Fauna designs and behavior patterns</p>
+        </div>
+        <div class="q-card" style="--i: 3;">
+          <div class="q-mark">?</div>
+          <p>Tech tree structure and progression curve</p>
+        </div>
+        <div class="q-card" style="--i: 4;">
+          <div class="q-mark">?</div>
+          <p>Loot and equipment system depth</p>
+        </div>
+        <div class="q-card" style="--i: 5;">
+          <div class="q-mark">?</div>
+          <p>Audio and music direction</p>
+        </div>
+        <div class="q-card" style="--i: 6;">
+          <div class="q-mark">?</div>
+          <p>Repository structure and Unity project setup</p>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<style>.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }</style>
+
+<script>
+(function() {
+  const links = document.querySelectorAll('.toc-link');
+  const sections = document.querySelectorAll('section[id]');
+  const toc = document.querySelector('.toc');
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const id = entry.target.id;
+        links.forEach(link => {
+          link.classList.toggle('active', link.getAttribute('href') === '#' + id);
+        });
+        const activeLink = toc.querySelector('.active');
+        if (activeLink && window.innerWidth < 1000) {
+          activeLink.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        }
+      }
+    });
+  }, {
+    rootMargin: '-20% 0px -75% 0px',
+    threshold: 0
+  });
+
+  sections.forEach(section => observer.observe(section));
+
+  links.forEach(link => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      const target = document.querySelector(link.getAttribute('href'));
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth' });
+        history.replaceState(null, '', link.getAttribute('href'));
+      }
+    });
+  });
+})();
+</script>
+
+</body>
+</html>
