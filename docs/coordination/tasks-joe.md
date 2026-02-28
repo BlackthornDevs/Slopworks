@@ -299,3 +299,46 @@ Build these in sequence:
 4. **J-006** last (wave controller) -- orchestrates J-005 enemies
 
 After J-006, merge joe/main to master. Kevin's turret system (Phase 4) will use your HealthComponent and DamageData -- keep the interfaces clean.
+
+---
+
+## Code review findings (2026-02-28)
+
+Lead developer reviewed all J-003 through J-006 commits on master. Issues logged in `contradictions.md` as C-004 through C-007. These must be fixed before Phase 3 is considered complete.
+
+### TASK J-007: Fix server authority violations (C-004)
+
+**Priority:** Critical
+**Branch:** `joe/main`
+
+Add `if (!IsServerInitialized) return;` guards to:
+- `EnemySpawner` -- all spawn/destroy methods
+- `WaveControllerBehaviour` -- wave start, enemy tracking
+- `FaunaController` -- AI tick, attack execution
+
+Route damage through a `ServerRpc` in `WeaponBehaviour` instead of calling `TakeDamage()` directly on the client.
+
+### TASK J-008: Extract FaunaAI from FaunaController (C-005)
+
+**Priority:** High
+**Branch:** `joe/main`
+
+`FaunaController` violates D-004. Split into:
+- `FaunaAI` (plain C#) -- threat evaluation, attack timing, state transitions, pack coordination
+- `FaunaController` (thin MonoBehaviour) -- owns `FaunaAI`, feeds it perception data, executes movement
+
+The simulation logic must be testable in EditMode without MonoBehaviour dependencies.
+
+### TASK J-009: Remove GameObject.Find usage (C-006)
+
+**Priority:** Medium
+**Branch:** `joe/main`
+
+Replace `FindAnyObjectByType<HealthComponent>()` in `PlayerHUD` and `GameObject.Find` patterns in `WeaponBehaviour` with proper dependency injection or `GameEventSO` event bus wiring. Player should receive its own references through spawn setup.
+
+### TASK J-010: Cache GetComponent in FaunaController (C-007)
+
+**Priority:** Low
+**Branch:** `joe/main`
+
+Cache the target's `HealthComponent` when target is acquired, clear on target change. Currently calls `GetComponent<HealthComponent>()` on every melee attack.
