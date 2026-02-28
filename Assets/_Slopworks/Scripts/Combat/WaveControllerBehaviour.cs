@@ -8,9 +8,11 @@ public class WaveControllerBehaviour : MonoBehaviour
     [SerializeField] private List<WaveDefinition> _waves;
     [SerializeField] private GameEventSO _waveStartedEvent;
     [SerializeField] private GameEventSO _waveEndedEvent;
+    [SerializeField] private GameEventSO _enemyDiedEvent;
 
     private WaveController _controller;
     private ThreatMeter _threat;
+    private bool _spawnInProgress;
 
     public WaveController Controller => _controller;
     public ThreatMeter Threat => _threat;
@@ -24,6 +26,18 @@ public class WaveControllerBehaviour : MonoBehaviour
         _controller.OnWaveEnded += HandleWaveEnded;
     }
 
+    private void OnEnable()
+    {
+        if (_enemyDiedEvent != null)
+        {
+            var listener = GetComponent<GameEventListener>();
+            if (listener == null)
+                listener = gameObject.AddComponent<GameEventListener>();
+
+            listener.Configure(_enemyDiedEvent, ReportEnemyKilled);
+        }
+    }
+
     private void OnDestroy()
     {
         _controller.OnWaveStarted -= HandleWaveStarted;
@@ -32,6 +46,12 @@ public class WaveControllerBehaviour : MonoBehaviour
 
     public void BeginNextWave()
     {
+        if (_spawnInProgress)
+        {
+            Debug.LogWarning("wave spawn already in progress");
+            return;
+        }
+
         var def = _controller.StartNextWave();
         if (def == null)
         {
@@ -49,6 +69,7 @@ public class WaveControllerBehaviour : MonoBehaviour
 
     private IEnumerator SpawnWaveCoroutine(WaveDefinition def)
     {
+        _spawnInProgress = true;
         int spawnCount = _controller.EnemiesRemaining;
 
         for (int i = 0; i < spawnCount; i++)
@@ -59,6 +80,8 @@ public class WaveControllerBehaviour : MonoBehaviour
             if (def.spawnDelay > 0f && i < spawnCount - 1)
                 yield return new WaitForSeconds(def.spawnDelay);
         }
+
+        _spawnInProgress = false;
     }
 
     private void HandleWaveStarted()
@@ -77,7 +100,6 @@ public class WaveControllerBehaviour : MonoBehaviour
 
         Debug.Log("wave " + (_controller.CurrentWave + 1) + " cleared");
 
-        // auto-start next wave after rest period if waves remain
         if (_controller.CurrentWave + 1 < _controller.TotalWaves)
         {
             float rest = _waves[_controller.CurrentWave].timeBetweenWaves;

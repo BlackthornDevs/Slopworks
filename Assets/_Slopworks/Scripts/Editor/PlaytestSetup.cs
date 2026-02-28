@@ -10,9 +10,10 @@ public static class PlaytestSetup
         FixGround();
         var weaponDef = CreateWeaponDefinition();
         var faunaDef = CreateFaunaDefinition();
+        var enemyDiedEvent = CreateEnemyDiedEvent();
         WirePlayerWeapon(weaponDef);
         WirePlayerHealth();
-        WireEnemyDefinition(faunaDef);
+        WireEnemyDefinition(faunaDef, enemyDiedEvent);
         BakeNavMesh();
 
         Debug.Log("playtest setup complete");
@@ -123,7 +124,26 @@ public static class PlaytestSetup
         Debug.Log("player health wired");
     }
 
-    private static void WireEnemyDefinition(FaunaDefinitionSO faunaDef)
+    private static GameEventSO CreateEnemyDiedEvent()
+    {
+        string folder = "Assets/_Slopworks/ScriptableObjects/Events";
+        EnsureFolder(folder);
+
+        string path = folder + "/EnemyDied.asset";
+        var existing = AssetDatabase.LoadAssetAtPath<GameEventSO>(path);
+        if (existing != null)
+        {
+            Debug.Log("enemy died event already exists at " + path);
+            return existing;
+        }
+
+        var evt = ScriptableObject.CreateInstance<GameEventSO>();
+        AssetDatabase.CreateAsset(evt, path);
+        Debug.Log("created enemy died event at " + path);
+        return evt;
+    }
+
+    private static void WireEnemyDefinition(FaunaDefinitionSO faunaDef, GameEventSO enemyDiedEvent)
     {
         var enemy = GameObject.Find("Enemy_Basic");
         if (enemy == null)
@@ -141,6 +161,7 @@ public static class PlaytestSetup
 
         var so = new SerializedObject(controller);
         so.FindProperty("_def").objectReferenceValue = faunaDef;
+        so.FindProperty("_onDeathEvent").objectReferenceValue = enemyDiedEvent;
         so.ApplyModifiedProperties();
 
         // also wire HealthBehaviour max health to match definition

@@ -125,6 +125,50 @@ public class HealthComponentTests
         Assert.AreEqual(0f, _health.CurrentHealth);
     }
 
+    [Test]
+    public void Heal_DoesNothingWithNegativeAmount()
+    {
+        _health.TakeDamage(MakeDamage(50f));
+        _health.Heal(-10f);
+
+        Assert.AreEqual(50f, _health.CurrentHealth);
+    }
+
+    [Test]
+    public void Heal_DoesNothingWithZeroAmount()
+    {
+        _health.TakeDamage(MakeDamage(50f));
+        _health.Heal(0f);
+
+        Assert.AreEqual(50f, _health.CurrentHealth);
+    }
+
+    [Test]
+    public void TakeDamage_ZeroDamageStillFiresOnDamaged()
+    {
+        bool fired = false;
+        _health.OnDamaged += _ => fired = true;
+
+        _health.TakeDamage(MakeDamage(0f));
+
+        Assert.IsTrue(fired);
+        Assert.AreEqual(100f, _health.CurrentHealth);
+    }
+
+    [Test]
+    public void TakeDamage_IgnoredAfterDeath()
+    {
+        DamageData last = default;
+        int callCount = 0;
+        _health.OnDamaged += d => { last = d; callCount++; };
+
+        _health.TakeDamage(MakeDamage(100f));
+        int countAfterDeath = callCount;
+        _health.TakeDamage(MakeDamage(50f));
+
+        Assert.AreEqual(countAfterDeath, callCount);
+    }
+
     private static DamageData MakeDamage(float amount)
     {
         return new DamageData(amount, "test", DamageType.Kinetic);

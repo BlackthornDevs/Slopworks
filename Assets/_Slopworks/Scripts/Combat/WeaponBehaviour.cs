@@ -38,26 +38,19 @@ public class WeaponBehaviour : MonoBehaviour
 
     private void OnFire(InputAction.CallbackContext ctx)
     {
-        if (!_weapon.TryFire())
+        if (_camera == null)
             return;
 
-        if (_camera == null)
+        if (!_weapon.TryFire())
             return;
 
         Ray ray = _camera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
 
-        if (Physics.Raycast(ray, out RaycastHit hit, _weaponDefinition.range, PhysicsLayers.WeaponHitMask))
+        if (Physics.Raycast(ray, out RaycastHit hit, _weapon.Range, PhysicsLayers.WeaponHitMask))
         {
             var health = hit.collider.GetComponent<HealthBehaviour>();
             if (health != null)
-            {
-                var damage = new DamageData(
-                    _weaponDefinition.damage,
-                    gameObject.name,
-                    _weaponDefinition.damageType
-                );
-                health.Health.TakeDamage(damage);
-            }
+                health.Health.TakeDamage(_weapon.BuildDamageData(gameObject.name));
         }
     }
 

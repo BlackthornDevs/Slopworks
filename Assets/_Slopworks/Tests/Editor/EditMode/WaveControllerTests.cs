@@ -199,4 +199,67 @@ public class WaveControllerTests
         // base 5 enemies * 1.5 multiplier = ceil(7.5) = 8
         Assert.AreEqual(8, _controller.EnemiesRemaining);
     }
+
+    // -- additional edge-case tests --
+
+    [Test]
+    public void EmptyWaveList_ReturnsNull()
+    {
+        var empty = new WaveController(new List<WaveDefinition>(), _threat);
+
+        Assert.IsNull(empty.StartNextWave());
+    }
+
+    [Test]
+    public void OnEnemyKilled_ExtraKillsDoNotGoNegative()
+    {
+        _controller.StartNextWave(); // 5 enemies
+        for (int i = 0; i < 10; i++)
+            _controller.OnEnemyKilled();
+
+        Assert.AreEqual(0, _controller.EnemiesRemaining);
+    }
+
+    [Test]
+    public void StartNextWave_ReturnsCorrectDefinition()
+    {
+        var def = _controller.StartNextWave();
+
+        Assert.AreEqual(5, def.enemyCount);
+        Assert.AreEqual(0.5f, def.spawnDelay);
+        Assert.AreEqual("test_grunt", def.faunaIds[0]);
+    }
+
+    [Test]
+    public void TotalWaves_MatchesListCount()
+    {
+        Assert.AreEqual(2, _controller.TotalWaves);
+    }
+
+    [Test]
+    public void CurrentWave_StartsAtNegativeOne()
+    {
+        Assert.AreEqual(-1, _controller.CurrentWave);
+    }
+
+    [Test]
+    public void Threat_ScaleEnemyCount_ZeroBase_ReturnsZero()
+    {
+        _threat.AddThreat(0.5f);
+
+        Assert.AreEqual(0, _threat.ScaleEnemyCount(0));
+    }
+
+    [Test]
+    public void StartNextWave_PastEnd_KeepsReturningNull()
+    {
+        // exhaust all waves
+        _controller.StartNextWave();
+        for (int i = 0; i < 5; i++) _controller.OnEnemyKilled();
+        _controller.StartNextWave();
+        for (int i = 0; i < 8; i++) _controller.OnEnemyKilled();
+
+        Assert.IsNull(_controller.StartNextWave());
+        Assert.IsNull(_controller.StartNextWave()); // second call past end
+    }
 }

@@ -5,6 +5,7 @@ using NPBehave;
 public class FaunaController : MonoBehaviour
 {
     [SerializeField] private FaunaDefinitionSO _def;
+    [SerializeField] private GameEventSO _onDeathEvent;
 
     private NavMeshAgent _agent;
     private HealthComponent _health;
@@ -12,6 +13,7 @@ public class FaunaController : MonoBehaviour
     private Collider _collider;
 
     private Transform _currentTarget;
+    private float _lastAttackTime = float.MinValue;
 
     private const float WANDER_RADIUS = 10f;
     private const float FLEE_DISTANCE = 12f;
@@ -29,6 +31,12 @@ public class FaunaController : MonoBehaviour
     private void Start()
     {
         var healthBehaviour = GetComponent<HealthBehaviour>();
+        if (healthBehaviour == null)
+        {
+            Debug.LogError("FaunaController on " + name + " requires a HealthBehaviour component", this);
+            enabled = false;
+            return;
+        }
         _health = healthBehaviour.Health;
 
         _agent.speed = _def.moveSpeed;
@@ -165,13 +173,18 @@ public class FaunaController : MonoBehaviour
         if (_currentTarget == null)
             return;
 
+        if (Time.time - _lastAttackTime < _def.attackCooldown)
+            return;
+
+        _lastAttackTime = Time.time;
+
         var healthBehaviour = _currentTarget.GetComponent<HealthBehaviour>();
         if (healthBehaviour == null)
             return;
 
         var damage = new DamageData(
             _def.attackDamage,
-            gameObject.name,
+            _def.faunaId,
             _def.attackDamageType
         );
         healthBehaviour.Health.TakeDamage(damage);
@@ -223,6 +236,9 @@ public class FaunaController : MonoBehaviour
 
         if (_collider != null)
             _collider.enabled = false;
+
+        if (_onDeathEvent != null)
+            _onDeathEvent.Raise();
 
         Destroy(gameObject, 2f);
     }

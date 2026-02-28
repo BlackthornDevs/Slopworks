@@ -122,4 +122,52 @@ public class WeaponControllerTests
 
         Assert.IsTrue(_weapon.CanFire);
     }
+
+    [Test]
+    public void TryFire_ZeroFireRate_NoCooldown()
+    {
+        _def.fireRate = 0f;
+        var weapon = new WeaponController(_def);
+
+        weapon.TryFire();
+
+        Assert.IsTrue(weapon.CanFire);
+    }
+
+    [Test]
+    public void Range_ReturnsDefinitionRange()
+    {
+        Assert.AreEqual(50f, _weapon.Range);
+    }
+
+    [Test]
+    public void BuildDamageData_ReturnsCorrectValues()
+    {
+        var data = _weapon.BuildDamageData("player_1");
+
+        Assert.AreEqual(25f, data.amount);
+        Assert.AreEqual("player_1", data.sourceId);
+        Assert.AreEqual(DamageType.Kinetic, data.type);
+    }
+
+    [Test]
+    public void Reload_IgnoredWhileAlreadyReloading()
+    {
+        _weapon.Reload();
+        _weapon.Tick(0.5f); // halfway through reload
+        _weapon.Reload(); // should be ignored
+        _weapon.Tick(0.6f); // total 1.1s from first reload
+
+        Assert.AreEqual(3, _weapon.CurrentAmmo);
+        Assert.IsFalse(_weapon.IsReloading);
+    }
+
+    [Test]
+    public void Reload_WhenAlreadyFull_StillReloads()
+    {
+        _weapon.Reload();
+        _weapon.Tick(1.1f);
+
+        Assert.AreEqual(3, _weapon.CurrentAmmo);
+    }
 }

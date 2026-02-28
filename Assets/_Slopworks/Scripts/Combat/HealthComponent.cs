@@ -34,7 +34,7 @@ public class HealthComponent
 
     public void Heal(float amount)
     {
-        if (!IsAlive)
+        if (!IsAlive || amount <= 0f)
             return;
 
         CurrentHealth = Math.Min(MaxHealth, CurrentHealth + amount);

@@ -7,6 +7,12 @@ public class WeaponController
     public int CurrentAmmo { get; private set; }
     public bool IsReloading { get; private set; }
     public bool CanFire => !IsReloading && CurrentAmmo > 0 && _fireCooldown <= 0f;
+    public float Range => _def.range;
+
+    public DamageData BuildDamageData(string sourceId)
+    {
+        return new DamageData(_def.damage, sourceId, _def.damageType);
+    }
 
     public WeaponController(WeaponDefinitionSO definition)
     {
@@ -20,7 +26,7 @@ public class WeaponController
             return false;
 
         CurrentAmmo--;
-        _fireCooldown = 1f / _def.fireRate;
+        _fireCooldown = _def.fireRate > 0f ? 1f / _def.fireRate : 0f;
         return true;
     }
 
