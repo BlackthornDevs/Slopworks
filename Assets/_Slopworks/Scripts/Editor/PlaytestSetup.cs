@@ -14,6 +14,9 @@ public static class PlaytestSetup
         WirePlayerWeapon(weaponDef);
         WirePlayerHealth();
         WireEnemyDefinition(faunaDef, enemyDiedEvent);
+        var enemyPrefab = SaveEnemyPrefab();
+        SetupWaveSystem(enemyDiedEvent, enemyPrefab);
+        SetupHUD();
         BakeNavMesh();
 
         Debug.Log("playtest setup complete");
@@ -175,6 +178,141 @@ public static class PlaytestSetup
 
         EditorUtility.SetDirty(enemy);
         Debug.Log("enemy fauna definition wired");
+    }
+
+    private static GameObject SaveEnemyPrefab()
+    {
+        string folder = "Assets/_Slopworks/Prefabs/Enemies";
+        EnsureFolder(folder);
+
+        string path = folder + "/Enemy_Basic.prefab";
+        var existing = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+        if (existing != null)
+        {
+            Debug.Log("enemy prefab already exists at " + path);
+            return existing;
+        }
+
+        var enemy = GameObject.Find("Enemy_Basic");
+        if (enemy == null)
+        {
+            Debug.LogWarning("Enemy_Basic not found — cannot create prefab");
+            return null;
+        }
+
+        var prefab = PrefabUtility.SaveAsPrefabAsset(enemy, path);
+        Debug.Log("saved enemy prefab at " + path);
+        return prefab;
+    }
+
+    private static void SetupWaveSystem(GameEventSO enemyDiedEvent, GameObject enemyPrefab)
+    {
+        if (enemyPrefab == null)
+        {
+            Debug.LogWarning("no enemy prefab — skipping wave setup");
+            return;
+        }
+
+        // create spawn points at arena edges
+        var spawnParent = GameObject.Find("SpawnPoints");
+        if (spawnParent == null)
+        {
+            spawnParent = new GameObject("SpawnPoints");
+            Vector3[] positions =
+            {
+                new Vector3(30, 0, 30),
+                new Vector3(-30, 0, 30),
+                new Vector3(30, 0, -30),
+                new Vector3(-30, 0, -30),
+            };
+
+            for (int i = 0; i < positions.Length; i++)
+            {
+                var point = new GameObject("SpawnPoint_" + i);
+                point.transform.SetParent(spawnParent.transform);
+                point.transform.position = positions[i];
+                point.transform.LookAt(Vector3.zero);
+            }
+
+            EditorUtility.SetDirty(spawnParent);
+            Debug.Log("created 4 spawn points");
+        }
+
+        // find or create wave controller
+        var waveObj = GameObject.Find("WaveController");
+        if (waveObj == null)
+        {
+            waveObj = new GameObject("WaveController");
+
+            // add EnemySpawner
+            var spawner = waveObj.AddComponent<EnemySpawner>();
+            var spawnerSo = new SerializedObject(spawner);
+            spawnerSo.FindProperty("_enemyPrefab").objectReferenceValue = enemyPrefab;
+
+            var spawnPointsProp = spawnerSo.FindProperty("_spawnPoints");
+            var points = spawnParent.GetComponentsInChildren<Transform>();
+            // skip the parent transform (index 0)
+            int childCount = points.Length - 1;
+            spawnPointsProp.arraySize = childCount;
+            for (int i = 0; i < childCount; i++)
+                spawnPointsProp.GetArrayElementAtIndex(i).objectReferenceValue = points[i + 1];
+            spawnerSo.ApplyModifiedProperties();
+
+            // add WaveControllerBehaviour
+            var wcb = waveObj.AddComponent<WaveControllerBehaviour>();
+            var wcbSo = new SerializedObject(wcb);
+            wcbSo.FindProperty("_spawner").objectReferenceValue = spawner;
+            wcbSo.FindProperty("_enemyDiedEvent").objectReferenceValue = enemyDiedEvent;
+
+            // auto-start first wave after 3 seconds
+            wcbSo.FindProperty("_autoStartDelay").floatValue = 3f;
+
+            // configure 3 waves
+            var wavesProp = wcbSo.FindProperty("_waves");
+            wavesProp.arraySize = 3;
+
+            SetWave(wavesProp.GetArrayElementAtIndex(0), 3, 1f, 5f);
+            SetWave(wavesProp.GetArrayElementAtIndex(1), 5, 0.8f, 5f);
+            SetWave(wavesProp.GetArrayElementAtIndex(2), 8, 0.5f, 0f);
+
+            wcbSo.ApplyModifiedProperties();
+            EditorUtility.SetDirty(waveObj);
+            Debug.Log("created wave controller with 3 waves (3, 5, 8 enemies)");
+        }
+        else
+        {
+            Debug.Log("wave controller already exists");
+        }
+    }
+
+    private static void SetWave(SerializedProperty waveProp,
+        int enemyCount, float spawnDelay, float timeBetween)
+    {
+        waveProp.FindPropertyRelative("enemyCount").intValue = enemyCount;
+        waveProp.FindPropertyRelative("spawnDelay").floatValue = spawnDelay;
+        waveProp.FindPropertyRelative("timeBetweenWaves").floatValue = timeBetween;
+    }
+
+    private static void SetupHUD()
+    {
+        var canvas = GameObject.Find("HUD_Canvas");
+        if (canvas == null)
+        {
+            Debug.LogWarning("HUD_Canvas not found — skipping HUD setup");
+            return;
+        }
+
+        var hud = canvas.GetComponent<PlayerHUD>();
+        if (hud == null)
+        {
+            canvas.AddComponent<PlayerHUD>();
+            EditorUtility.SetDirty(canvas);
+            Debug.Log("added PlayerHUD to HUD_Canvas");
+        }
+        else
+        {
+            Debug.Log("PlayerHUD already on HUD_Canvas");
+        }
     }
 
     private static void FixGround()

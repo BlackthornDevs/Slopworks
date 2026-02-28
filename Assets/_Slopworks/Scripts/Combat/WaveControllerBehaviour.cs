@@ -9,6 +9,7 @@ public class WaveControllerBehaviour : MonoBehaviour
     [SerializeField] private GameEventSO _waveStartedEvent;
     [SerializeField] private GameEventSO _waveEndedEvent;
     [SerializeField] private GameEventSO _enemyDiedEvent;
+    [SerializeField] private float _autoStartDelay = -1f;
 
     private WaveController _controller;
     private ThreatMeter _threat;
@@ -24,6 +25,15 @@ public class WaveControllerBehaviour : MonoBehaviour
 
         _controller.OnWaveStarted += HandleWaveStarted;
         _controller.OnWaveEnded += HandleWaveEnded;
+    }
+
+    private IEnumerator Start()
+    {
+        if (_autoStartDelay >= 0f)
+        {
+            yield return new WaitForSeconds(_autoStartDelay);
+            BeginNextWave();
+        }
     }
 
     private void OnEnable()
