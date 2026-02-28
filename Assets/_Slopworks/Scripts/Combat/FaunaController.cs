@@ -24,17 +24,16 @@ public class FaunaController : MonoBehaviour
     {
         _agent = GetComponent<NavMeshAgent>();
         _collider = GetComponent<Collider>();
+    }
 
+    private void Start()
+    {
         var healthBehaviour = GetComponent<HealthBehaviour>();
         _health = healthBehaviour.Health;
 
         _agent.speed = _def.moveSpeed;
         _agent.stoppingDistance = _def.attackRange * 0.5f;
-    }
 
-    // TODO: convert to OnStartServer when adding NetworkBehaviour
-    private void OnEnable()
-    {
         _health.OnDamaged += OnDamaged;
         _health.OnDeath += OnDeath;
 
@@ -48,11 +47,13 @@ public class FaunaController : MonoBehaviour
         _tree.Start();
     }
 
-    // TODO: convert to OnStopServer when adding NetworkBehaviour
     private void OnDisable()
     {
-        _health.OnDamaged -= OnDamaged;
-        _health.OnDeath -= OnDeath;
+        if (_health != null)
+        {
+            _health.OnDamaged -= OnDamaged;
+            _health.OnDeath -= OnDeath;
+        }
 
         _tree?.Stop();
         _tree = null;
