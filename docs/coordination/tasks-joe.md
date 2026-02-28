@@ -64,12 +64,54 @@ A first-person character controller with a toggleable isometric camera mode. Thi
 - Cursor locks in FPS, unlocks in isometric
 - Walk up to an object with `IInteractable`, see prompt, press E to interact
 
-### Setup before starting
+### Status: COMPLETE
 
-```bash
-git fetch origin master
-git checkout joe/main 2>/dev/null || git checkout -b joe/main origin/master
-git merge origin/master
-```
+---
 
-This gives you the full project skeleton with all shared scripts, FishNet, Core scenes, and folder structure.
+## TASK J-002: Clean up TMP extras and merge to master
+
+**Priority:** High -- blocking master integration
+**Branch:** `joe/main`
+
+### What to do
+
+Your J-001 player controller work is done and ready for master, but `joe/main` has the full TextMesh Pro Examples & Extras folder committed (hundreds of sample scenes, fonts, textures, shaders). This bloat should not go to master.
+
+### Steps
+
+1. Add the following to `.gitignore`:
+   ```
+   # TextMesh Pro examples (not needed in repo)
+   Assets/TextMesh Pro/Examples & Extras/
+   ```
+
+2. Remove it from git tracking (keeps the files locally, just stops tracking):
+   ```bash
+   git rm -r --cached "Assets/TextMesh Pro/Examples & Extras/"
+   ```
+
+3. Commit:
+   ```
+   Remove TMP Examples & Extras from tracking and gitignore
+   ```
+
+4. Merge latest master into joe/main first (Phase 1 factory systems are now on master):
+   ```bash
+   git fetch origin master
+   git merge origin/master
+   ```
+
+5. Resolve any conflicts, then merge joe/main into master:
+   ```bash
+   git checkout master
+   git merge joe/main
+   git push origin master
+   ```
+
+### Why
+
+The TMP Examples & Extras is ~300 files of sample content that Unity imports on demand. It inflates the repo size and clutters diffs. The actual TMP runtime (fonts, shaders, resources) stays tracked -- only the examples get excluded.
+
+### After merging
+
+Master will have both the Phase 1 factory systems (from kevin/main) and the player controller + input system (from joe/main). Both branches should then pull the merged master.
