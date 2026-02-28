@@ -36,6 +36,8 @@ FaunaAITests.cs added (23 tests). Existing tests unaffected — no signature cha
 
 ### Key context
 
+- `tasks-joe.md` now has an auto-pickup protocol -- read the top of the file and follow it every session
+- Merge master before starting work to pick up the latest task assignments
 - `Slopworks.Runtime.asmdef` now references FishNet.Runtime — all combat scripts can use NetworkBehaviour
 - DamageData has a new `sourcePosition` field (Vector3) with backward-compatible constructors
 - PlaytestSetup.SetupHUD() now wires all serialized references via SerializedObject

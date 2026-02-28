@@ -143,7 +143,7 @@ Added `_cachedTargetHealth` field. UpdatePerception caches HealthBehaviour once 
 ## Phase 3 completion notes
 
 **All tasks (J-003 through J-006) complete and merged to master** (2026-02-28, commit `7bdb704`).
-**Code review fixes (J-007 through J-010) complete** (2026-02-28, commit `9b71b82`). Ready to merge to master.
+**Code review fixes (J-007 through J-010) complete** (2026-02-28, commit `9b71b82`). Merged to master.
 
 ### Additional work beyond task specs
 
