@@ -53,10 +53,12 @@ Last commit: (pending -- uncommitted work from this + prior session)
 - None -- all work is ready to commit
 
 ## Next task to pick up
-- **Phase 1 is COMPLETE.** All features verified end-to-end in interactive playtest:
-  - Factory grid, foundations, walls, ramps, machines, storage, belts, auto-inserters, simulation tick
-  - Full pipeline tested: storage (F-fill) -> belt -> smelter -> belt -> storage, items flow
-- **Start Phase 2 planning** -- read `docs/plans/2026-02-27-vertical-slice-plan.md` for Phase 2 scope
+- **Phase 1 (Base Building) is COMPLETE.** All features verified end-to-end in interactive playtest.
+- **Phase 2 (FPS Controller) is COMPLETE** -- Joe finished J-001 (controller + camera toggle).
+- **Phase 3 (Combat) is COMPLETE** -- Joe finished J-003 through J-010.
+- **Next: Phase 4 (Turret Defenses)** -- read `docs/plans/2026-02-27-vertical-slice-plan.md` Phase 4.
+  - Or decide who owns Phase 4 vs Phase 5 (Building Exploration) vs Phase 6 (Supply Chain).
+  - Joe has J-011/J-012 (asmdef fixes) still pending.
 
 ## Blockers or decisions needed
 - None
