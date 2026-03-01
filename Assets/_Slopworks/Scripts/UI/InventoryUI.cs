@@ -30,6 +30,7 @@ public class InventoryUI : MonoBehaviour
             _playerInventory.Inventory.OnSlotChanged += OnSlotChanged;
 
         _panel.SetActive(false);
+        Debug.Log($"inventory ui: initialized ({_slots?.Length ?? 0} slots, itemRegistry={_itemRegistry != null})");
     }
 
     private void OnDestroy()

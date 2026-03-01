@@ -25,6 +25,7 @@ public class RecipeSelectionUI : MonoBehaviour
     {
         _recipeRegistry = FindAnyObjectByType<RecipeRegistry>();
         _itemRegistry = FindAnyObjectByType<ItemRegistry>();
+        Debug.Log($"recipe ui: awake (registry={_recipeRegistry != null}, itemRegistry={_itemRegistry != null})");
         CreatePanel();
         _panel.SetActive(false);
     }
@@ -65,11 +66,21 @@ public class RecipeSelectionUI : MonoBehaviour
             Destroy(entry);
         _recipeEntries.Clear();
 
-        if (_currentMachine == null || _recipeRegistry == null) return;
+        if (_currentMachine == null || _recipeRegistry == null)
+        {
+            Debug.Log($"recipe ui: populate skipped (machine={_currentMachine != null}, registry={_recipeRegistry != null})");
+            return;
+        }
 
-        var recipes = _recipeRegistry.GetForMachine(_currentMachine.Definition.machineType);
+        var machineType = _currentMachine.Definition.machineType;
+        var recipes = _recipeRegistry.GetForMachine(machineType);
+        Debug.Log($"recipe ui: found {recipes.Count} recipes for machine type '{machineType}'");
+
         foreach (var recipe in recipes)
+        {
+            Debug.Log($"recipe ui: adding entry '{recipe.displayName}' canCraft={CanCraftRecipe(recipe)}");
             CreateRecipeEntry(recipe);
+        }
     }
 
     private void CreateRecipeEntry(RecipeSO recipe)
@@ -107,29 +118,39 @@ public class RecipeSelectionUI : MonoBehaviour
 
     private void OnRecipeSelected(RecipeSO recipe)
     {
-        if (_currentMachine == null || _playerInventory == null) return;
+        Debug.Log($"recipe ui: selected '{recipe.displayName}'");
+
+        if (_currentMachine == null || _playerInventory == null)
+        {
+            Debug.LogWarning($"recipe ui: select aborted (machine={_currentMachine != null}, inventory={_playerInventory != null})");
+            return;
+        }
 
         foreach (var input in recipe.inputs)
         {
+            int have = _playerInventory.Inventory.GetCount(input.itemId);
             if (!_playerInventory.TryRemove(input.itemId, input.count))
             {
-                Debug.LogWarning($"recipe ui: failed to remove {input.count}x {input.itemId}");
+                Debug.LogWarning($"recipe ui: failed to remove {input.count}x {input.itemId} (have {have})");
                 return;
             }
+            Debug.Log($"recipe ui: consumed {input.count}x {input.itemId} (had {have})");
         }
 
         for (int i = 0; i < recipe.inputs.Length; i++)
         {
             var input = recipe.inputs[i];
-            _currentMachine.Machine.TryInsertInput(
-                i % _currentMachine.Definition.inputBufferSize,
+            int slot = i % _currentMachine.Definition.inputBufferSize;
+            bool inserted = _currentMachine.Machine.TryInsertInput(
+                slot,
                 ItemInstance.Create(input.itemId),
                 input.count);
+            Debug.Log($"recipe ui: insert {input.count}x {input.itemId} into slot {slot} = {inserted}");
         }
 
         _currentMachine.Machine.SetRecipe(recipe.recipeId);
 
-        Debug.Log($"recipe ui: set recipe {recipe.displayName} on {_currentMachine.Definition.displayName}");
+        Debug.Log($"recipe ui: set recipe '{recipe.displayName}' on '{_currentMachine.Definition.displayName}'");
         Close();
     }
 
@@ -231,7 +252,7 @@ public class RecipeSelectionUI : MonoBehaviour
         vertLayout.spacing = 4;
         vertLayout.childControlWidth = true;
         vertLayout.childForceExpandWidth = true;
-        vertLayout.childControlHeight = false;
+        vertLayout.childControlHeight = true;
 
         var csf = contentObj.AddComponent<ContentSizeFitter>();
         csf.verticalFit = ContentSizeFitter.FitMode.PreferredSize;

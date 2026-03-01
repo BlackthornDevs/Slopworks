@@ -22,6 +22,7 @@ public class HUDController : MonoBehaviour
 
     private void Start()
     {
+        Debug.Log("hud: creating UI elements");
         CreateCrosshair();
         CreateHealthBar();
         CreateInteractionPrompt();
@@ -29,6 +30,7 @@ public class HUDController : MonoBehaviour
         CreateWaveWarning();
         CreateHotbar();
         WireReferences();
+        Debug.Log("hud: start complete");
     }
 
     public void Initialize(HealthBehaviour health, PlayerInventory inventory, Camera cam)
@@ -36,6 +38,7 @@ public class HUDController : MonoBehaviour
         _playerHealth = health;
         _playerInventory = inventory;
         _playerCamera = cam;
+        Debug.Log($"hud: initialize (health={health != null}, inventory={inventory != null}, camera={cam != null})");
         WireReferences();
     }
 
@@ -55,6 +58,8 @@ public class HUDController : MonoBehaviour
             for (int i = 0; i < _hotbarSlots.Length; i++)
                 _hotbarSlots[i].Bind(_playerInventory, i);
         }
+
+        Debug.Log($"hud: wired (health={_playerHealth != null}, inventory={_playerInventory != null}, camera={_playerCamera != null}, hotbar={_hotbarSlots?.Length ?? 0} slots)");
     }
 
     private void Update()
