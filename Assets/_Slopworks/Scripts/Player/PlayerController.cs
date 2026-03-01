@@ -12,6 +12,7 @@ public class PlayerController : MonoBehaviour
     private SlopworksControls _controls;
     private Rigidbody _rb;
     private Transform _cameraTransform;
+    private PlayerInventory _playerInventory;
 
     private float _pitch;
     private bool _isGrounded;
@@ -27,6 +28,8 @@ public class PlayerController : MonoBehaviour
         _controls = new SlopworksControls();
         _rb = GetComponent<Rigidbody>();
         _cameraTransform = GetComponentInChildren<Camera>().transform;
+
+        _playerInventory = GetComponent<PlayerInventory>();
 
         _rb.freezeRotation = true;
         _rb.interpolation = RigidbodyInterpolation.Interpolate;
@@ -48,6 +51,7 @@ public class PlayerController : MonoBehaviour
     {
         Look();
         CheckJump();
+        HandleHotbarInput();
     }
 
     private void FixedUpdate()
@@ -95,6 +99,20 @@ public class PlayerController : MonoBehaviour
         if (_isGrounded && _controls.Exploration.Jump.WasPressedThisFrame())
         {
             _rb.linearVelocity = new Vector3(_rb.linearVelocity.x, _jumpForce, _rb.linearVelocity.z);
+        }
+    }
+
+    private void HandleHotbarInput()
+    {
+        if (_playerInventory == null) return;
+
+        for (int i = 0; i < 9; i++)
+        {
+            if (UnityEngine.Input.GetKeyDown(KeyCode.Alpha1 + i))
+            {
+                _playerInventory.SelectHotbarSlot(i);
+                break;
+            }
         }
     }
 }
