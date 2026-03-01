@@ -13,6 +13,7 @@ public class PlayerController : MonoBehaviour
     private Rigidbody _rb;
     private Transform _cameraTransform;
     private PlayerInventory _playerInventory;
+    private IInteractable _currentInteractable;
 
     private float _pitch;
     private bool _isGrounded;
@@ -52,6 +53,7 @@ public class PlayerController : MonoBehaviour
         Look();
         CheckJump();
         HandleHotbarInput();
+        HandleInteraction();
     }
 
     private void FixedUpdate()
@@ -113,6 +115,24 @@ public class PlayerController : MonoBehaviour
                 _playerInventory.SelectHotbarSlot(i);
                 break;
             }
+        }
+    }
+
+    private void HandleInteraction()
+    {
+        var ray = new Ray(_cameraTransform.position, _cameraTransform.forward);
+        if (Physics.Raycast(ray, out var hit, 3f, PhysicsLayers.InteractMask))
+        {
+            _currentInteractable = hit.collider.GetComponent<IInteractable>();
+        }
+        else
+        {
+            _currentInteractable = null;
+        }
+
+        if (_currentInteractable != null && _controls.Exploration.Interact.WasPressedThisFrame())
+        {
+            _currentInteractable.Interact(gameObject);
         }
     }
 }
