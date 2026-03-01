@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 public class PlayerController : MonoBehaviour
 {
@@ -41,6 +42,8 @@ public class PlayerController : MonoBehaviour
     private void OnEnable()
     {
         _controls.Exploration.Enable();
+        Cursor.lockState = CursorLockMode.Locked;
+        Cursor.visible = false;
     }
 
     private void OnDisable()
@@ -104,13 +107,22 @@ public class PlayerController : MonoBehaviour
         }
     }
 
+    private static readonly Key[] HotbarKeys =
+    {
+        Key.Digit1, Key.Digit2, Key.Digit3, Key.Digit4, Key.Digit5,
+        Key.Digit6, Key.Digit7, Key.Digit8, Key.Digit9
+    };
+
     private void HandleHotbarInput()
     {
         if (_playerInventory == null) return;
 
-        for (int i = 0; i < 9; i++)
+        var kb = Keyboard.current;
+        if (kb == null) return;
+
+        for (int i = 0; i < HotbarKeys.Length; i++)
         {
-            if (UnityEngine.Input.GetKeyDown(KeyCode.Alpha1 + i))
+            if (kb[HotbarKeys[i]].wasPressedThisFrame)
             {
                 _playerInventory.SelectHotbarSlot(i);
                 break;

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
 /// <summary>
@@ -30,7 +31,7 @@ public class RecipeSelectionUI : MonoBehaviour
 
     private void Update()
     {
-        if (IsOpen && UnityEngine.Input.GetKeyDown(KeyCode.Escape))
+        if (IsOpen && Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame)
             Close();
     }
 
