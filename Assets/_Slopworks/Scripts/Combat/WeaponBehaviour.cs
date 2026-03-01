@@ -51,12 +51,12 @@ public class WeaponBehaviour : NetworkBehaviour
 
     private void Update()
     {
-        _weapon.Tick(Time.deltaTime);
+        _weapon?.Tick(Time.deltaTime);
     }
 
     private void OnFire(InputAction.CallbackContext ctx)
     {
-        if (_camera == null) return;
+        if (_camera == null || _weapon == null) return;
         if (!IsOwner) return;
         if (!_weapon.TryFire()) return;
 

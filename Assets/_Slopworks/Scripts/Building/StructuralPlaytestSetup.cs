@@ -1,23 +1,24 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
 /// <summary>
-/// Unified playtest bootstrapper for structural building + factory automation.
+/// Kevin's consolidated playtest bootstrapper. Grows each phase.
 /// Drop on an empty GameObject, hit Play, and test the full gameplay loop:
-/// place foundations, then place belts/machines/storage ON those foundations.
+/// FPS player, inventory, crafting, building, belts, machines, combat.
 ///
 /// Controls:
-///   1 - Foundation tool (drag rectangle)
-///   2 - Wall tool (click + R rotate + click)
-///   3 - Ramp tool (click + R rotate + click)
-///   4 - Delete tool (click to remove)
-///   5 - Belt tool (2-click: start cell, end cell)
-///   6 - Machine tool (1-click + R rotate)
-///   7 - Storage tool (1-click + R rotate)
-///   Escape - Cancel / deselect tool
-///   PageUp / PageDown - Change active level
-///   Right-click + mouse to look, WASD to fly
+///   WASD - Move, Mouse - Look, Space - Jump, Shift - Sprint
+///   B - Toggle build/items hotbar page
+///   1-9 - Select hotbar slot (items or build tool depending on page)
+///   Tab - Open/close inventory
+///   E - Interact with machines
+///   R - Rotate (wall/ramp/machine placement)
+///   Escape - Cancel / return to items page
+///   PageUp/PageDown - Change active level
+///   F - Fill storage with iron ore
+///   Left click - Fire weapon / place building
 ///
 /// Everything is created at runtime -- no prefabs or assets required.
 /// </summary>
@@ -33,6 +34,9 @@ public class StructuralPlaytestSetup : MonoBehaviour
 
     [Header("Automation")]
     [SerializeField] private ushort _beltSpeed = 4;
+
+    [Header("Inventory")]
+    [SerializeField] private int _worldItemCount = 5;
 
     // -- Structural infrastructure --
     private FactoryGrid _grid;
@@ -55,7 +59,13 @@ public class StructuralPlaytestSetup : MonoBehaviour
     private StorageDefinitionSO _storageDef;
     private ItemDefinitionSO _ironOreDef;
     private ItemDefinitionSO _ironIngotDef;
+    private ItemDefinitionSO _ironScrapDef;
     private RecipeSO _smeltRecipe;
+
+    // -- Player / HUD --
+    private PlayerHUD _playerHUD;
+    private PlayerInventory _playerInventory;
+    private WeaponBehaviour _weaponBehaviour;
 
     // -- Tracking --
     private readonly List<BuildingData> _foundations = new();
@@ -122,14 +132,22 @@ public class StructuralPlaytestSetup : MonoBehaviour
     private void Awake()
     {
         CreateDefinitions();
+        CreateRegistries();
         CreateInfrastructure();
         CreateGroundPlane();
-        SetupCamera();
 
         if (_preSeedFactory)
             PreSeedFactory();
 
-        Debug.Log("Unified playtest started. [1] Foundation [2] Wall [3] Ramp [4] Delete [5] Belt [6] Machine [7] Storage");
+        var player = CreatePlayer();
+        CreateWorldItems();
+        CreateSmelterInteractable();
+        CreateHUD(player);
+
+        Debug.Log("playtest: setup complete");
+        Debug.Log("controls: WASD=move, Mouse=look, Space=jump, Shift=sprint");
+        Debug.Log("controls: B=toggle build/items, 1-9=select slot, Tab=inventory, E=interact");
+        Debug.Log("controls: R=rotate, Esc=cancel, PgUp/PgDn=level, F=fill storage");
     }
 
     private void FixedUpdate()
@@ -145,6 +163,7 @@ public class StructuralPlaytestSetup : MonoBehaviour
         if (kb == null || mouse == null) return;
 
         HandleToolSelection(kb);
+        HandleDigitKeys(kb);
         HandleLevelChange(kb);
         HandleFillStorage(kb, mouse);
 
@@ -192,7 +211,7 @@ public class StructuralPlaytestSetup : MonoBehaviour
 
         GUI.Box(new Rect(x - 4, y - 4, w + 8, h * lineCount + 8), "");
 
-        DrawLine(ref y, x, w, h, "UNIFIED BUILDING + AUTOMATION PLAYTEST", true);
+        DrawLine(ref y, x, w, h, "SLOPWORKS PLAYTEST (Kevin)", true);
         DrawLine(ref y, x, w, h, $"Tool: {_currentTool}  |  Level: {_currentLevel}");
         y += 4;
         DrawLine(ref y, x, w, h, $"Foundations: {_foundations.Count}  |  Walls: {_walls.Count}  |  Ramps: {_ramps.Count}");
@@ -211,9 +230,9 @@ public class StructuralPlaytestSetup : MonoBehaviour
         DrawLine(ref y, x, w, h, $"Port nodes: {_portRegistry.Count}");
 
         y += 4;
-        DrawLine(ref y, x, w, h, "[1] Foundation  [2] Wall  [3] Ramp  [4] Delete");
-        DrawLine(ref y, x, w, h, "[5] Belt  [6] Machine  [7] Storage  [F] Fill storage");
-        DrawLine(ref y, x, w, h, "[PgUp/PgDn] Level  [R] Rotate  [Esc] Cancel");
+        DrawLine(ref y, x, w, h, "[B] Toggle build/items  [1-7] Select tool/slot  [V] FPS/Iso");
+        DrawLine(ref y, x, w, h, "[PgUp/PgDn] Level  [R] Rotate  [Esc] Cancel  [F] Fill");
+        DrawLine(ref y, x, w, h, "[Tab] Inventory  [E] Interact  [WASD] Move  [Space] Jump");
         DrawLine(ref y, x, w, h, "Port colors: BLUE = input  RED = output");
 
         if (_currentTool == ToolMode.Wall)
@@ -249,6 +268,12 @@ public class StructuralPlaytestSetup : MonoBehaviour
 
     private void OnDestroy()
     {
+        if (_playerHUD != null)
+        {
+            _playerHUD.OnBuildToolSelected -= OnHotbarBuildToolSelected;
+            _playerHUD.OnPageChanged -= OnHotbarPageChanged;
+        }
+
         if (_foundationDef != null) DestroyImmediate(_foundationDef);
         if (_wallDef != null) DestroyImmediate(_wallDef);
         if (_rampDef != null) DestroyImmediate(_rampDef);
@@ -256,6 +281,7 @@ public class StructuralPlaytestSetup : MonoBehaviour
         if (_storageDef != null) DestroyImmediate(_storageDef);
         if (_ironOreDef != null) DestroyImmediate(_ironOreDef);
         if (_ironIngotDef != null) DestroyImmediate(_ironIngotDef);
+        if (_ironScrapDef != null) DestroyImmediate(_ironScrapDef);
         if (_smeltRecipe != null) DestroyImmediate(_smeltRecipe);
     }
 
@@ -306,6 +332,7 @@ public class StructuralPlaytestSetup : MonoBehaviour
 
         _storageDef = ScriptableObject.CreateInstance<StorageDefinitionSO>();
         _storageDef.storageId = "storage_bin";
+        _storageDef.displayName = "Storage Bin";
         _storageDef.slotCount = 4;
         _storageDef.maxStackSize = 50;
         _storageDef.size = Vector2Int.one;
@@ -327,15 +354,28 @@ public class StructuralPlaytestSetup : MonoBehaviour
         _ironOreDef = ScriptableObject.CreateInstance<ItemDefinitionSO>();
         _ironOreDef.itemId = IronOre;
         _ironOreDef.displayName = "Iron Ore";
+        _ironOreDef.category = ItemCategory.RawMaterial;
+        _ironOreDef.isStackable = true;
+        _ironOreDef.maxStackSize = 64;
 
         _ironIngotDef = ScriptableObject.CreateInstance<ItemDefinitionSO>();
         _ironIngotDef.itemId = IronIngot;
         _ironIngotDef.displayName = "Iron Ingot";
+        _ironIngotDef.category = ItemCategory.Component;
+        _ironIngotDef.isStackable = true;
+        _ironIngotDef.maxStackSize = 64;
+
+        _ironScrapDef = ScriptableObject.CreateInstance<ItemDefinitionSO>();
+        _ironScrapDef.itemId = "iron_scrap";
+        _ironScrapDef.displayName = "Iron Scrap";
+        _ironScrapDef.category = ItemCategory.RawMaterial;
+        _ironScrapDef.isStackable = true;
+        _ironScrapDef.maxStackSize = 64;
 
         _smeltRecipe = ScriptableObject.CreateInstance<RecipeSO>();
         _smeltRecipe.recipeId = SmeltIronRecipeId;
         _smeltRecipe.displayName = "Smelt Iron";
-        _smeltRecipe.inputs = new[] { new RecipeIngredient { itemId = IronOre, count = 1 } };
+        _smeltRecipe.inputs = new[] { new RecipeIngredient { itemId = "iron_scrap", count = 1 } };
         _smeltRecipe.outputs = new[] { new RecipeIngredient { itemId = IronIngot, count = 1 } };
         _smeltRecipe.craftDuration = 2f;
         _smeltRecipe.requiredMachineType = SmelterType;
@@ -375,18 +415,272 @@ public class StructuralPlaytestSetup : MonoBehaviour
             renderer.material.color = new Color(0.2f, 0.2f, 0.2f);
     }
 
-    private void SetupCamera()
+    private void CreateRegistries()
     {
-        var cam = Camera.main;
-        if (cam == null) return;
+        var registryObj = new GameObject("Registries");
+        registryObj.SetActive(false);
 
+        var itemRegistry = registryObj.AddComponent<ItemRegistry>();
+        var itemsField = typeof(ItemRegistry).GetField("_items",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        itemsField?.SetValue(itemRegistry, new[] { _ironOreDef, _ironIngotDef, _ironScrapDef });
+
+        var recipeRegistry = registryObj.AddComponent<RecipeRegistry>();
+        var recipesField = typeof(RecipeRegistry).GetField("_recipes",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        recipesField?.SetValue(recipeRegistry, new[] { _smeltRecipe });
+
+        registryObj.SetActive(true);
+        Debug.Log("playtest: registries created");
+    }
+
+    private GameObject CreatePlayer()
+    {
         float centerX = 10f * FactoryGrid.CellSize;
         float centerZ = 10f * FactoryGrid.CellSize;
-        cam.transform.position = new Vector3(centerX, 20f, centerZ - 12f);
-        cam.transform.LookAt(new Vector3(centerX, 0f, centerZ));
 
-        if (cam.GetComponent<PlaytestCameraController>() == null)
-            cam.gameObject.AddComponent<PlaytestCameraController>();
+        var player = new GameObject("Player");
+        player.layer = PhysicsLayers.Player;
+        player.transform.position = new Vector3(centerX, 1.5f, centerZ - 5f);
+
+        var capsule = player.AddComponent<CapsuleCollider>();
+        capsule.radius = 0.3f;
+        capsule.height = 1.8f;
+        capsule.center = new Vector3(0, 0.9f, 0);
+
+        var rb = player.AddComponent<Rigidbody>();
+        rb.freezeRotation = true;
+        rb.interpolation = RigidbodyInterpolation.Interpolate;
+
+        // Repurpose existing Main Camera as isometric camera (keep PlaytestCameraController for fly movement)
+        var isoCam = Camera.main;
+        if (isoCam != null)
+        {
+            isoCam.gameObject.name = "IsometricCamera";
+            // Remove AudioListener from iso cam -- player camera owns it
+            var oldListener = isoCam.GetComponent<AudioListener>();
+            if (oldListener != null) DestroyImmediate(oldListener);
+            // Add PlaytestCameraController if not already present
+            if (isoCam.GetComponent<PlaytestCameraController>() == null)
+                isoCam.gameObject.AddComponent<PlaytestCameraController>();
+            // Position isometric cam looking down at grid center
+            isoCam.transform.position = new Vector3(centerX, 20f, centerZ - 12f);
+            isoCam.transform.LookAt(new Vector3(centerX, 0f, centerZ));
+            isoCam.gameObject.SetActive(false); // starts in FPS mode
+        }
+
+        // FPS camera on player
+        var camObj = new GameObject("PlayerCamera");
+        camObj.tag = "MainCamera";
+        camObj.transform.SetParent(player.transform, false);
+        camObj.transform.localPosition = new Vector3(0, 1.6f, 0);
+        var fpsCam = camObj.AddComponent<Camera>();
+        camObj.AddComponent<AudioListener>();
+
+        // Camera mode toggle (isometric for building, FPS for combat/exploration)
+        // Must be added AFTER PlayerController so we can wire the reference
+        var playerCtrl = player.GetComponent<PlayerController>();
+        var modeController = player.AddComponent<CameraModeController>();
+        var modeFlags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+        typeof(CameraModeController).GetField("_fpsCamera", modeFlags)?.SetValue(modeController, fpsCam);
+        if (isoCam != null)
+            typeof(CameraModeController).GetField("_isometricCamera", modeFlags)?.SetValue(modeController, isoCam);
+        typeof(CameraModeController).GetField("_playerController", modeFlags)?.SetValue(modeController, playerCtrl);
+
+        // Components (PlayerInventory before PlayerController so Awake finds it)
+        _playerInventory = player.AddComponent<PlayerInventory>();
+        player.AddComponent<PlayerController>();
+        player.AddComponent<HealthBehaviour>();
+
+        // Weapon (Joe's combat)
+        _weaponBehaviour = player.AddComponent<WeaponBehaviour>();
+
+        // Pickup trigger (child)
+        var pickupObj = new GameObject("PickupTrigger");
+        pickupObj.transform.SetParent(player.transform, false);
+        pickupObj.layer = PhysicsLayers.Player;
+        pickupObj.AddComponent<ItemPickupTrigger>();
+
+        StartCoroutine(PreloadInventory(_playerInventory));
+
+        Debug.Log($"playtest: player created at ({centerX}, 1.5, {centerZ - 5})");
+        return player;
+    }
+
+    private IEnumerator PreloadInventory(PlayerInventory inventory)
+    {
+        yield return null;
+        inventory.TryAdd(ItemInstance.Create("iron_scrap"), 10);
+        inventory.TryAdd(ItemInstance.Create(IronOre), 5);
+        Debug.Log("playtest: preloaded items into inventory");
+    }
+
+    private void CreateWorldItems()
+    {
+        float centerX = 10f * FactoryGrid.CellSize;
+        float centerZ = 10f * FactoryGrid.CellSize;
+
+        for (int i = 0; i < _worldItemCount; i++)
+        {
+            float x = centerX + Random.Range(-8f, 8f);
+            float z = centerZ + Random.Range(-8f, 8f);
+            var pos = new Vector3(x, 0.3f, z);
+
+            var obj = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            obj.name = $"WorldItem_IronScrap_{i}";
+            obj.transform.position = pos;
+            obj.transform.localScale = new Vector3(0.3f, 0.3f, 0.3f);
+
+            var renderer = obj.GetComponent<Renderer>();
+            renderer.material.color = new Color(0.6f, 0.4f, 0.2f);
+
+            DestroyImmediate(obj.GetComponent<BoxCollider>());
+
+            var worldItem = obj.AddComponent<WorldItem>();
+            worldItem.Initialize(_ironScrapDef, Random.Range(1, 4));
+        }
+        Debug.Log($"playtest: {_worldItemCount} world items created");
+    }
+
+    private void CreateSmelterInteractable()
+    {
+        float centerX = 10f * FactoryGrid.CellSize;
+        float centerZ = 10f * FactoryGrid.CellSize;
+
+        var obj = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        obj.name = "SmelterInteractable";
+        obj.transform.position = new Vector3(centerX + 4, 0.5f, centerZ + 4);
+        obj.transform.localScale = new Vector3(2, 1, 2);
+
+        var smelterRenderer = obj.GetComponent<Renderer>();
+        smelterRenderer.material.color = new Color(0.8f, 0.4f, 0.1f);
+
+        obj.layer = PhysicsLayers.Interactable;
+
+        obj.SetActive(false);
+        var machineBehaviour = obj.AddComponent<MachineBehaviour>();
+        var defField = typeof(MachineBehaviour).GetField("_definition",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        defField?.SetValue(machineBehaviour, _smelterDef);
+        obj.SetActive(true);
+
+        Debug.Log("playtest: smelter interactable created");
+    }
+
+    private void CreateHUD(GameObject player)
+    {
+        var canvasObj = new GameObject("HUDCanvas");
+        var canvas = canvasObj.AddComponent<Canvas>();
+        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        canvas.sortingOrder = 10;
+        canvasObj.AddComponent<UnityEngine.UI.CanvasScaler>();
+        canvasObj.AddComponent<UnityEngine.UI.GraphicRaycaster>();
+        canvasObj.AddComponent<UnityEngine.EventSystems.EventSystem>();
+        canvasObj.AddComponent<UnityEngine.InputSystem.UI.InputSystemUIInputModule>();
+
+        _playerHUD = canvasObj.AddComponent<PlayerHUD>();
+        canvasObj.AddComponent<RecipeSelectionUI>();
+        canvasObj.AddComponent<StorageUI>();
+        var inventoryUI = canvasObj.AddComponent<InventoryUI>();
+
+        StartCoroutine(WireHUD(_playerHUD, inventoryUI, player));
+    }
+
+    private IEnumerator WireHUD(PlayerHUD hud, InventoryUI inventoryUI, GameObject player)
+    {
+        yield return null;
+
+        var health = player.GetComponent<HealthBehaviour>();
+        var inventory = player.GetComponent<PlayerInventory>();
+        var weapon = player.GetComponent<WeaponBehaviour>();
+        var cam = player.GetComponentInChildren<Camera>();
+
+        hud.Initialize(
+            health != null ? health.Health : null,
+            weapon != null ? weapon.Weapon : null,
+            null, null);
+        hud.InitializeInventory(inventory, cam);
+        inventoryUI.Initialize(inventory);
+
+        // Set up hotbar pages
+        var itemsPage = new HotbarPage("Items", PlayerInventory.HotbarSlots);
+        var buildPage = CreateBuildPage();
+        hud.SetPages(new[] { itemsPage, buildPage });
+
+        // Wire build tool selection to ToolMode
+        hud.OnBuildToolSelected += OnHotbarBuildToolSelected;
+        hud.OnPageChanged += OnHotbarPageChanged;
+
+        Debug.Log("playtest: HUD wired to player");
+    }
+
+    // -- Build tool ID to ToolMode mapping --
+
+    private static readonly Dictionary<string, ToolMode> BuildToolMap = new()
+    {
+        { "foundation", ToolMode.Foundation },
+        { "wall", ToolMode.Wall },
+        { "ramp", ToolMode.Ramp },
+        { "belt", ToolMode.Belt },
+        { "machine", ToolMode.MachinePlace },
+        { "storage", ToolMode.StoragePlace },
+        { "delete", ToolMode.Delete },
+    };
+
+    private HotbarPage CreateBuildPage()
+    {
+        var page = new HotbarPage("Build", PlayerInventory.HotbarSlots);
+
+        void Set(int slot, string id, string name, Color color)
+        {
+            page.Entries[slot] = new HotbarEntry { Id = id, DisplayName = name, Color = color };
+        }
+
+        Set(0, "foundation", "Found", new Color(0.4f, 0.4f, 0.4f, 0.8f));
+        Set(1, "wall", "Wall", new Color(0.5f, 0.5f, 0.5f, 0.8f));
+        Set(2, "ramp", "Ramp", new Color(0.5f, 0.6f, 0.5f, 0.8f));
+        Set(3, "belt", "Belt", new Color(0.3f, 0.5f, 0.7f, 0.8f));
+        Set(4, "machine", "Machine", new Color(0.7f, 0.5f, 0.2f, 0.8f));
+        Set(5, "storage", "Storage", new Color(0.6f, 0.4f, 0.3f, 0.8f));
+        Set(6, "delete", "Delete", new Color(0.8f, 0.2f, 0.2f, 0.8f));
+
+        return page;
+    }
+
+    private void OnHotbarBuildToolSelected(int pageIndex, int slotIndex, string entryId)
+    {
+        if (BuildToolMap.TryGetValue(entryId, out var toolMode))
+        {
+            CancelAllPending();
+            _currentTool = toolMode;
+            if (toolMode == ToolMode.MachinePlace || toolMode == ToolMode.StoragePlace)
+                _placeRotation = 0;
+            Debug.Log($"build tool: {entryId} -> {toolMode}");
+        }
+    }
+
+    private void OnHotbarPageChanged(int pageIndex)
+    {
+        if (pageIndex == 0)
+        {
+            CancelAllPending();
+            _currentTool = ToolMode.None;
+            _playerHUD?.SetBuildModeVisible(false);
+            if (_weaponBehaviour != null)
+            {
+                _weaponBehaviour.enabled = true;
+                Debug.Log("weapon: re-enabled (items page)");
+            }
+        }
+        else
+        {
+            _playerHUD?.SetBuildModeVisible(true);
+            if (_weaponBehaviour != null)
+            {
+                _weaponBehaviour.enabled = false;
+                Debug.Log("weapon: disabled (build page)");
+            }
+        }
     }
 
     // -- Pre-seed factory --
@@ -416,8 +710,8 @@ public class StructuralPlaytestSetup : MonoBehaviour
             SpawnStorageVisual(srcResult, new Vector2Int(5, 7));
             var srcStorage = (StorageContainer)srcResult.SimulationObject;
             for (int i = 0; i < 50; i++)
-                srcStorage.TryInsert(IronOre);
-            Debug.Log("Pre-seed: source storage placed at (5,7) with 50 iron ore");
+                srcStorage.TryInsert("iron_scrap");
+            Debug.Log("Pre-seed: source storage placed at (5,7) with 50 iron scrap");
         }
 
         // Belt from (6,7) to (8,7)
@@ -465,47 +759,39 @@ public class StructuralPlaytestSetup : MonoBehaviour
 
     private void HandleToolSelection(Keyboard kb)
     {
-        if (kb.digit1Key.wasPressedThisFrame)
-        {
-            CancelAllPending();
-            _currentTool = ToolMode.Foundation;
-        }
-        else if (kb.digit2Key.wasPressedThisFrame)
-        {
-            CancelAllPending();
-            _currentTool = ToolMode.Wall;
-        }
-        else if (kb.digit3Key.wasPressedThisFrame)
-        {
-            CancelAllPending();
-            _currentTool = ToolMode.Ramp;
-        }
-        else if (kb.digit4Key.wasPressedThisFrame)
-        {
-            CancelAllPending();
-            _currentTool = ToolMode.Delete;
-        }
-        else if (kb.digit5Key.wasPressedThisFrame)
-        {
-            CancelAllPending();
-            _currentTool = ToolMode.Belt;
-        }
-        else if (kb.digit6Key.wasPressedThisFrame)
-        {
-            CancelAllPending();
-            _currentTool = ToolMode.MachinePlace;
-            _placeRotation = 0;
-        }
-        else if (kb.digit7Key.wasPressedThisFrame)
-        {
-            CancelAllPending();
-            _currentTool = ToolMode.StoragePlace;
-            _placeRotation = 0;
-        }
-        else if (kb.escapeKey.wasPressedThisFrame)
+        // B key toggles hotbar page (items <-> build)
+        // OnHotbarPageChanged handles tool cancel and build mode indicator
+        if (kb.bKey.wasPressedThisFrame && _playerHUD != null)
+            _playerHUD.TogglePage();
+
+        if (kb.escapeKey.wasPressedThisFrame)
         {
             CancelAllPending();
             _currentTool = ToolMode.None;
+            // Return to items page -- OnHotbarPageChanged handles build mode indicator
+            _playerHUD?.SetPage(0);
+        }
+    }
+
+    private static readonly Key[] DigitKeys =
+    {
+        Key.Digit1, Key.Digit2, Key.Digit3, Key.Digit4, Key.Digit5,
+        Key.Digit6, Key.Digit7, Key.Digit8, Key.Digit9
+    };
+
+    private void HandleDigitKeys(Keyboard kb)
+    {
+        if (_playerHUD == null) return;
+        // Only intercept digit keys when on build page
+        if (_playerHUD.CurrentPageIndex == 0) return;
+
+        for (int i = 0; i < DigitKeys.Length; i++)
+        {
+            if (kb[DigitKeys[i]].wasPressedThisFrame)
+            {
+                _playerHUD.OnSlotPressed(i);
+                break;
+            }
         }
     }
 
@@ -547,9 +833,9 @@ public class StructuralPlaytestSetup : MonoBehaviour
                 && cell.Value.y >= bd.Origin.y && cell.Value.y < bd.Origin.y + bd.Size.y)
             {
                 int added = 0;
-                while (storage.TryInsert(IronOre))
+                while (storage.TryInsert("iron_scrap"))
                     added++;
-                Debug.Log($"Filled storage at ({bd.Origin.x},{bd.Origin.y}) with {added} iron ore (total: {storage.GetTotalItemCount()})");
+                Debug.Log($"Filled storage at ({bd.Origin.x},{bd.Origin.y}) with {added} iron scrap (total: {storage.GetTotalItemCount()})");
                 return;
             }
         }
@@ -584,6 +870,8 @@ public class StructuralPlaytestSetup : MonoBehaviour
         var cell = GetCellUnderCursor(mouse);
         if (!cell.HasValue)
         {
+            if (mouse.leftButton.wasPressedThisFrame)
+                Debug.Log("foundation: click ignored, no grid cell under cursor");
             HideGhosts();
             return;
         }
@@ -694,7 +982,10 @@ public class StructuralPlaytestSetup : MonoBehaviour
             {
                 var cell = GetCellUnderCursor(mouse);
                 if (!cell.HasValue)
+                {
+                    Debug.Log("wall: click ignored, no grid cell under cursor");
                     return;
+                }
 
                 var building = _grid.GetAt(cell.Value, _currentLevel);
                 if (building == null || !building.IsStructural)
@@ -793,7 +1084,10 @@ public class StructuralPlaytestSetup : MonoBehaviour
             {
                 var cell = GetCellUnderCursor(mouse);
                 if (!cell.HasValue)
+                {
+                    Debug.Log("ramp: click ignored, no grid cell under cursor");
                     return;
+                }
 
                 var building = _grid.GetAt(cell.Value, _currentLevel);
                 if (building == null || !building.IsStructural)
@@ -937,18 +1231,25 @@ public class StructuralPlaytestSetup : MonoBehaviour
                 DestroyPlaceGhost();
             }
 
-            if (mouse.leftButton.wasPressedThisFrame && cell.HasValue)
+            if (mouse.leftButton.wasPressedThisFrame)
             {
-                var existing = _grid.GetAt(cell.Value, _currentLevel);
-                if (existing == null || !existing.IsStructural)
+                if (!cell.HasValue)
                 {
-                    Debug.Log("Belts must be placed on foundations");
-                    return;
+                    Debug.Log("belt: click ignored, no grid cell under cursor");
                 }
-                _beltStartSet = true;
-                _beltStartCell = cell.Value;
-                DestroyPlaceGhost();
-                Debug.Log($"Belt start: ({_beltStartCell.x},{_beltStartCell.y}) -- click end cell");
+                else
+                {
+                    var existing = _grid.GetAt(cell.Value, _currentLevel);
+                    if (existing == null || !existing.IsStructural)
+                    {
+                        Debug.Log("Belts must be placed on foundations");
+                        return;
+                    }
+                    _beltStartSet = true;
+                    _beltStartCell = cell.Value;
+                    DestroyPlaceGhost();
+                    Debug.Log($"Belt start: ({_beltStartCell.x},{_beltStartCell.y}) -- click end cell");
+                }
             }
         }
         else
@@ -959,22 +1260,29 @@ public class StructuralPlaytestSetup : MonoBehaviour
             else
                 DestroyBeltGhostLine();
 
-            if (mouse.leftButton.wasPressedThisFrame && cell.HasValue)
+            if (mouse.leftButton.wasPressedThisFrame)
             {
-                var endCell = cell.Value;
-                var result = _automationService.PlaceBelt(_beltStartCell, endCell, _currentLevel);
-                if (result != null)
+                if (!cell.HasValue)
                 {
-                    _automationBuildings.Add(result);
-                    SpawnBeltVisual(result, _beltStartCell, endCell);
-                    int connections = CountConnections(result.Ports);
-                    Debug.Log($"Belt placed from ({_beltStartCell.x},{_beltStartCell.y}) to ({endCell.x},{endCell.y}), {connections} connections formed");
+                    Debug.Log("belt: end click ignored, no grid cell under cursor");
                 }
                 else
                 {
-                    LogBeltPlacementFailure(_beltStartCell, endCell);
+                    var endCell = cell.Value;
+                    var result = _automationService.PlaceBelt(_beltStartCell, endCell, _currentLevel);
+                    if (result != null)
+                    {
+                        _automationBuildings.Add(result);
+                        SpawnBeltVisual(result, _beltStartCell, endCell);
+                        int connections = CountConnections(result.Ports);
+                        Debug.Log($"Belt placed from ({_beltStartCell.x},{_beltStartCell.y}) to ({endCell.x},{endCell.y}), {connections} connections formed");
+                    }
+                    else
+                    {
+                        LogBeltPlacementFailure(_beltStartCell, endCell);
+                    }
+                    CancelBeltPlacement();
                 }
-                CancelBeltPlacement();
             }
         }
     }
@@ -1125,7 +1433,11 @@ public class StructuralPlaytestSetup : MonoBehaviour
             ClearGhostPortIndicators();
         }
 
-        if (mouse.leftButton.wasPressedThisFrame && cell.HasValue)
+        if (mouse.leftButton.wasPressedThisFrame && !cell.HasValue)
+        {
+            Debug.Log("machine: click ignored, no grid cell under cursor");
+        }
+        else if (mouse.leftButton.wasPressedThisFrame && cell.HasValue)
         {
             ClearGhostPortIndicators();
             var result = _automationService.PlaceMachine(_smelterDef, cell.Value, _placeRotation, _currentLevel);
@@ -1171,7 +1483,11 @@ public class StructuralPlaytestSetup : MonoBehaviour
             DestroyPlaceGhost();
         }
 
-        if (mouse.leftButton.wasPressedThisFrame && cell.HasValue)
+        if (mouse.leftButton.wasPressedThisFrame && !cell.HasValue)
+        {
+            Debug.Log("storage: click ignored, no grid cell under cursor");
+        }
+        else if (mouse.leftButton.wasPressedThisFrame && cell.HasValue)
         {
             var result = _automationService.PlaceStorage(_storageDef, cell.Value, _placeRotation, _currentLevel);
             if (result != null)
@@ -1227,7 +1543,10 @@ public class StructuralPlaytestSetup : MonoBehaviour
 
         var cell = GetCellUnderCursor(mouse);
         if (!cell.HasValue)
+        {
+            Debug.Log("delete: click ignored, no grid cell under cursor");
             return;
+        }
 
         // Priority 1: automation buildings (belts, machines, storage)
         for (int i = _automationBuildings.Count - 1; i >= 0; i--)
@@ -1418,11 +1737,24 @@ public class StructuralPlaytestSetup : MonoBehaviour
         var worldPos = _grid.CellToWorld(cell, _currentLevel);
         var machine = GameObject.CreatePrimitive(PrimitiveType.Cube);
         machine.name = $"Machine_{cell.x}_{cell.y}";
-        var collider = machine.GetComponent<Collider>();
-        if (collider != null) Destroy(collider);
+
+        // Replace default collider with a BoxCollider on the Interactable layer
+        var defaultCollider = machine.GetComponent<Collider>();
+        if (defaultCollider != null) Destroy(defaultCollider);
+        machine.layer = PhysicsLayers.Interactable;
+        var boxCollider = machine.AddComponent<BoxCollider>();
+        boxCollider.size = Vector3.one;
+
         machine.transform.position = worldPos + Vector3.up * 0.6f;
         machine.transform.localScale = new Vector3(0.9f, 1.2f, 0.9f);
         SetColor(machine, new Color(0.2f, 0.4f, 0.8f));
+
+        // Add MachineBehaviour and link simulation machine (inactive-then-activate pattern)
+        machine.SetActive(false);
+        var behaviour = machine.AddComponent<MachineBehaviour>();
+        behaviour.Initialize(_smelterDef, result.SimulationObject as Machine);
+        machine.SetActive(true);
+
         result.BuildingData.Instance = machine;
 
         // Port direction indicators: blue arrow = input, red arrow = output
@@ -1434,11 +1766,24 @@ public class StructuralPlaytestSetup : MonoBehaviour
         var worldPos = _grid.CellToWorld(cell, _currentLevel);
         var storage = GameObject.CreatePrimitive(PrimitiveType.Cube);
         storage.name = $"Storage_{cell.x}_{cell.y}";
-        var collider = storage.GetComponent<Collider>();
-        if (collider != null) Destroy(collider);
+
+        // Replace default collider with a BoxCollider on the Interactable layer
+        var defaultCollider = storage.GetComponent<Collider>();
+        if (defaultCollider != null) Destroy(defaultCollider);
+        storage.layer = PhysicsLayers.Interactable;
+        var boxCollider = storage.AddComponent<BoxCollider>();
+        boxCollider.size = Vector3.one;
+
         storage.transform.position = worldPos + Vector3.up * 0.5f;
         storage.transform.localScale = new Vector3(0.85f, 1.0f, 0.85f);
         SetColor(storage, new Color(0.8f, 0.7f, 0.1f));
+
+        // Add StorageBehaviour and link simulation container (inactive-then-activate pattern)
+        storage.SetActive(false);
+        var behaviour = storage.AddComponent<StorageBehaviour>();
+        behaviour.Initialize(_storageDef, result.SimulationObject as StorageContainer);
+        storage.SetActive(true);
+
         result.BuildingData.Instance = storage;
     }
 
@@ -1491,7 +1836,7 @@ public class StructuralPlaytestSetup : MonoBehaviour
             var indicator = GameObject.CreatePrimitive(PrimitiveType.Cube);
             indicator.name = isInput ? "GhostPortIn" : "GhostPortOut";
             var col = indicator.GetComponent<Collider>();
-            if (col != null) Destroy(col);
+            if (col != null) DestroyImmediate(col);
 
             var dir3 = new Vector3(rotatedDir.x, 0, rotatedDir.y);
             indicator.transform.position = worldPos + Vector3.up * 0.6f + dir3 * (cellSize * 0.45f);
@@ -1627,7 +1972,10 @@ public class StructuralPlaytestSetup : MonoBehaviour
     {
         var camera = Camera.main;
         if (camera == null)
+        {
+            Debug.LogWarning("build raycast: Camera.main is null, no camera tagged MainCamera is active");
             return null;
+        }
 
         var mousePos = mouse.position.ReadValue();
         var ray = camera.ScreenPointToRay(new Vector3(mousePos.x, mousePos.y, 0f));
