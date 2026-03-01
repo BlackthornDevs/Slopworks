@@ -81,6 +81,11 @@ public class RecipeSelectionUI : MonoBehaviour
             Debug.Log($"recipe ui: adding entry '{recipe.displayName}' canCraft={CanCraftRecipe(recipe)}");
             CreateRecipeEntry(recipe);
         }
+
+        // Force layout rebuild -- VerticalLayoutGroup doesn't auto-rebuild for runtime children
+        var contentRect = _recipeListContent as RectTransform;
+        if (contentRect != null)
+            LayoutRebuilder.ForceRebuildLayoutImmediate(contentRect);
     }
 
     private void CreateRecipeEntry(RecipeSO recipe)
@@ -93,8 +98,12 @@ public class RecipeSelectionUI : MonoBehaviour
         bool canCraft = CanCraftRecipe(recipe);
         bg.color = canCraft ? new Color(0.2f, 0.3f, 0.2f, 0.9f) : new Color(0.3f, 0.2f, 0.2f, 0.5f);
 
+        var entryRect = bg.rectTransform;
+        entryRect.sizeDelta = new Vector2(0, 40);
+
         var layout = entryObj.AddComponent<LayoutElement>();
         layout.preferredHeight = 40;
+        layout.minHeight = 40;
 
         var textObj = new GameObject("Text");
         textObj.transform.SetParent(entryObj.transform, false);
@@ -240,9 +249,9 @@ public class RecipeSelectionUI : MonoBehaviour
 
         var contentObj = new GameObject("Content");
         contentObj.transform.SetParent(scrollObj.transform, false);
-        _recipeListContent = contentObj.transform;
 
         var contentRect = contentObj.AddComponent<RectTransform>();
+        _recipeListContent = contentObj.transform;
         contentRect.anchorMin = new Vector2(0, 1);
         contentRect.anchorMax = new Vector2(1, 1);
         contentRect.pivot = new Vector2(0.5f, 1);
