@@ -127,6 +127,24 @@ Existing playtest scenes to reference:
 
 ---
 
+## Testing requirements
+
+**Unit tests are necessary but not sufficient.** Phase 5 shipped 675 passing EditMode tests and still had 5 bugs that only appeared during manual playtest. Every bug was at an integration seam: component ordering, Unity lifecycle timing, UI hierarchy, input system wiring. Pure C# simulation tests don't catch these.
+
+Every phase must include tests at two levels:
+
+1. **Simulation tests** — pure C# logic (Inventory.AddItem returns correct count, Machine.Tick advances state). These are the existing EditMode tests. Keep writing them.
+
+2. **Integration tests** — verify that systems actually work together the way a player experiences them. These catch the bugs that simulation tests miss:
+   - **Component dependency chains** — if B.Awake() calls GetComponent<A>(), test what happens when A is missing or added in the wrong order
+   - **Bootstrapper ordering** — test that setup sequences produce working references, not just that individual systems work in isolation
+   - **UI structure** — test that runtime-created UI elements have correct parents, nonzero dimensions, and expected component configurations
+   - **End-to-end flows** — test the full user action (player walks over item -> item enters inventory -> hotbar updates), not just each step alone
+
+**Do not mark a phase complete based on passing unit tests alone.** If the playtest scene reveals bugs, the test suite had gaps. Write the missing integration test before (or alongside) fixing the bug so the same class of problem is caught automatically next time.
+
+---
+
 ## Writing style
 
 Sentence case everywhere — code comments, log messages, UI text, commit messages, variable names where naming allows it. No emojis in source code or logs.
