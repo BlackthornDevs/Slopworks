@@ -320,37 +320,50 @@ Create a combined turret defense playtest that verifies the full loop: place tur
 
 ## Pre-PR merge task
 
-### TASK J-023: Merge master into joe/main and resolve conflicts before PR
+### TASK J-023: Merge master into joe/main and port turret code to JoePlaytestSetup
 
 **Status:** Pending
 **Priority:** Critical
 **Branch:** `joe/main`
 
-Master now contains Phase 6 (Building Exploration) and Phase 8 (Supply Chain Network) from Kevin. Your branch is missing both. You MUST merge master and resolve all conflicts before creating a PR for your turret work.
+`StructuralPlaytestSetup.cs` no longer exists. It was split into shared infrastructure + per-developer bootstrappers to eliminate merge conflicts. Your turret code needs to be ported into `JoePlaytestSetup.cs`, which is exclusively yours.
+
+**New file structure (on master):**
+
+| File | Location | Purpose |
+|------|----------|---------|
+| `PlaytestContext.cs` | `Scripts/Debug/` | Shared data class holding all refs from bootstrap |
+| `PlaytestBootstrap.cs` | `Scripts/Debug/` | Plain C# one-shot setup (creates grid, simulation, player, HUD, combat) |
+| `PlaytestToolController.cs` | `Scripts/Debug/` | MonoBehaviour: all shared tool handling (foundation, wall, ramp, belt, machine, storage, delete), visuals, OnGUI, simulation tick |
+| `KevinPlaytestSetup.cs` | `Scripts/Debug/` | Kevin's exclusive bootstrapper (building exploration, supply chain, overworld map) |
+| `JoePlaytestSetup.cs` | `Scripts/Debug/` | Joe's exclusive bootstrapper -- YOUR file, skeleton ready for turret code |
 
 **Steps:**
 1. `git fetch origin master && git merge origin/master`
-2. Resolve merge conflicts in `StructuralPlaytestSetup.cs` -- this is the big one. Details below.
-3. Verify compilation: `recompile_scripts` via MCP
-4. Run ALL EditMode tests -- they must all pass (789+ tests expected)
-5. Do a quick manual playtest: hit Play, verify turrets still work, verify building portal and supply dock are present
+2. The merge should be clean -- `StructuralPlaytestSetup.cs` is deleted on master, so git won't conflict with your version. You may need to delete your copy manually if git keeps it.
+3. Port turret code into `JoePlaytestSetup.cs`. The skeleton has commented placeholders showing exactly where each piece goes:
+   - Add `CreateTurretDefinition()` -- create TurretDefinitionSO at runtime, add to `_ctx.RuntimeSOs`
+   - Uncomment slot 7 in `CreateBuildPage()`: `Set(7, "turret", "Turret", ...)`
+   - Register turret tool handler: `_toolCtrl.RegisterToolHandler(PlaytestToolController.ToolMode.TurretPlace, HandleTurretPlaceInput)`
+   - Replace `CreateGroundPlane()` with your PlaytestEnvironment code
+   - Add turret pre-seed chain after `_toolCtrl.PreSeedFactory()` in the `_preSeedFactory` block
+   - Add `Update()` with P key trigger for turret pre-seed
+   - Add `OnGUI()` for turret stats (start Y position from `_toolCtrl.GuiNextY`)
+   - Add turret SO cleanup in `OnDestroy()`
+4. Verify compilation: `recompile_scripts` via MCP
+5. Run ALL EditMode tests -- they must all pass (789+ tests expected)
+6. Quick manual playtest: hit Play in a scene with JoePlaytestSetup, verify turrets work
 
-**StructuralPlaytestSetup.cs conflict details:**
-
-Master has these additions that your branch does not have -- preserve ALL of them:
-
-- **Phase 6 (Building Exploration):** BuildingManager, BuildingLayoutGenerator, MEPRestorePointBehaviour, building portal system, building entry/exit, building enemies, MEP restore flow. Look for methods like `CreateBuildingManager()`, `CreateBuildingPortal()`, building-related fields (`_buildingManager`, `_warehouseState`, etc.), and Update() logic for building entry (F key near portal).
-
-- **Phase 8 (Supply Chain):** SupplyLineManager, SupplyLine, OverworldMap, OverworldMapUI. Look for `CreateSupplyChain()`, supply-related fields (`_supplyLineManager`, `_warehouseSupplyLine`, `_overworldMap`, `_overworldMapUI`), M key toggle in Update(), supply status in OnGUI(), `_supplyLineManager.TickAll()` in FixedUpdate(), and `_warehouseSupplyLine.Dispose()` in OnDestroy().
-
-- **Supply dock rewrite:** `CreateSupplyDock()` was completely rewritten to use `_automationService.PlaceStorage()` at grid cell (15,7) with output-only ports and SpawnPortIndicators(). Do NOT keep the old hand-placed supply dock code.
-
-**Your turret additions to integrate:**
-- Tool slot 7 for turret placement (no conflict -- Kevin uses slots 1-6)
-- `ToolMode.TurretPlace` enum value
-- P key for pre-seed factory
-- `CreateTurretDefinition()`, turret placement logic in Update()
-- PlaytestEnvironment replacing CreateGroundPlane()
+**Key API on PlaytestToolController:**
+- `RegisterToolHandler(ToolMode mode, Action<Keyboard, Mouse> handler)` -- register your turret input handler
+- `SetTool(ToolMode mode)` -- programmatically switch tools
+- `GetCellUnderCursor()` -- returns grid cell under mouse
+- `SpawnPortIndicators(PlacementResult result)` -- show port indicators on placed buildings
+- `PreSeedFactory()` -- pre-seeds the basic smelting chain
+- `CurrentTool` -- read current tool mode
+- `CurrentLevel` -- read current vertical level
+- `GuiNextY` -- Y position after shared OnGUI, use as start for your OnGUI
+- `SuppressInput` -- set true to block all tool input (for modal UI)
 
 **Shared file changes (yours, already on joe/main):**
 - `PhysicsLayers.cs` -- added FaunaMask (additive, no conflict expected)
@@ -362,9 +375,8 @@ Master has these additions that your branch does not have -- preserve ALL of the
 **Acceptance criteria:**
 - Zero compilation errors after merge
 - All EditMode tests pass (should be 789+ after merge)
-- Turret placement and firing still works
-- Building portal, supply dock, and overworld map (M key) are present in scene
-- No Phase 6 or Phase 8 code was lost during conflict resolution
+- Turret placement and firing still works in JoePlaytestSetup scene
+- `StructuralPlaytestSetup.cs` is fully deleted (not present on joe/main after merge)
 
 ---
 
