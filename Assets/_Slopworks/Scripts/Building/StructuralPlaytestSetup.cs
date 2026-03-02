@@ -20,6 +20,7 @@ using UnityEngine.InputSystem;
 ///   Escape - Cancel / return to items page
 ///   PageUp/PageDown - Change active level
 ///   F - Fill storage with iron ore
+///   G - Spawn enemy wave
 ///   M - Overworld map
 ///   Left click - Fire weapon / place building
 ///
@@ -70,6 +71,12 @@ public class StructuralPlaytestSetup : MonoBehaviour
     private PlayerInventory _playerInventory;
     private WeaponBehaviour _weaponBehaviour;
 
+    // -- Turret definitions (created at runtime) --
+    private TurretDefinitionSO _turretDef;
+
+    // -- Turret tracking --
+    private readonly List<TurretBehaviour> _turrets = new();
+
     // -- Combat definitions (created at runtime) --
     private WeaponDefinitionSO _weaponDef;
     private FaunaDefinitionSO _faunaDef;
@@ -106,7 +113,7 @@ public class StructuralPlaytestSetup : MonoBehaviour
     private readonly List<PlacementResult> _automationBuildings = new();
 
     // -- Tool state --
-    private enum ToolMode { None, Foundation, Wall, Ramp, Delete, Belt, MachinePlace, StoragePlace }
+    private enum ToolMode { None, Foundation, Wall, Ramp, Delete, Belt, MachinePlace, StoragePlace, TurretPlace }
     private ToolMode _currentTool = ToolMode.None;
     private int _currentLevel;
 
@@ -148,7 +155,8 @@ public class StructuralPlaytestSetup : MonoBehaviour
     private readonly List<GameObject> _beltItemPool = new();
     private readonly List<float> _positionBuffer = new();
 
-    // -- Ground plane --
+    // -- Environment --
+    private PlaytestEnvironment _environment;
     private GameObject _groundPlane;
 
     // -- Colors --
@@ -163,18 +171,31 @@ public class StructuralPlaytestSetup : MonoBehaviour
 
     private void Awake()
     {
+        DestroySceneCameras();
         CreateDefinitions();
         CreateRegistries();
         CreateInfrastructure();
-        CreateGroundPlane();
+        CreateEnvironment();
         CreateBuildingLayout();
         CreateMEPRestorePoints();
         CreateBuildingEntryExit();
 
         if (_preSeedFactory)
+        {
             PreSeedFactory();
+            _preSeedTriggered = true;
+        }
 
         var player = CreatePlayer();
+
+        // Match player camera to fog color for seamless blending
+        var fpsCam = player.GetComponentInChildren<Camera>();
+        if (fpsCam != null && RenderSettings.fog)
+        {
+            fpsCam.clearFlags = CameraClearFlags.SolidColor;
+            fpsCam.backgroundColor = RenderSettings.fogColor;
+        }
+
         WirePlayerCombat(player);
         CreateWorldItems();
         CreateSmelterInteractable();
@@ -238,6 +259,7 @@ public class StructuralPlaytestSetup : MonoBehaviour
         HandleLevelChange(kb);
         HandleFillStorage(kb, mouse);
         HandleWaveTrigger(kb);
+        HandlePreSeedTrigger(kb);
 
         switch (_currentTool)
         {
@@ -261,6 +283,9 @@ public class StructuralPlaytestSetup : MonoBehaviour
                 break;
             case ToolMode.StoragePlace:
                 HandleStoragePlaceInput(kb, mouse);
+                break;
+            case ToolMode.TurretPlace:
+                HandleTurretPlaceInput(kb, mouse);
                 break;
         }
 
@@ -297,8 +322,13 @@ public class StructuralPlaytestSetup : MonoBehaviour
         foreach (var ab in _automationBuildings)
             if (ab.SimulationObject is StorageContainer) storageCount++;
 
-        DrawLine(ref y, x, w, h, $"Belts: {beltCount}  |  Machines: {machineCount}  |  Storage: {storageCount}");
-        DrawLine(ref y, x, w, h, $"Auto-inserters: {inserterCount}  |  Belt links: {_simulation.BeltNetwork.ConnectionCount}");
+        int turretCount = _turrets.Count;
+        int activeTurrets = 0;
+        foreach (var t in _turrets)
+            if (t != null && t.HasTarget) activeTurrets++;
+
+        DrawLine(ref y, x, w, h, $"Belts: {beltCount}  |  Machines: {machineCount}  |  Storage: {storageCount}  |  Turrets: {turretCount}");
+        DrawLine(ref y, x, w, h, $"Auto-inserters: {inserterCount}  |  Belt links: {_simulation.BeltNetwork.ConnectionCount}  |  Active turrets: {activeTurrets}");
         DrawLine(ref y, x, w, h, $"Port nodes: {_portRegistry.Count}");
 
         // Combat stats (null-safe -- components initialize in Start, OnGUI runs before that)
@@ -330,10 +360,10 @@ public class StructuralPlaytestSetup : MonoBehaviour
         DrawLine(ref y, x, w, h, $"Supply: {inTransit} in transit | {delivered} delivered");
 
         y += 4;
-        DrawLine(ref y, x, w, h, "[B] Toggle build/items  [1-7] Select tool/slot  [V] FPS/Iso");
+        DrawLine(ref y, x, w, h, "[B] Toggle build/items  [1-8] Select tool/slot  [V] FPS/Iso");
         DrawLine(ref y, x, w, h, "[PgUp/PgDn] Level  [R] Rotate  [Esc] Cancel  [F] Fill");
         DrawLine(ref y, x, w, h, "[Tab] Inventory  [E] Interact  [WASD] Move  [Space] Jump");
-        DrawLine(ref y, x, w, h, "[G] Spawn wave  |  Port colors: BLUE=input RED=output");
+        DrawLine(ref y, x, w, h, "[G] Spawn wave  [P] Pre-seed factory  |  BLUE=input RED=output");
         DrawLine(ref y, x, w, h, "[Portal] Enter/exit building  [M] Overworld map");
 
         if (_currentTool == ToolMode.Wall)
@@ -386,6 +416,7 @@ public class StructuralPlaytestSetup : MonoBehaviour
         if (_ironIngotDef != null) DestroyImmediate(_ironIngotDef);
         if (_ironScrapDef != null) DestroyImmediate(_ironScrapDef);
         if (_smeltRecipe != null) DestroyImmediate(_smeltRecipe);
+        if (_turretDef != null) DestroyImmediate(_turretDef);
         if (_weaponDef != null) DestroyImmediate(_weaponDef);
         if (_faunaDef != null) DestroyImmediate(_faunaDef);
         if (_enemyDiedEvent != null) DestroyImmediate(_enemyDiedEvent);
@@ -489,6 +520,28 @@ public class StructuralPlaytestSetup : MonoBehaviour
         _smeltRecipe.outputs = new[] { new RecipeIngredient { itemId = IronIngot, count = 1 } };
         _smeltRecipe.craftDuration = 2f;
         _smeltRecipe.requiredMachineType = SmelterType;
+
+        // Turret
+        _turretDef = ScriptableObject.CreateInstance<TurretDefinitionSO>();
+        _turretDef.turretId = "turret_basic";
+        _turretDef.displayName = "Basic Turret";
+        _turretDef.range = 20f;
+        _turretDef.fireInterval = 0.5f;
+        _turretDef.damagePerShot = 10f;
+        _turretDef.damageType = DamageType.Kinetic;
+        _turretDef.ammoItemId = "iron_scrap";
+        _turretDef.size = Vector2Int.one;
+        _turretDef.ammoSlotCount = 1;
+        _turretDef.ammoMaxStackSize = 64;
+        _turretDef.ports = new[]
+        {
+            new MachinePort
+            {
+                localOffset = Vector2Int.zero,
+                direction = new Vector2Int(-1, 0),
+                type = PortType.Input
+            }
+        };
 
         // Combat
         _weaponDef = ScriptableObject.CreateInstance<WeaponDefinitionSO>();
@@ -675,6 +728,18 @@ public class StructuralPlaytestSetup : MonoBehaviour
         }
     }
 
+    private bool _preSeedTriggered;
+
+    private void HandlePreSeedTrigger(Keyboard kb)
+    {
+        if (kb.pKey.wasPressedThisFrame && !_preSeedTriggered)
+        {
+            _preSeedTriggered = true;
+            PreSeedFactory();
+            Debug.Log("playtest: pre-seed factory triggered via P key");
+        }
+    }
+
     private void CreateInfrastructure()
     {
         _grid = new FactoryGrid();
@@ -690,23 +755,30 @@ public class StructuralPlaytestSetup : MonoBehaviour
             _grid, _portRegistry, _connectionResolver, _simulation);
     }
 
-    private void CreateGroundPlane()
+    private void DestroySceneCameras()
     {
-        _groundPlane = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        _groundPlane.name = "GridPlane";
-        _groundPlane.layer = PhysicsLayers.GridPlane;
-        _groundPlane.transform.position = new Vector3(
-            FactoryGrid.Width * FactoryGrid.CellSize * 0.5f,
-            -0.05f,
-            FactoryGrid.Height * FactoryGrid.CellSize * 0.5f);
-        _groundPlane.transform.localScale = new Vector3(
-            FactoryGrid.Width * FactoryGrid.CellSize,
-            0.1f,
-            FactoryGrid.Height * FactoryGrid.CellSize);
+        // Remove any pre-existing cameras so they don't conflict with the
+        // player camera rig created by CreatePlayer.
+        foreach (var cam in FindObjectsByType<Camera>(FindObjectsSortMode.None))
+        {
+            Debug.Log($"playtest: destroying scene camera '{cam.name}'");
+            Destroy(cam.gameObject);
+        }
+    }
 
-        var renderer = _groundPlane.GetComponent<Renderer>();
-        if (renderer != null)
-            renderer.material.color = new Color(0.2f, 0.2f, 0.2f);
+    private void CreateEnvironment()
+    {
+        var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+        var gridCenter = new Vector3(
+            FactoryGrid.Width * FactoryGrid.CellSize * 0.5f, 0f,
+            FactoryGrid.Height * FactoryGrid.CellSize * 0.5f);
+
+        var envObj = new GameObject("PlaytestEnvironment");
+        _environment = envObj.AddComponent<PlaytestEnvironment>();
+        typeof(PlaytestEnvironment).GetField("_centerOffset", flags)?.SetValue(_environment, gridCenter);
+        typeof(PlaytestEnvironment).GetField("_arenaSize", flags)
+            ?.SetValue(_environment, FactoryGrid.Width * FactoryGrid.CellSize);
+        _groundPlane = _environment.Generate();
     }
 
     private void CreateRegistries()
@@ -941,6 +1013,7 @@ public class StructuralPlaytestSetup : MonoBehaviour
         { "belt", ToolMode.Belt },
         { "machine", ToolMode.MachinePlace },
         { "storage", ToolMode.StoragePlace },
+        { "turret", ToolMode.TurretPlace },
         { "delete", ToolMode.Delete },
     };
 
@@ -959,7 +1032,8 @@ public class StructuralPlaytestSetup : MonoBehaviour
         Set(3, "belt", "Belt", new Color(0.3f, 0.5f, 0.7f, 0.8f));
         Set(4, "machine", "Machine", new Color(0.7f, 0.5f, 0.2f, 0.8f));
         Set(5, "storage", "Storage", new Color(0.6f, 0.4f, 0.3f, 0.8f));
-        Set(6, "delete", "Delete", new Color(0.8f, 0.2f, 0.2f, 0.8f));
+        Set(6, "turret", "Turret", new Color(0.8f, 0.3f, 0.3f, 0.8f));
+        Set(7, "delete", "Delete", new Color(0.8f, 0.2f, 0.2f, 0.8f));
 
         return page;
     }
@@ -970,7 +1044,7 @@ public class StructuralPlaytestSetup : MonoBehaviour
         {
             CancelAllPending();
             _currentTool = toolMode;
-            if (toolMode == ToolMode.MachinePlace || toolMode == ToolMode.StoragePlace)
+            if (toolMode == ToolMode.MachinePlace || toolMode == ToolMode.StoragePlace || toolMode == ToolMode.TurretPlace)
                 _placeRotation = 0;
             Debug.Log($"build tool: {entryId} -> {toolMode}");
         }
@@ -1332,6 +1406,50 @@ public class StructuralPlaytestSetup : MonoBehaviour
             _automationBuildings.Add(outResult);
             SpawnStorageVisual(outResult, new Vector2Int(13, 7));
             Debug.Log("Pre-seed: output storage placed at (13,7)");
+        }
+
+        // -- Turret defense chain --
+        // Ammo storage at (5,5), pre-filled with 200 iron scrap
+        var ammoResult = _automationService.PlaceStorage(_storageDef, new Vector2Int(5, 5), 0);
+        if (ammoResult != null)
+        {
+            _automationBuildings.Add(ammoResult);
+            SpawnStorageVisual(ammoResult, new Vector2Int(5, 5));
+            var ammoStorage = (StorageContainer)ammoResult.SimulationObject;
+            for (int i = 0; i < 200; i++)
+                ammoStorage.TryInsert("iron_scrap");
+            Debug.Log("Pre-seed: ammo storage placed at (5,5) with 200 iron scrap");
+        }
+        else
+        {
+            Debug.LogWarning("Pre-seed: FAILED to place ammo storage at (5,5)");
+        }
+
+        // Belt from (6,5) to (8,5) -- feeds east toward turret
+        var ammoBeltResult = _automationService.PlaceBelt(new Vector2Int(6, 5), new Vector2Int(8, 5));
+        if (ammoBeltResult != null)
+        {
+            _automationBuildings.Add(ammoBeltResult);
+            SpawnBeltVisual(ammoBeltResult, new Vector2Int(6, 5), new Vector2Int(8, 5));
+            Debug.Log("Pre-seed: ammo belt placed from (6,5) to (8,5)");
+        }
+        else
+        {
+            Debug.LogWarning("Pre-seed: FAILED to place ammo belt from (6,5) to (8,5)");
+        }
+
+        // Turret at (9,5), rotation 0 (input port faces west toward belt)
+        var turretResult = _automationService.PlaceTurret(_turretDef, new Vector2Int(9, 5), 0, 0);
+        if (turretResult != null)
+        {
+            _automationBuildings.Add(turretResult);
+            SpawnTurretVisual(turretResult, new Vector2Int(9, 5));
+            int connections = CountConnections(turretResult.Ports);
+            Debug.Log($"Pre-seed: turret placed at (9,5), {connections} port connections");
+        }
+        else
+        {
+            Debug.LogWarning("Pre-seed: FAILED to place turret at (9,5)");
         }
 
         Debug.Log($"Pre-seed complete: {_simulation.InserterCount} auto-inserters, {_simulation.BeltNetwork.ConnectionCount} belt links");
@@ -2084,6 +2202,103 @@ public class StructuralPlaytestSetup : MonoBehaviour
                 Debug.Log($"Cannot place storage at ({cell.Value.x},{cell.Value.y}): no foundation or overlap");
             }
         }
+    }
+
+    // -- Turret 1-click placement with R rotate --
+
+    private void HandleTurretPlaceInput(Keyboard kb, Mouse mouse)
+    {
+        var cell = GetCellUnderCursor(mouse);
+
+        if (kb.rKey.wasPressedThisFrame)
+        {
+            _placeRotation = (_placeRotation + 90) % 360;
+            Debug.Log($"Turret rotation: {_placeRotation}");
+        }
+
+        if (cell.HasValue)
+        {
+            // Turrets skip foundation check in playtest -- always show valid ghost
+            UpdatePlaceGhost(cell.Value, _turretDef.size, true,
+                new Color(0.8f, 0.3f, 0.3f, 0.6f), 0.5f);
+            UpdateGhostPortIndicators(cell.Value, _turretDef.ports, _placeRotation);
+        }
+        else
+        {
+            DestroyPlaceGhost();
+            ClearGhostPortIndicators();
+        }
+
+        if (mouse.leftButton.wasPressedThisFrame && !cell.HasValue)
+        {
+            Debug.Log("turret: click ignored, no grid cell under cursor");
+        }
+        else if (mouse.leftButton.wasPressedThisFrame && cell.HasValue)
+        {
+            ClearGhostPortIndicators();
+            var result = _automationService.PlaceTurret(_turretDef, cell.Value, _placeRotation, _currentLevel, skipFoundationCheck: true);
+            if (result != null)
+            {
+                _automationBuildings.Add(result);
+                SpawnTurretVisual(result, cell.Value);
+                int connections = CountConnections(result.Ports);
+                var inputDir = GridRotation.Rotate(new Vector2Int(-1, 0), _placeRotation);
+                Debug.Log($"Turret placed at ({cell.Value.x},{cell.Value.y}) rotation {_placeRotation} (ammo input from {FormatDirection(inputDir)}), {connections} connections formed");
+            }
+            else
+            {
+                Debug.Log($"Cannot place turret at ({cell.Value.x},{cell.Value.y}): overlap with existing building");
+            }
+        }
+    }
+
+    private void SpawnTurretVisual(PlacementResult result, Vector2Int cell)
+    {
+        var worldPos = _grid.CellToWorld(cell, _currentLevel);
+        var turretController = (TurretController)result.SimulationObject;
+
+        // Base: cylinder
+        var baseObj = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        baseObj.name = $"Turret_{cell.x}_{cell.y}";
+        var defaultCollider = baseObj.GetComponent<Collider>();
+        if (defaultCollider != null) Destroy(defaultCollider);
+        baseObj.layer = PhysicsLayers.Interactable;
+        baseObj.AddComponent<BoxCollider>();
+
+        baseObj.transform.position = worldPos + Vector3.up * 0.4f;
+        baseObj.transform.localScale = new Vector3(0.8f, 0.4f, 0.8f);
+        SetColor(baseObj, new Color(0.5f, 0.15f, 0.15f));
+
+        // Barrel pivot: empty child of base for rotation
+        var pivot = new GameObject("BarrelPivot");
+        pivot.transform.SetParent(baseObj.transform);
+        pivot.transform.localPosition = Vector3.up * 0.4f;
+
+        // Barrel: elongated cube child of pivot
+        var barrel = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        barrel.name = "Barrel";
+        var barrelCollider = barrel.GetComponent<Collider>();
+        if (barrelCollider != null) Destroy(barrelCollider);
+        barrel.transform.SetParent(pivot.transform);
+        barrel.transform.localPosition = new Vector3(0f, 0f, 0.3f);
+        barrel.transform.localScale = new Vector3(0.15f, 0.15f, 0.6f);
+        SetColor(barrel, new Color(0.3f, 0.1f, 0.1f));
+
+        // Add TurretBehaviour (inactive-then-activate pattern)
+        baseObj.SetActive(false);
+        var behaviour = baseObj.AddComponent<TurretBehaviour>();
+        behaviour.Initialize(_turretDef, turretController, pivot.transform);
+        baseObj.SetActive(true);
+
+        _turrets.Add(behaviour);
+        result.BuildingData.Instance = baseObj;
+
+        // Port indicators
+        SpawnPortIndicators(result.Ports, worldPos, baseObj.transform);
+
+        // Pre-load ammo so turret fires immediately in playtest
+        turretController.AmmoStorage.TryInsertStack("iron_scrap", 32);
+        Debug.Log($"turret visual spawned, pre-loaded 32 ammo");
     }
 
     // -- Ghost preview for machine/storage --
