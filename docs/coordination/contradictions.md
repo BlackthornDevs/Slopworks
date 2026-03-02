@@ -65,3 +65,15 @@ Format:
 **Joe's code does:** `FaunaController` calls `GetComponent<HealthComponent>()` on the target every melee attack instead of caching.
 **Impact:** Unnecessary allocation per attack. At scale with many fauna this adds up.
 **Fix required:** Cache the target's `HealthComponent` when target is acquired, clear on target change.
+
+## C-008: Dev_Test scene should use StructuralPlaytestSetup instead of a separate bootstrapper
+
+**Found by:** joe
+**Date:** 2026-03-02
+**D-009 says:** "Each developer has one playtest scene that grows each phase. Kevin's scene is StructuralPlaytest (building + automation + inventory + crafting + combat). Joe's scene is Dev_Test (combat focus)."
+**Problem:** Dev_Test currently has a separate bootstrapper (DevTestPlaytestSetup) with only combat features. This means Joe's scene is missing factory automation, turrets, building exploration, supply chain, and the build page — all features that exist in Kevin's StructuralPlaytestSetup. Joe cannot test his turret work (J-013 through J-015) in his own scene. The two scenes are out of sync, and Dev_Test falls behind master as Kevin adds features.
+**Options:**
+1. **Dev_Test uses StructuralPlaytestSetup directly.** Swap the component. Both scenes use one bootstrapper. Zero code duplication. Scenes start identical and diverge only when dev-specific features are added. Joe's turrets, tower features, etc. would be tested by adding them to StructuralPlaytestSetup (which already has turrets).
+2. **Fork StructuralPlaytestSetup into DevTestPlaytestSetup.** Copy ~1500 lines. Two independent copies to maintain. Every change Kevin makes must be manually mirrored in Joe's copy, or the scenes drift apart.
+3. **Keep Dev_Test combat-only per current D-009.** Joe tests turrets only through Kevin's scene. Dev_Test stays lightweight but can't verify Joe's factory-integrated features.
+**Recommendation:** Option 1. One bootstrapper, two scenes. The "combat focus" distinction in D-009 was written before Joe built turrets (factory-integrated combat). Now that Joe's features touch factory automation, keeping a separate combat-only bootstrapper means Joe can never test his own work end-to-end. Using StructuralPlaytestSetup directly keeps both scenes in sync with zero maintenance cost.

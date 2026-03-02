@@ -432,6 +432,19 @@ public static class PlaytestSetup
             Debug.Log("added DevTestHUDBootstrap to HUD_Canvas");
         }
 
+        // wire the bootstrap's player inventory ref (no Find at runtime)
+        if (player != null)
+        {
+            var inventory = player.GetComponent<PlayerInventory>();
+            if (inventory != null)
+            {
+                var bootstrapSo = new SerializedObject(bootstrap);
+                bootstrapSo.FindProperty("_playerInventory").objectReferenceValue = inventory;
+                bootstrapSo.ApplyModifiedProperties();
+                Debug.Log("wired PlayerInventory on DevTestHUDBootstrap");
+            }
+        }
+
         EditorUtility.SetDirty(canvas);
     }
 

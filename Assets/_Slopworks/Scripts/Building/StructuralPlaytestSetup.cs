@@ -2236,7 +2236,7 @@ public class StructuralPlaytestSetup : MonoBehaviour
         else if (mouse.leftButton.wasPressedThisFrame && cell.HasValue)
         {
             ClearGhostPortIndicators();
-            var result = _automationService.PlaceTurret(_turretDef, cell.Value, _placeRotation, _currentLevel, skipFoundationCheck: true);
+            var result = _automationService.PlaceTurret(_turretDef, cell.Value, _placeRotation, _currentLevel);
             if (result != null)
             {
                 _automationBuildings.Add(result);
