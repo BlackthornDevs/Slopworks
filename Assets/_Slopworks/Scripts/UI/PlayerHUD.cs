@@ -38,6 +38,7 @@ public class PlayerHUD : MonoBehaviour
     private Image _crosshairImage;
     private TextMeshProUGUI _buildModeText;
     private TextMeshProUGUI _waveWarningText;
+    private TextMeshProUGUI _buildingStatusText;
     private HotbarSlotUI[] _hotbarSlots;
     private GameObject _hotbarContainer;
     private TextMeshProUGUI _hotbarPageLabel;
@@ -180,6 +181,21 @@ public class PlayerHUD : MonoBehaviour
             _buildModeText.gameObject.SetActive(visible);
     }
 
+    public void SetBuildingStatus(string text)
+    {
+        if (_buildingStatusText == null) return;
+
+        if (string.IsNullOrEmpty(text))
+        {
+            _buildingStatusText.gameObject.SetActive(false);
+        }
+        else
+        {
+            _buildingStatusText.text = text;
+            _buildingStatusText.gameObject.SetActive(true);
+        }
+    }
+
     public void ShowWaveWarning(string message)
     {
         if (_waveWarningText != null)
@@ -272,6 +288,7 @@ public class PlayerHUD : MonoBehaviour
         CreateBuildModeIndicator();
         CreateWaveWarning();
         CreateHotbar();
+        CreateBuildingStatus();
         CreateDamageFlash();
     }
 
@@ -417,6 +434,15 @@ public class PlayerHUD : MonoBehaviour
         rect.anchoredPosition = new Vector2(0, -60);
 
         obj.SetActive(false);
+    }
+
+    private void CreateBuildingStatus()
+    {
+        _buildingStatusText = CreateText("BuildingStatus", new Vector2(16, -46),
+            TextAlignmentOptions.TopLeft, 14);
+        _buildingStatusText.color = new Color(0.8f, 0.9f, 1f);
+        _buildingStatusText.text = "";
+        _buildingStatusText.gameObject.SetActive(false);
     }
 
     private void CreateHotbar()

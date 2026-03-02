@@ -79,6 +79,19 @@ public class StructuralPlaytestSetup : MonoBehaviour
     private WaveControllerBehaviour _waveController;
     private EnemySpawner _enemySpawner;
 
+    // -- Building exploration --
+    private BuildingManager _buildingManager;
+    private BuildingState _warehouseState;
+    private BuildingDefinitionSO _warehouseDef;
+    private GameEventSO _buildingClaimedEvent;
+    private BuildingLayout _buildingLayout;
+    private WaveControllerBehaviour _buildingWaveController;
+    private EnemySpawner _buildingEnemySpawner;
+    private bool _insideBuilding;
+    private StorageContainer _supplyDockContainer;
+    private StorageBehaviour _supplyDockBehaviour;
+    private StorageDefinitionSO _supplyDockDef;
+
     // -- Tracking --
     private readonly List<BuildingData> _foundations = new();
     private readonly List<WallData> _walls = new();
@@ -147,6 +160,9 @@ public class StructuralPlaytestSetup : MonoBehaviour
         CreateRegistries();
         CreateInfrastructure();
         CreateGroundPlane();
+        CreateBuildingLayout();
+        CreateMEPRestorePoints();
+        CreateBuildingEntryExit();
 
         if (_preSeedFactory)
             PreSeedFactory();
@@ -157,20 +173,26 @@ public class StructuralPlaytestSetup : MonoBehaviour
         CreateSmelterInteractable();
         CreateEnemyTemplate();
         CreateSpawnPointsAndWaves();
+        CreateBuildingEnemies();
         BakeNavMesh();
         CreateHUD(player);
+        CreateSupplyDock();
 
         Debug.Log("playtest: setup complete");
         Debug.Log("controls: WASD=move, Mouse=look, Space=jump, Shift=sprint");
         Debug.Log("controls: B=toggle build/items, 1-9=select slot, Tab=inventory, E=interact");
         Debug.Log("controls: R=rotate, Esc=cancel, PgUp/PgDn=level, F=fill storage");
         Debug.Log("controls: G=spawn next wave, LMB=fire weapon (items page)");
+        Debug.Log("controls: [Portal] Enter/exit building");
     }
 
     private void FixedUpdate()
     {
         if (_simulation != null)
             _simulation.Tick(Time.fixedDeltaTime);
+
+        if (_buildingManager != null)
+            _buildingManager.TickAll(Time.fixedDeltaTime);
     }
 
     private void Update()
@@ -220,7 +242,7 @@ public class StructuralPlaytestSetup : MonoBehaviour
         float w = 420;
         float h = 22;
 
-        int lineCount = 18;
+        int lineCount = 20;
         if (_currentTool == ToolMode.Wall && _pendingWall) lineCount++;
         if (_currentTool == ToolMode.Wall && !_pendingWall) lineCount++;
         if (_currentTool == ToolMode.Ramp) lineCount++;
@@ -259,11 +281,23 @@ public class StructuralPlaytestSetup : MonoBehaviour
         string ammoInfo = weapon != null ? $"Ammo: {weapon.CurrentAmmo}/{_weaponDef.magazineSize}" : "Ammo: --";
         DrawLine(ref y, x, w, h, $"{waveInfo}  |  {healthInfo}  |  {ammoInfo}");
 
+        // Building exploration status
+        string buildingStatus;
+        if (_warehouseState == null)
+            buildingStatus = "Building: --";
+        else if (_warehouseState.IsClaimed)
+            buildingStatus = "Building: Claimed | Production active";
+        else
+            buildingStatus = $"Building: Unclaimed | MEP: {_warehouseState.RestoredCount}/{_warehouseState.RequiredMEPCount}";
+        string locationInfo = _insideBuilding ? " [INSIDE]" : "";
+        DrawLine(ref y, x, w, h, $"{buildingStatus}{locationInfo}");
+
         y += 4;
         DrawLine(ref y, x, w, h, "[B] Toggle build/items  [1-7] Select tool/slot  [V] FPS/Iso");
         DrawLine(ref y, x, w, h, "[PgUp/PgDn] Level  [R] Rotate  [Esc] Cancel  [F] Fill");
         DrawLine(ref y, x, w, h, "[Tab] Inventory  [E] Interact  [WASD] Move  [Space] Jump");
         DrawLine(ref y, x, w, h, "[G] Spawn wave  |  Port colors: BLUE=input RED=output");
+        DrawLine(ref y, x, w, h, "[Portal] Enter/exit building");
 
         if (_currentTool == ToolMode.Wall)
         {
@@ -317,6 +351,9 @@ public class StructuralPlaytestSetup : MonoBehaviour
         if (_faunaDef != null) DestroyImmediate(_faunaDef);
         if (_enemyDiedEvent != null) DestroyImmediate(_enemyDiedEvent);
         if (_enemyTemplate != null) DestroyImmediate(_enemyTemplate);
+        if (_warehouseDef != null) DestroyImmediate(_warehouseDef);
+        if (_buildingClaimedEvent != null) DestroyImmediate(_buildingClaimedEvent);
+        if (_supplyDockDef != null) DestroyImmediate(_supplyDockDef);
     }
 
     // -- Setup --
@@ -441,6 +478,17 @@ public class StructuralPlaytestSetup : MonoBehaviour
         _faunaDef.baseBravery = 0.5f;
 
         _enemyDiedEvent = ScriptableObject.CreateInstance<GameEventSO>();
+
+        // Building exploration
+        _warehouseDef = ScriptableObject.CreateInstance<BuildingDefinitionSO>();
+        _warehouseDef.buildingId = "warehouse_01";
+        _warehouseDef.displayName = "Abandoned Warehouse";
+        _warehouseDef.requiredMEPCount = 4;
+        _warehouseDef.producedItemIds = new[] { IronIngot };
+        _warehouseDef.producedAmounts = new[] { 1 };
+        _warehouseDef.productionInterval = 30f;
+
+        _buildingClaimedEvent = ScriptableObject.CreateInstance<GameEventSO>();
     }
 
     private void WirePlayerCombat(GameObject player)
@@ -571,8 +619,9 @@ public class StructuralPlaytestSetup : MonoBehaviour
     {
 #if UNITY_EDITOR
         _groundPlane.isStatic = true;
+        // Building geometry is already marked isStatic by BuildingLayoutGenerator
         UnityEditor.AI.NavMeshBuilder.BuildNavMesh();
-        Debug.Log("playtest: navmesh baked");
+        Debug.Log("playtest: navmesh baked (home base + building interior)");
 #else
         Debug.LogWarning("playtest: navmesh baking not available outside editor");
 #endif
@@ -825,7 +874,22 @@ public class StructuralPlaytestSetup : MonoBehaviour
         hud.OnBuildToolSelected += OnHotbarBuildToolSelected;
         hud.OnPageChanged += OnHotbarPageChanged;
 
-        Debug.Log("playtest: HUD wired to player (combat + inventory)");
+        // Wire building MEP status updates to HUD
+        if (_warehouseState != null)
+        {
+            _warehouseState.OnPointRestored += () =>
+            {
+                if (_insideBuilding && _playerHUD != null)
+                {
+                    string status = _warehouseState.IsClaimed
+                        ? "Warehouse: Claimed"
+                        : $"Warehouse: MEP {_warehouseState.RestoredCount}/{_warehouseState.RequiredMEPCount}";
+                    _playerHUD.SetBuildingStatus(status);
+                }
+            };
+        }
+
+        Debug.Log("playtest: HUD wired to player (combat + inventory + building)");
     }
 
     // -- Build tool ID to ToolMode mapping --
@@ -895,6 +959,210 @@ public class StructuralPlaytestSetup : MonoBehaviour
                 Debug.Log("weapon: disabled (build page)");
             }
         }
+    }
+
+    // -- Building exploration --
+
+    private void CreateBuildingLayout()
+    {
+        var buildingOrigin = new Vector3(200f, 0f, 200f);
+        _buildingLayout = BuildingLayoutGenerator.GenerateWarehouse(buildingOrigin);
+
+        // Building manager + state
+        _buildingManager = new BuildingManager();
+        _warehouseState = new BuildingState(_warehouseDef);
+        _buildingManager.Register(_warehouseState);
+
+        // Wire claim event
+        _warehouseState.OnBuildingClaimed += () =>
+        {
+            Debug.Log("building: WAREHOUSE CLAIMED -- production starts");
+            _buildingClaimedEvent.Raise();
+        };
+
+        Debug.Log("playtest: warehouse layout generated at (200, 0, 200)");
+    }
+
+    private void CreateMEPRestorePoints()
+    {
+        var types = new[] { MEPSystemType.Electrical, MEPSystemType.Plumbing,
+                            MEPSystemType.Mechanical, MEPSystemType.HVAC };
+
+        for (int i = 0; i < _buildingLayout.MEPPositions.Length; i++)
+        {
+            var mepTransform = _buildingLayout.MEPPositions[i];
+            var pointId = $"mep_{i}";
+            var point = new MEPRestorePoint(pointId, types[i]);
+            _warehouseState.AddRestorePoint(point);
+
+            var obj = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            obj.name = $"MEPPoint_{types[i]}";
+            obj.transform.position = mepTransform.position;
+            obj.transform.localScale = new Vector3(0.8f, 0.8f, 0.8f);
+            obj.layer = PhysicsLayers.Interactable;
+
+            var behaviour = obj.AddComponent<MEPRestorePointBehaviour>();
+            behaviour.Initialize(point, _warehouseState);
+        }
+
+        Debug.Log("playtest: 4 MEP restore points created in warehouse");
+    }
+
+    private void CreateBuildingEntryExit()
+    {
+        float centerX = 10f * FactoryGrid.CellSize;
+        float centerZ = 10f * FactoryGrid.CellSize;
+
+        // Entry portal near the factory area
+        var entryObj = new GameObject("BuildingEntryPortal");
+        entryObj.layer = PhysicsLayers.VolumeTrigger;
+        entryObj.transform.position = new Vector3(centerX + 15, 1f, centerZ + 15);
+
+        var entryRb = entryObj.AddComponent<Rigidbody>();
+        entryRb.isKinematic = true;
+        var entryCollider = entryObj.AddComponent<BoxCollider>();
+        entryCollider.isTrigger = true;
+        entryCollider.size = new Vector3(3f, 3f, 3f);
+
+        var entryTrigger = entryObj.AddComponent<BuildingEntryTrigger>();
+        entryTrigger.Initialize(_buildingLayout.EntranceSpawn, OnPlayerEnterBuilding);
+
+        // Visual marker for entry portal
+        var entryVisual = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        entryVisual.name = "EntryPortalVisual";
+        entryVisual.transform.position = entryObj.transform.position;
+        entryVisual.transform.localScale = new Vector3(2f, 3f, 0.3f);
+        SetColor(entryVisual, new Color(0.2f, 0.5f, 1f, 0.6f));
+        var entryVisCol = entryVisual.GetComponent<Collider>();
+        if (entryVisCol != null) Destroy(entryVisCol);
+
+        // Exit destination (near the entry portal, for returning to home base)
+        var exitDestObj = new GameObject("ExitDestination");
+        exitDestObj.transform.position = new Vector3(centerX + 15, 1.5f, centerZ + 12);
+
+        // Exit portal inside the building (near entrance)
+        var exitObj = new GameObject("BuildingExitPortal");
+        exitObj.layer = PhysicsLayers.VolumeTrigger;
+        exitObj.transform.position = _buildingLayout.EntranceSpawn.position + new Vector3(0, 1f, -2f);
+
+        var exitRb = exitObj.AddComponent<Rigidbody>();
+        exitRb.isKinematic = true;
+        var exitCollider = exitObj.AddComponent<BoxCollider>();
+        exitCollider.isTrigger = true;
+        exitCollider.size = new Vector3(3f, 3f, 3f);
+
+        var exitTrigger = exitObj.AddComponent<BuildingExitTrigger>();
+        exitTrigger.Initialize(exitDestObj.transform, OnPlayerExitBuilding);
+
+        // Visual marker for exit portal
+        var exitVisual = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        exitVisual.name = "ExitPortalVisual";
+        exitVisual.transform.position = exitObj.transform.position;
+        exitVisual.transform.localScale = new Vector3(2f, 3f, 0.3f);
+        SetColor(exitVisual, new Color(1f, 0.5f, 0.2f, 0.6f));
+        var exitVisCol = exitVisual.GetComponent<Collider>();
+        if (exitVisCol != null) Destroy(exitVisCol);
+
+        Debug.Log("playtest: building entry/exit portals created");
+    }
+
+    private void OnPlayerEnterBuilding()
+    {
+        _insideBuilding = true;
+
+        // Auto-start building waves
+        if (_buildingWaveController != null)
+            _buildingWaveController.BeginNextWave();
+
+        if (_playerHUD != null)
+        {
+            string status = _warehouseState.IsClaimed
+                ? "Warehouse: Claimed"
+                : $"Warehouse: MEP {_warehouseState.RestoredCount}/{_warehouseState.RequiredMEPCount}";
+            _playerHUD.SetBuildingStatus(status);
+        }
+    }
+
+    private void OnPlayerExitBuilding()
+    {
+        _insideBuilding = false;
+        _playerHUD?.SetBuildingStatus(null);
+    }
+
+    private void CreateBuildingEnemies()
+    {
+        var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+
+        // Spawn points from the building layout
+        var spawnTransforms = _buildingLayout.EnemySpawnPoints;
+
+        // Building wave controller -- inactive so we can set fields before Awake
+        var waveObj = new GameObject("BuildingWaveController");
+        waveObj.SetActive(false);
+
+        // Building enemy spawner reusing same template
+        _buildingEnemySpawner = waveObj.AddComponent<EnemySpawner>();
+        typeof(EnemySpawner).GetField("_enemyPrefab", flags)?.SetValue(_buildingEnemySpawner, _enemyTemplate);
+        typeof(EnemySpawner).GetField("_spawnPoints", flags)?.SetValue(_buildingEnemySpawner, spawnTransforms);
+
+        // Building waves -- smaller than home base
+        var waves = new List<WaveDefinition>
+        {
+            new WaveDefinition { enemyCount = 3, spawnDelay = 1f, timeBetweenWaves = 5f },
+            new WaveDefinition { enemyCount = 4, spawnDelay = 0.8f, timeBetweenWaves = 0f },
+        };
+        _buildingWaveController = waveObj.AddComponent<WaveControllerBehaviour>();
+        typeof(WaveControllerBehaviour).GetField("_waves", flags)?.SetValue(_buildingWaveController, waves);
+        typeof(WaveControllerBehaviour).GetField("_spawner", flags)?.SetValue(_buildingWaveController, _buildingEnemySpawner);
+        typeof(WaveControllerBehaviour).GetField("_enemyDiedEvent", flags)?.SetValue(_buildingWaveController, _enemyDiedEvent);
+        typeof(WaveControllerBehaviour).GetField("_autoStartDelay", flags)?.SetValue(_buildingWaveController, -1f);
+
+        waveObj.SetActive(true);
+
+        Debug.Log("playtest: building enemies created (2 waves: 3, 4 enemies, auto-start on entry)");
+    }
+
+    private void CreateSupplyDock()
+    {
+        float centerX = 10f * FactoryGrid.CellSize;
+        float centerZ = 10f * FactoryGrid.CellSize;
+
+        // Supply dock near the factory
+        var dockObj = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        dockObj.name = "SupplyDock";
+        dockObj.transform.position = new Vector3(centerX + 12, 0.5f, centerZ + 4);
+        dockObj.transform.localScale = new Vector3(2, 1, 2);
+        SetColor(dockObj, new Color(0.3f, 0.6f, 0.4f));
+
+        dockObj.layer = PhysicsLayers.Interactable;
+
+        // Create storage container for supply dock
+        _supplyDockContainer = new StorageContainer(8, 64);
+
+        // StorageBehaviour for interaction (inactive-then-activate pattern)
+        dockObj.SetActive(false);
+        _supplyDockBehaviour = dockObj.AddComponent<StorageBehaviour>();
+        _supplyDockDef = ScriptableObject.CreateInstance<StorageDefinitionSO>();
+        _supplyDockDef.storageId = "supply_dock";
+        _supplyDockDef.displayName = "Supply Dock";
+        _supplyDockDef.slotCount = 8;
+        _supplyDockDef.maxStackSize = 64;
+        _supplyDockBehaviour.Initialize(_supplyDockDef, _supplyDockContainer);
+        dockObj.SetActive(true);
+
+        // Wire production to supply dock
+        _warehouseState.OnItemProduced += (itemId, amount) =>
+        {
+            for (int i = 0; i < amount; i++)
+            {
+                if (_supplyDockContainer.TryInsert(itemId))
+                    Debug.Log($"supply dock: received 1 {itemId} from warehouse");
+                else
+                    Debug.Log($"supply dock: full, {itemId} lost");
+            }
+        };
+
+        Debug.Log("playtest: supply dock created near factory");
     }
 
     // -- Pre-seed factory --
