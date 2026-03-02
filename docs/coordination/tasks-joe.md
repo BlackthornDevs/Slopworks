@@ -227,8 +227,7 @@ Phase 4 is now assigned to Joe. Use these existing systems:
 
 ### TASK J-013: Auto-turret simulation layer
 
-**Status:** Complete (2026-03-01)
-**Commits:** `6312a91`
+**Status:** Pending (re-implementation -- original commits lost from Legion PC, never reached origin)
 **Priority:** High
 **Branch:** `joe/main`
 **Ownership:** `Scripts/Combat/`
@@ -259,8 +258,7 @@ Build the turret as a plain C# simulation object (D-004 pattern). The turret det
 
 ### TASK J-014: Turret MonoBehaviour wrapper and placement
 
-**Status:** Complete (2026-03-01)
-**Commits:** `2e4cc15`
+**Status:** Pending (re-implementation -- original commits lost)
 **Priority:** High
 **Branch:** `joe/main`
 **Ownership:** `Scripts/Combat/`
@@ -295,8 +293,7 @@ Build the thin MonoBehaviour wrapper and integrate turret placement into the pla
 
 ### TASK J-015: Turret playtest scene
 
-**Status:** Complete (2026-03-01)
-**Commits:** `0a99c34`
+**Status:** Pending (re-implementation -- original commits lost)
 **Priority:** Medium
 **Branch:** `joe/main`
 **Ownership:** `Scripts/Combat/`, `Scenes/`
@@ -322,11 +319,14 @@ Create a combined turret defense playtest that verifies the full loop: place tur
 
 ### TASK J-023: Merge master into joe/main and resolve conflicts before PR
 
-**Status:** Pending
+**Status:** Complete (2026-03-02)
+**Commits:** `5aaa09d`
 **Priority:** Critical
 **Branch:** `joe/main`
 
 Master now contains Phase 6 (Building Exploration) and Phase 8 (Supply Chain Network) from Kevin. Your branch is missing both. You MUST merge master and resolve all conflicts before creating a PR for your turret work.
+
+**Result:** Clean merge, no conflicts. Git ort strategy auto-merged all 122 files. Zero compilation errors, 789/789 EditMode tests passing.
 
 **Steps:**
 1. `git fetch origin master && git merge origin/master`
