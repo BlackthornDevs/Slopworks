@@ -2,13 +2,11 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
-using UnityEngine.AI;
 using UnityEngine.InputSystem;
 
 /// <summary>
-/// Kevin's exclusive playtest bootstrapper. The only component on the scene GameObject.
-/// Drop on an empty GameObject, hit Play, and test the full gameplay loop:
-/// FPS player, inventory, crafting, building, belts, machines, combat, supply chain.
+/// Kevin's exclusive playtest bootstrapper. Implements IPlaytestFeatureProvider so it
+/// can run standalone (only component on the scene) or as a provider inside MasterPlaytestSetup.
 ///
 /// Controls:
 ///   WASD - Move, Mouse - Look, Space - Jump, Shift - Sprint
@@ -26,7 +24,7 @@ using UnityEngine.InputSystem;
 ///
 /// Everything is created at runtime -- no prefabs or assets required.
 /// </summary>
-public class KevinPlaytestSetup : MonoBehaviour
+public class KevinPlaytestSetup : MonoBehaviour, IPlaytestFeatureProvider
 {
     [Header("Pre-seed")]
     [SerializeField] private bool _preSeedFactory;
@@ -36,6 +34,9 @@ public class KevinPlaytestSetup : MonoBehaviour
 
     [Header("Inventory")]
     [SerializeField] private int _worldItemCount = 5;
+
+    // Standalone vs provider mode
+    private bool _isStandalone = true;
 
     // Shared context
     private PlaytestContext _ctx;
@@ -70,25 +71,148 @@ public class KevinPlaytestSetup : MonoBehaviour
     // -- Supply dock grid position --
     private static readonly Vector2Int SupplyDockCell = new Vector2Int(15, 7);
 
+    // ========== IPlaytestFeatureProvider ==========
+
+    public string ProviderName => "Kevin";
+
+    public void CreateDefinitions(PlaytestContext ctx)
+    {
+        _ctx = ctx;
+        CreateBuildingDefinitions();
+    }
+
+    public void ConfigureBuildPage(HotbarPage buildPage)
+    {
+        // No Kevin-specific build page slots currently (slots 0-6 are shared)
+    }
+
+    public void RegisterToolHandlers(PlaytestToolController toolCtrl)
+    {
+        _toolCtrl = toolCtrl;
+        // No custom tool handlers currently
+    }
+
+    public void CreateWorldObjects(PlaytestContext ctx, PlaytestToolController toolCtrl)
+    {
+        // _toolCtrl already set by RegisterToolHandlers (phase 3)
+        CreateBuildingLayout();
+        CreateMEPRestorePoints();
+        CreateBuildingEntryExit();
+        CreateWorldItems();
+        CreateSmelterInteractable();
+        CreateSupplyDock();
+        CreateSupplyChain();
+    }
+
+    public WaveControllerBehaviour CreateCombatSetup(PlaytestContext ctx)
+    {
+        CreateSpawnPointsAndWaves();
+        CreateBuildingEnemies();
+        return _waveController;
+    }
+
+    public void PreSeed(PlaytestToolController toolCtrl)
+    {
+        // No Kevin-specific pre-seed beyond the shared one
+    }
+
+    public IEnumerator WireHUD(PlaytestContext ctx)
+    {
+        // No yields here -- caller handles the 2-frame delay
+        return WireKevinHUDBody();
+    }
+
+    public void FixedTick(float deltaTime)
+    {
+        if (_buildingManager != null)
+            _buildingManager.TickAll(deltaTime);
+
+        if (_supplyLineManager != null)
+            _supplyLineManager.TickAll(deltaTime);
+    }
+
+    public void UpdateInput(Keyboard kb)
+    {
+        // Overworld map toggle
+        if (kb[Key.M].wasPressedThisFrame && _overworldMapUI != null)
+        {
+            PlaytestLogger.Log("input: key M (overworld map)");
+            _overworldMapUI.Toggle();
+            Cursor.lockState = _overworldMapUI.IsOpen ? CursorLockMode.None : CursorLockMode.Locked;
+            Cursor.visible = _overworldMapUI.IsOpen;
+        }
+
+        // Close map with Escape
+        if (kb[Key.Escape].wasPressedThisFrame && _overworldMapUI != null && _overworldMapUI.IsOpen)
+        {
+            _overworldMapUI.Toggle();
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+        }
+
+        // Suppress tool input while map is open
+        if (_toolCtrl != null)
+            _toolCtrl.SuppressInput = _overworldMapUI != null && _overworldMapUI.IsOpen;
+    }
+
+    public void DrawGUI(PlaytestToolController toolCtrl, ref float y, float x, float w, float h)
+    {
+        // Building exploration status
+        string buildingStatus;
+        if (_warehouseState == null)
+            buildingStatus = "Building: --";
+        else if (_warehouseState.IsClaimed)
+            buildingStatus = "Building: Claimed | Production active";
+        else
+            buildingStatus = $"Building: Unclaimed | MEP: {_warehouseState.RestoredCount}/{_warehouseState.RequiredMEPCount}";
+        string locationInfo = _insideBuilding ? " [INSIDE]" : "";
+        PlaytestToolController.DrawLine(ref y, x, w, h, $"{buildingStatus}{locationInfo}");
+
+        // Supply chain status
+        int inTransit = _supplyLineManager != null ? _supplyLineManager.TotalInFlight : 0;
+        int delivered = _supplyLineManager != null ? _supplyLineManager.TotalDelivered : 0;
+        PlaytestToolController.DrawLine(ref y, x, w, h, $"Supply: {inTransit} in transit | {delivered} delivered");
+
+        PlaytestToolController.DrawLine(ref y, x, w, h, "[Portal] Enter/exit building  [M] Overworld map");
+    }
+
+    public void Cleanup()
+    {
+        _warehouseSupplyLine?.Dispose();
+
+        if (_warehouseDef != null) DestroyImmediate(_warehouseDef);
+        if (_buildingClaimedEvent != null) DestroyImmediate(_buildingClaimedEvent);
+        if (_supplyDockDef != null) DestroyImmediate(_supplyDockDef);
+    }
+
+    // ========== Standalone Awake ==========
+
     private void Awake()
     {
+        if (GetComponent<MasterPlaytestSetup>() != null)
+        {
+            _isStandalone = false;
+            return; // MasterPlaytestSetup will call our interface methods
+        }
+
         // 1. Shared bootstrap
         _ctx = new PlaytestBootstrap(this, _beltSpeed).Setup();
 
         // 2. Kevin-specific definitions
-        CreateBuildingDefinitions();
+        CreateDefinitions(_ctx);
 
         // 3. Ground plane
-        CreateGroundPlane();
+        _groundPlane = PlaytestToolController.CreateGroundPlane();
 
-        // 4. Building exploration
+        // 4. Building exploration + world objects (before tool controller, needs _buildingLayout)
         CreateBuildingLayout();
         CreateMEPRestorePoints();
         CreateBuildingEntryExit();
 
         // 5. Shared tool controller
+        var buildPage = PlaytestToolController.CreateSharedBuildPage();
         _toolCtrl = gameObject.AddComponent<PlaytestToolController>();
-        _toolCtrl.Initialize(_ctx, CreateBuildPage(), _groundPlane);
+        _toolCtrl.Initialize(_ctx, buildPage, _groundPlane);
 
         // 6. Pre-seed (optional)
         if (_preSeedFactory)
@@ -104,14 +228,14 @@ public class KevinPlaytestSetup : MonoBehaviour
         _toolCtrl.SetWaveController(_waveController);
 
         // 9. NavMesh
-        BakeNavMesh();
+        PlaytestToolController.BakeNavMesh(_groundPlane);
 
         // 10. Supply chain
         CreateSupplyDock();
         CreateSupplyChain();
 
         // 11. Kevin-specific HUD wiring (yield 2 frames -- after tool controller's HUD wiring)
-        StartCoroutine(WireKevinHUD());
+        StartCoroutine(WireKevinHUDDelayed());
 
         Debug.Log("playtest: setup complete (Kevin)");
         Debug.Log("controls: WASD=move, Mouse=look, Space=jump, Shift=sprint");
@@ -134,49 +258,6 @@ public class KevinPlaytestSetup : MonoBehaviour
         _warehouseDef.productionInterval = 30f;
 
         _buildingClaimedEvent = ScriptableObject.CreateInstance<GameEventSO>();
-    }
-
-    // -- Ground plane --
-
-    private void CreateGroundPlane()
-    {
-        _groundPlane = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        _groundPlane.name = "GridPlane";
-        _groundPlane.layer = PhysicsLayers.GridPlane;
-        _groundPlane.transform.position = new Vector3(
-            FactoryGrid.Width * FactoryGrid.CellSize * 0.5f,
-            -0.05f,
-            FactoryGrid.Height * FactoryGrid.CellSize * 0.5f);
-        _groundPlane.transform.localScale = new Vector3(
-            FactoryGrid.Width * FactoryGrid.CellSize,
-            0.1f,
-            FactoryGrid.Height * FactoryGrid.CellSize);
-
-        var renderer = _groundPlane.GetComponent<Renderer>();
-        if (renderer != null)
-            renderer.material.color = new Color(0.2f, 0.2f, 0.2f);
-    }
-
-    // -- Build page --
-
-    private HotbarPage CreateBuildPage()
-    {
-        var page = new HotbarPage("Build", PlayerInventory.HotbarSlots);
-
-        void Set(int slot, string id, string name, Color color)
-        {
-            page.Entries[slot] = new HotbarEntry { Id = id, DisplayName = name, Color = color };
-        }
-
-        Set(0, "foundation", "Found", new Color(0.4f, 0.4f, 0.4f, 0.8f));
-        Set(1, "wall", "Wall", new Color(0.5f, 0.5f, 0.5f, 0.8f));
-        Set(2, "ramp", "Ramp", new Color(0.5f, 0.6f, 0.5f, 0.8f));
-        Set(3, "belt", "Belt", new Color(0.3f, 0.5f, 0.7f, 0.8f));
-        Set(4, "machine", "Machine", new Color(0.7f, 0.5f, 0.2f, 0.8f));
-        Set(5, "storage", "Storage", new Color(0.6f, 0.4f, 0.3f, 0.8f));
-        Set(6, "delete", "Delete", new Color(0.8f, 0.2f, 0.2f, 0.8f));
-
-        return page;
     }
 
     // -- Building exploration --
@@ -384,17 +465,6 @@ public class KevinPlaytestSetup : MonoBehaviour
         Debug.Log("playtest: building enemies created (2 waves: 3, 4 enemies, auto-start on entry)");
     }
 
-    private void BakeNavMesh()
-    {
-#if UNITY_EDITOR
-        _groundPlane.isStatic = true;
-        UnityEditor.AI.NavMeshBuilder.BuildNavMesh();
-        Debug.Log("playtest: navmesh baked (home base + building interior)");
-#else
-        Debug.LogWarning("playtest: navmesh baking not available outside editor");
-#endif
-    }
-
     // -- Supply chain --
 
     private void CreateSupplyDock()
@@ -544,12 +614,18 @@ public class KevinPlaytestSetup : MonoBehaviour
 
     // -- HUD wiring (Kevin-specific) --
 
-    private IEnumerator WireKevinHUD()
+    private IEnumerator WireKevinHUDDelayed()
     {
-        // Wait 2 frames -- after tool controller's 1-frame HUD wiring
         yield return null;
         yield return null;
 
+        var body = WireKevinHUDBody();
+        while (body.MoveNext())
+            yield return body.Current;
+    }
+
+    private IEnumerator WireKevinHUDBody()
+    {
         if (_warehouseState != null)
         {
             _warehouseState.OnPointRestored += () =>
@@ -565,49 +641,28 @@ public class KevinPlaytestSetup : MonoBehaviour
         }
 
         Debug.Log("playtest: Kevin HUD extensions wired (building status)");
+        yield break;
     }
 
-    // -- Unity callbacks --
+    // -- Unity callbacks (standalone mode only) --
 
     private void FixedUpdate()
     {
-        if (_buildingManager != null)
-            _buildingManager.TickAll(Time.fixedDeltaTime);
-
-        if (_supplyLineManager != null)
-            _supplyLineManager.TickAll(Time.fixedDeltaTime);
+        if (!_isStandalone) return;
+        FixedTick(Time.fixedDeltaTime);
     }
 
     private void Update()
     {
+        if (!_isStandalone) return;
         var kb = Keyboard.current;
         if (kb == null) return;
-
-        // Overworld map toggle
-        if (kb[Key.M].wasPressedThisFrame && _overworldMapUI != null)
-        {
-            PlaytestLogger.Log("input: key M (overworld map)");
-            _overworldMapUI.Toggle();
-            Cursor.lockState = _overworldMapUI.IsOpen ? CursorLockMode.None : CursorLockMode.Locked;
-            Cursor.visible = _overworldMapUI.IsOpen;
-        }
-
-        // Close map with Escape
-        if (kb[Key.Escape].wasPressedThisFrame && _overworldMapUI != null && _overworldMapUI.IsOpen)
-        {
-            _overworldMapUI.Toggle();
-            Cursor.lockState = CursorLockMode.Locked;
-            Cursor.visible = false;
-        }
-
-        // Suppress tool input while map is open
-        if (_toolCtrl != null)
-            _toolCtrl.SuppressInput = _overworldMapUI != null && _overworldMapUI.IsOpen;
+        UpdateInput(kb);
     }
 
     private void OnGUI()
     {
-        // Start after shared OnGUI
+        if (!_isStandalone) return;
         if (_toolCtrl == null) return;
 
         float x = 10;
@@ -615,35 +670,15 @@ public class KevinPlaytestSetup : MonoBehaviour
         float w = 420;
         float h = 22;
 
-        // Building exploration status
-        string buildingStatus;
-        if (_warehouseState == null)
-            buildingStatus = "Building: --";
-        else if (_warehouseState.IsClaimed)
-            buildingStatus = "Building: Claimed | Production active";
-        else
-            buildingStatus = $"Building: Unclaimed | MEP: {_warehouseState.RestoredCount}/{_warehouseState.RequiredMEPCount}";
-        string locationInfo = _insideBuilding ? " [INSIDE]" : "";
-        PlaytestToolController.DrawLine(ref y, x, w, h, $"{buildingStatus}{locationInfo}");
-
-        // Supply chain status
-        int inTransit = _supplyLineManager != null ? _supplyLineManager.TotalInFlight : 0;
-        int delivered = _supplyLineManager != null ? _supplyLineManager.TotalDelivered : 0;
-        PlaytestToolController.DrawLine(ref y, x, w, h, $"Supply: {inTransit} in transit | {delivered} delivered");
-
-        PlaytestToolController.DrawLine(ref y, x, w, h, "[Portal] Enter/exit building  [M] Overworld map");
+        DrawGUI(_toolCtrl, ref y, x, w, h);
     }
 
     private void OnDestroy()
     {
-        _warehouseSupplyLine?.Dispose();
+        Cleanup();
 
-        if (_warehouseDef != null) DestroyImmediate(_warehouseDef);
-        if (_buildingClaimedEvent != null) DestroyImmediate(_buildingClaimedEvent);
-        if (_supplyDockDef != null) DestroyImmediate(_supplyDockDef);
-
-        // Destroy shared SOs from bootstrap
-        if (_ctx != null && _ctx.RuntimeSOs != null)
+        // Destroy shared SOs from bootstrap (only in standalone mode)
+        if (_isStandalone && _ctx != null && _ctx.RuntimeSOs != null)
         {
             foreach (var so in _ctx.RuntimeSOs)
             {
@@ -651,8 +686,8 @@ public class KevinPlaytestSetup : MonoBehaviour
             }
         }
 
-        // Destroy enemy template
-        if (_ctx != null && _ctx.EnemyTemplate != null)
+        // Destroy enemy template (only in standalone mode)
+        if (_isStandalone && _ctx != null && _ctx.EnemyTemplate != null)
             DestroyImmediate(_ctx.EnemyTemplate);
     }
 }

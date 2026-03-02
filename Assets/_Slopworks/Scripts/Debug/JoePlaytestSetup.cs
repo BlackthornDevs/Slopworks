@@ -2,12 +2,11 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
-using UnityEngine.AI;
 using UnityEngine.InputSystem;
 
 /// <summary>
-/// Joe's exclusive playtest bootstrapper. Skeleton for Joe to fill in turret and
-/// PlaytestEnvironment code from his branch. The only component on the scene GameObject.
+/// Joe's exclusive playtest bootstrapper. Implements IPlaytestFeatureProvider so it
+/// can run standalone (only component on the scene) or as a provider inside MasterPlaytestSetup.
 ///
 /// Joe: port your turret code here. See docs/coordination/tasks-joe.md J-023 for details.
 ///
@@ -28,13 +27,16 @@ using UnityEngine.InputSystem;
 ///   P - Pre-seed factory with turret chain
 ///   8 - Turret placement tool (on build page)
 /// </summary>
-public class JoePlaytestSetup : MonoBehaviour
+public class JoePlaytestSetup : MonoBehaviour, IPlaytestFeatureProvider
 {
     [Header("Pre-seed")]
     [SerializeField] private bool _preSeedFactory;
 
     [Header("Automation")]
     [SerializeField] private ushort _beltSpeed = 4;
+
+    // Standalone vs provider mode
+    private bool _isStandalone = true;
 
     // Shared context
     private PlaytestContext _ctx;
@@ -50,28 +52,109 @@ public class JoePlaytestSetup : MonoBehaviour
     // Joe adds: turret fields here
     // private TurretDefinitionSO _turretDef;
 
+    // ========== IPlaytestFeatureProvider ==========
+
+    public string ProviderName => "Joe";
+
+    public void CreateDefinitions(PlaytestContext ctx)
+    {
+        _ctx = ctx;
+        // Joe adds: CreateTurretDefinition() here
+    }
+
+    public void ConfigureBuildPage(HotbarPage buildPage)
+    {
+        // Joe adds: slot 7 for turret
+        // buildPage.Entries[7] = new HotbarEntry { Id = "turret", DisplayName = "Turret", Color = new Color(0.9f, 0.3f, 0.3f, 0.8f) };
+    }
+
+    public void RegisterToolHandlers(PlaytestToolController toolCtrl)
+    {
+        _toolCtrl = toolCtrl;
+        // Joe adds: toolCtrl.RegisterToolHandler(PlaytestToolController.ToolMode.TurretPlace, HandleTurretPlaceInput);
+    }
+
+    public void CreateWorldObjects(PlaytestContext ctx, PlaytestToolController toolCtrl)
+    {
+        // _toolCtrl already set by RegisterToolHandlers (phase 3)
+        // Joe adds: arena objects, turret placements, etc.
+    }
+
+    public WaveControllerBehaviour CreateCombatSetup(PlaytestContext ctx)
+    {
+        if (_isStandalone)
+        {
+            // Standalone mode: Joe owns the wave controller
+            CreateSpawnPointsAndWaves();
+            return _waveController;
+        }
+
+        // Master mode: Kevin handles home-base waves. Joe adds tower-specific waves later.
+        return null;
+    }
+
+    public void PreSeed(PlaytestToolController toolCtrl)
+    {
+        // Joe adds: turret chain pre-seed
+    }
+
+    public IEnumerator WireHUD(PlaytestContext ctx)
+    {
+        // No yields here -- caller handles the 2-frame delay
+        return WireJoeHUDBody();
+    }
+
+    public void FixedTick(float deltaTime)
+    {
+        // Joe adds: turret tick logic
+    }
+
+    public void UpdateInput(Keyboard kb)
+    {
+        // Joe adds: P key for turret pre-seed, turret placement input
+    }
+
+    public void DrawGUI(PlaytestToolController toolCtrl, ref float y, float x, float w, float h)
+    {
+        // Joe adds: turret stats
+    }
+
+    public void Cleanup()
+    {
+        // Joe adds: turret SO cleanup
+    }
+
+    // ========== Standalone Awake ==========
+
     private void Awake()
     {
+        if (GetComponent<MasterPlaytestSetup>() != null)
+        {
+            _isStandalone = false;
+            return; // MasterPlaytestSetup will call our interface methods
+        }
+
         // 1. Shared bootstrap
         _ctx = new PlaytestBootstrap(this, _beltSpeed).Setup();
 
         // 2. Ground plane (Joe replaces with PlaytestEnvironment later)
-        CreateGroundPlane();
+        _groundPlane = PlaytestToolController.CreateGroundPlane();
 
         // 3. Shared tool controller
+        var buildPage = PlaytestToolController.CreateSharedBuildPage();
+        ConfigureBuildPage(buildPage);
         _toolCtrl = gameObject.AddComponent<PlaytestToolController>();
-        _toolCtrl.Initialize(_ctx, CreateBuildPage(), _groundPlane);
+        _toolCtrl.Initialize(_ctx, buildPage, _groundPlane);
 
         // Joe adds: turret definition and RegisterToolHandler here
-        // CreateTurretDefinition();
-        // _toolCtrl.RegisterToolHandler(PlaytestToolController.ToolMode.TurretPlace, HandleTurretPlaceInput);
+        RegisterToolHandlers(_toolCtrl);
 
         // 4. Waves
         CreateSpawnPointsAndWaves();
         _toolCtrl.SetWaveController(_waveController);
 
         // 5. NavMesh
-        BakeNavMesh();
+        PlaytestToolController.BakeNavMesh(_groundPlane);
 
         // 6. Pre-seed (optional)
         if (_preSeedFactory)
@@ -81,59 +164,13 @@ public class JoePlaytestSetup : MonoBehaviour
         }
 
         // 7. Joe-specific HUD wiring
-        StartCoroutine(WireJoeHUD());
+        StartCoroutine(WireJoeHUDDelayed());
 
         Debug.Log("playtest: setup complete (Joe)");
         Debug.Log("controls: WASD=move, Mouse=look, Space=jump, Shift=sprint");
         Debug.Log("controls: B=toggle build/items, 1-8=select slot, Tab=inventory, E=interact");
         Debug.Log("controls: R=rotate, Esc=cancel, PgUp/PgDn=level, F=fill storage");
         Debug.Log("controls: G=spawn next wave, LMB=fire weapon (items page)");
-    }
-
-    // -- Ground plane --
-
-    private void CreateGroundPlane()
-    {
-        // Basic ground plane -- Joe replaces with PlaytestEnvironment
-        _groundPlane = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        _groundPlane.name = "GridPlane";
-        _groundPlane.layer = PhysicsLayers.GridPlane;
-        _groundPlane.transform.position = new Vector3(
-            FactoryGrid.Width * FactoryGrid.CellSize * 0.5f,
-            -0.05f,
-            FactoryGrid.Height * FactoryGrid.CellSize * 0.5f);
-        _groundPlane.transform.localScale = new Vector3(
-            FactoryGrid.Width * FactoryGrid.CellSize,
-            0.1f,
-            FactoryGrid.Height * FactoryGrid.CellSize);
-
-        var renderer = _groundPlane.GetComponent<Renderer>();
-        if (renderer != null)
-            renderer.material.color = new Color(0.2f, 0.2f, 0.2f);
-    }
-
-    // -- Build page --
-
-    private HotbarPage CreateBuildPage()
-    {
-        var page = new HotbarPage("Build", PlayerInventory.HotbarSlots);
-
-        void Set(int slot, string id, string name, Color color)
-        {
-            page.Entries[slot] = new HotbarEntry { Id = id, DisplayName = name, Color = color };
-        }
-
-        Set(0, "foundation", "Found", new Color(0.4f, 0.4f, 0.4f, 0.8f));
-        Set(1, "wall", "Wall", new Color(0.5f, 0.5f, 0.5f, 0.8f));
-        Set(2, "ramp", "Ramp", new Color(0.5f, 0.6f, 0.5f, 0.8f));
-        Set(3, "belt", "Belt", new Color(0.3f, 0.5f, 0.7f, 0.8f));
-        Set(4, "machine", "Machine", new Color(0.7f, 0.5f, 0.2f, 0.8f));
-        Set(5, "storage", "Storage", new Color(0.6f, 0.4f, 0.3f, 0.8f));
-        Set(6, "delete", "Delete", new Color(0.8f, 0.2f, 0.2f, 0.8f));
-        // Joe adds: slot 7 for turret
-        // Set(7, "turret", "Turret", new Color(0.9f, 0.3f, 0.3f, 0.8f));
-
-        return page;
     }
 
     // -- Combat --
@@ -187,40 +224,61 @@ public class JoePlaytestSetup : MonoBehaviour
         Debug.Log("playtest: wave system created (3 waves: 3, 5, 8 enemies, press G to start)");
     }
 
-    private void BakeNavMesh()
-    {
-#if UNITY_EDITOR
-        _groundPlane.isStatic = true;
-        UnityEditor.AI.NavMeshBuilder.BuildNavMesh();
-        Debug.Log("playtest: navmesh baked");
-#else
-        Debug.LogWarning("playtest: navmesh baking not available outside editor");
-#endif
-    }
-
     // -- HUD wiring (Joe-specific) --
 
-    private IEnumerator WireJoeHUD()
+    private IEnumerator WireJoeHUDDelayed()
     {
         yield return null;
         yield return null;
 
+        var body = WireJoeHUDBody();
+        while (body.MoveNext())
+            yield return body.Current;
+    }
+
+    private IEnumerator WireJoeHUDBody()
+    {
         // Joe adds: turret-specific HUD wiring here
 
         Debug.Log("playtest: Joe HUD extensions wired");
+        yield break;
     }
 
-    // -- Unity callbacks --
+    // -- Unity callbacks (standalone mode only) --
 
-    // Joe adds: Update for P key (pre-seed turret chain), turret placement input
-    // Joe adds: OnGUI for turret stats
+    private void FixedUpdate()
+    {
+        if (!_isStandalone) return;
+        FixedTick(Time.fixedDeltaTime);
+    }
+
+    private void Update()
+    {
+        if (!_isStandalone) return;
+        var kb = Keyboard.current;
+        if (kb == null) return;
+        UpdateInput(kb);
+    }
+
+    private void OnGUI()
+    {
+        if (!_isStandalone) return;
+        if (_toolCtrl == null) return;
+
+        float x = 10;
+        float y = _toolCtrl.GuiNextY;
+        float w = 420;
+        float h = 22;
+
+        DrawGUI(_toolCtrl, ref y, x, w, h);
+    }
 
     private void OnDestroy()
     {
-        // Joe adds: turret SO cleanup here
+        Cleanup();
 
-        // Destroy shared SOs from bootstrap
-        if (_ctx != null && _ctx.RuntimeSOs != null)
+        // Destroy shared SOs from bootstrap (only in standalone mode)
+        if (_isStandalone && _ctx != null && _ctx.RuntimeSOs != null)
         {
             foreach (var so in _ctx.RuntimeSOs)
             {
@@ -228,7 +286,7 @@ public class JoePlaytestSetup : MonoBehaviour
             }
         }
 
-        if (_ctx != null && _ctx.EnemyTemplate != null)
+        if (_isStandalone && _ctx != null && _ctx.EnemyTemplate != null)
             DestroyImmediate(_ctx.EnemyTemplate);
     }
 }

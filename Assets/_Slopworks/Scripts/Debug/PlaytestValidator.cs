@@ -6,8 +6,12 @@ using UnityEngine;
 /// Automated playtest validation. Runs checks after bootstrap completes and logs
 /// structured [VALIDATE] messages that can be read via MCP console logs.
 ///
-/// Add to a playtest scene alongside KevinPlaytestSetup or JoePlaytestSetup.
-/// Waits a configurable number of frames for coroutines to finish, then validates.
+/// Add to any playtest scene alongside KevinPlaytestSetup, JoePlaytestSetup, or
+/// MasterPlaytestSetup. Auto-detects which bootstrapper is present and runs the
+/// appropriate checks. In master mode, validates both providers are present and
+/// no duplicate wave controllers exist.
+/// Universal checks (player, grid, HUD, combat, navmesh) run in all scenes.
+/// Dev-specific checks (buildings, turrets) only run when that dev's bootstrapper is found.
 /// </summary>
 public class PlaytestValidator : MonoBehaviour
 {
@@ -39,14 +43,32 @@ public class PlaytestValidator : MonoBehaviour
         _pass = 0;
         _fail = 0;
 
+        // Universal checks -- every playtest scene needs these
         ValidatePlayer();
         ValidateGrid();
         ValidateHUD();
         ValidateWorldItems();
         ValidateCombat();
-        ValidateBuildings();
-        ValidateSupplyChain();
         ValidateNavMesh();
+
+        // Dev-specific checks -- auto-detect by bootstrapper type
+        bool hasMaster = FindAnyObjectByType<MasterPlaytestSetup>() != null;
+        bool hasKevin = FindAnyObjectByType<KevinPlaytestSetup>() != null;
+        bool hasJoe = FindAnyObjectByType<JoePlaytestSetup>() != null;
+
+        if (hasMaster)
+            ValidateMasterScene(hasKevin, hasJoe);
+
+        if (hasKevin)
+        {
+            ValidateBuildings();
+            ValidateSupplyChain();
+        }
+
+        if (hasJoe)
+        {
+            ValidateTurrets();
+        }
 
         Debug.Log($"[VALIDATE] === results: {_pass} passed, {_fail} failed ===");
 
@@ -170,6 +192,17 @@ public class PlaytestValidator : MonoBehaviour
             $"count={spawners.Length}");
     }
 
+    // -- Turrets (Joe-specific, filled in after turret code merges to master) --
+
+    private void ValidateTurrets()
+    {
+        // Turret classes (TurretBehaviour, TurretDefinitionSO) are on joe/main.
+        // When J-023 merges, add checks here:
+        // - enemy template exists and has FaunaController
+        // - turret tool registered on build page
+        // - turret definition SO created at runtime
+    }
+
     // -- Buildings (Kevin-specific) --
 
     private void ValidateBuildings()
@@ -209,6 +242,33 @@ public class PlaytestValidator : MonoBehaviour
 
         var mapUI = FindAnyObjectByType<OverworldMapUI>();
         Check("overworld_map_ui_exists", mapUI != null);
+    }
+
+    // -- Master scene --
+
+    private void ValidateMasterScene(bool hasKevin, bool hasJoe)
+    {
+        Check("master_has_kevin_provider", hasKevin,
+            "MasterPlaytestSetup requires KevinPlaytestSetup component");
+        Check("master_has_joe_provider", hasJoe,
+            "MasterPlaytestSetup requires JoePlaytestSetup component");
+
+        // Only one active wave controller in master mode (no duplicates)
+        var waveControllers = FindObjectsByType<WaveControllerBehaviour>(FindObjectsSortMode.None);
+        // Kevin creates home-base WaveController + BuildingWaveController = 2
+        // Joe should return null in master mode, so no additional wave controllers
+        // Total expected: 2 (home-base + building)
+        Check("master_wave_controller_count", waveControllers.Length <= 2,
+            $"expected at most 2, got {waveControllers.Length} (duplicate home-base waves?)");
+
+        // Verify providers are discovered
+        var master = FindAnyObjectByType<MasterPlaytestSetup>();
+        if (master != null)
+        {
+            var providers = master.GetComponents<IPlaytestFeatureProvider>();
+            Check("master_providers_discovered", providers.Length >= 2,
+                $"expected at least 2, got {providers.Length}");
+        }
     }
 
     // -- NavMesh --
