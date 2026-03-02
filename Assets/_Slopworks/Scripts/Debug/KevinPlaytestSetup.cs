@@ -586,6 +586,7 @@ public class KevinPlaytestSetup : MonoBehaviour
         // Overworld map toggle
         if (kb[Key.M].wasPressedThisFrame && _overworldMapUI != null)
         {
+            PlaytestLogger.Log("input: key M (overworld map)");
             _overworldMapUI.Toggle();
             Cursor.lockState = _overworldMapUI.IsOpen ? CursorLockMode.None : CursorLockMode.Locked;
             Cursor.visible = _overworldMapUI.IsOpen;

@@ -130,8 +130,10 @@ public class PlaytestToolController : MonoBehaviour
 
     public void SetTool(ToolMode mode)
     {
+        var old = _currentTool;
         CancelAllPending();
         _currentTool = mode;
+        PlaytestLogger.Log($"event: tool changed {old} -> {mode}");
         if (mode == ToolMode.MachinePlace || mode == ToolMode.StoragePlace)
             _placeRotation = 0;
     }
@@ -324,6 +326,7 @@ public class PlaytestToolController : MonoBehaviour
 
     private void OnHotbarBuildToolSelected(int pageIndex, int slotIndex, string entryId)
     {
+        PlaytestLogger.Log($"input: build tool selected {entryId} slot {slotIndex}");
         if (BuildToolMap.TryGetValue(entryId, out var toolMode))
         {
             CancelAllPending();
@@ -336,6 +339,7 @@ public class PlaytestToolController : MonoBehaviour
 
     private void OnHotbarPageChanged(int pageIndex)
     {
+        PlaytestLogger.Log($"event: page changed to {pageIndex}");
         if (pageIndex == 0)
         {
             CancelAllPending();
@@ -392,14 +396,18 @@ public class PlaytestToolController : MonoBehaviour
     {
         if (kb.pageUpKey.wasPressedThisFrame)
         {
+            int old = _currentLevel;
             _currentLevel = Mathf.Min(_currentLevel + 1, FactoryGrid.MaxLevels - 1);
             UpdateGroundPlaneHeight();
+            PlaytestLogger.Log($"input: level {old} -> {_currentLevel}");
             Debug.Log($"Level: {_currentLevel}");
         }
         else if (kb.pageDownKey.wasPressedThisFrame)
         {
+            int old = _currentLevel;
             _currentLevel = Mathf.Max(_currentLevel - 1, 0);
             UpdateGroundPlaneHeight();
+            PlaytestLogger.Log($"input: level {old} -> {_currentLevel}");
             Debug.Log($"Level: {_currentLevel}");
         }
     }
@@ -408,6 +416,8 @@ public class PlaytestToolController : MonoBehaviour
     {
         if (!kb.fKey.wasPressedThisFrame)
             return;
+
+        PlaytestLogger.Log("input: key F (fill storage)");
 
         var cell = GetCellUnderCursor(mouse);
         if (!cell.HasValue)
@@ -439,6 +449,7 @@ public class PlaytestToolController : MonoBehaviour
     {
         if (kb.gKey.wasPressedThisFrame && _waveController != null)
         {
+            PlaytestLogger.Log("input: key G (spawn wave)");
             _waveController.BeginNextWave();
             Debug.Log("playtest: wave triggered via G key");
         }
@@ -479,6 +490,7 @@ public class PlaytestToolController : MonoBehaviour
 
         if (mouse.leftButton.wasPressedThisFrame)
         {
+            PlaytestLogger.Log($"input: LMB | tool=Foundation cell=({cell.Value.x},{cell.Value.y})");
             _isDragging = true;
             _dragStart = cell.Value;
             _dragEnd = cell.Value;
@@ -595,6 +607,7 @@ public class PlaytestToolController : MonoBehaviour
                     return;
                 }
 
+                PlaytestLogger.Log($"input: LMB | tool=Wall cell=({cell.Value.x},{cell.Value.y})");
                 _pendingWall = true;
                 _pendingWallCell = cell.Value;
                 _pendingWallDirIndex = 0;
@@ -697,6 +710,7 @@ public class PlaytestToolController : MonoBehaviour
                     return;
                 }
 
+                PlaytestLogger.Log($"input: LMB | tool=Ramp cell=({cell.Value.x},{cell.Value.y})");
                 _pendingRamp = true;
                 _pendingRampCell = cell.Value;
                 _pendingRampDirIndex = 0;
@@ -845,6 +859,7 @@ public class PlaytestToolController : MonoBehaviour
                         Debug.Log("Belts must be placed on foundations");
                         return;
                     }
+                    PlaytestLogger.Log($"input: LMB | tool=Belt start cell=({cell.Value.x},{cell.Value.y})");
                     _beltStartSet = true;
                     _beltStartCell = cell.Value;
                     DestroyPlaceGhost();
@@ -867,6 +882,7 @@ public class PlaytestToolController : MonoBehaviour
                 }
                 else
                 {
+                    PlaytestLogger.Log($"input: LMB | tool=Belt end cell=({cell.Value.x},{cell.Value.y})");
                     var endCell = cell.Value;
                     var result = _ctx.AutomationService.PlaceBelt(_beltStartCell, endCell, _currentLevel);
                     if (result != null)
@@ -1015,6 +1031,7 @@ public class PlaytestToolController : MonoBehaviour
         }
         else if (mouse.leftButton.wasPressedThisFrame && cell.HasValue)
         {
+            PlaytestLogger.Log($"input: LMB | tool=Machine cell=({cell.Value.x},{cell.Value.y})");
             ClearGhostPortIndicators();
             var result = _ctx.AutomationService.PlaceMachine(_ctx.SmelterDef, cell.Value, _placeRotation, _currentLevel);
             if (result != null)
@@ -1065,6 +1082,7 @@ public class PlaytestToolController : MonoBehaviour
         }
         else if (mouse.leftButton.wasPressedThisFrame && cell.HasValue)
         {
+            PlaytestLogger.Log($"input: LMB | tool=Storage cell=({cell.Value.x},{cell.Value.y})");
             var result = _ctx.AutomationService.PlaceStorage(_ctx.StorageDef, cell.Value, _placeRotation, _currentLevel);
             if (result != null)
             {
@@ -1123,6 +1141,8 @@ public class PlaytestToolController : MonoBehaviour
             Debug.Log("delete: click ignored, no grid cell under cursor");
             return;
         }
+
+        PlaytestLogger.Log($"input: LMB | tool=Delete cell=({cell.Value.x},{cell.Value.y})");
 
         // Priority 1: automation buildings
         for (int i = _automationBuildings.Count - 1; i >= 0; i--)
