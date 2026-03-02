@@ -1,5 +1,14 @@
 # Slopworks — Claude rules
 
+## GitHub Actions suspended (account-wide)
+
+GitHub Actions are disabled on the entire `jamditis` GitHub account until further notice. This means:
+- **No CI/CD pipelines will run** — builds, tests, deploys all fail silently
+- **GitHub Pages deploys won't work** — even "legacy" static deploys that used Actions under the hood
+- **No automated workflows** — PR checks, scheduled jobs, release automation are all dead
+
+**For any project that previously deployed via GitHub Actions or GitHub Pages, you must use an alternative** (manual deploy, Cloudflare Pages, Firebase Hosting, direct FTP, etc.). Do not create or rely on `.github/workflows/` files.
+
 Post-apocalyptic co-op factory/survival game built in Unity + FishNet. Two-person team: Joe (jamditis) + Kevin (kamditis) at BlackthornDevs. Both developers run parallel builds from the same design doc and merge the best parts — so both Claude instances working in this repo must follow identical rules.
 
 ## Agent hierarchy
