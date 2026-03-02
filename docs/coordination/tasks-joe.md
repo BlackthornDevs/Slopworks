@@ -323,11 +323,11 @@ Create a combined turret defense playtest that verifies the full loop: place tur
 ### TASK J-023: Merge master into joe/main and port turret code to JoePlaytestSetup
 
 **Status:** Complete (2026-03-02)
-**Commits:** `5aaa09d`
+**Commits:** `2b19ef3` (merge), `a404e5b` (turret port)
 **Priority:** Critical
 **Branch:** `joe/main`
 
-`StructuralPlaytestSetup.cs` no longer exists. It was split into shared infrastructure + per-developer bootstrappers to eliminate merge conflicts. Your turret code needs to be ported into `JoePlaytestSetup.cs`, which is exclusively yours.
+`StructuralPlaytestSetup.cs` no longer exists. It was split into shared infrastructure + per-developer bootstrappers to eliminate merge conflicts. Turret code ported into `JoePlaytestSetup.cs`. Stale files deleted (DevTestPlaytestSetup, DevTestHUDBootstrap, StructuralPlaytestSetup).
 
 **FIRST: Close PR #9 without merging.** It modifies files that don't exist on master and will not merge. Run: `gh pr close 9`
 
