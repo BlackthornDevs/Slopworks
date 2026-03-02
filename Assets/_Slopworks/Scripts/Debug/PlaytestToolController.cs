@@ -18,7 +18,7 @@ public class PlaytestToolController : MonoBehaviour
 
     public ToolMode CurrentTool => _currentTool;
     public int CurrentLevel => _currentLevel;
-    public float GuiNextY { get; private set; }
+    public float GuiNextY { get; set; }
     public bool SuppressInput { get; set; }
 
     public List<BuildingData> Foundations => _foundations;
@@ -121,6 +121,61 @@ public class PlaytestToolController : MonoBehaviour
         _buildPage = buildPage;
         _groundPlane = groundPlane;
         StartCoroutine(WireHUD());
+    }
+
+    /// <summary>
+    /// Creates a build page with the 7 shared tool slots (foundation through delete).
+    /// Both standalone bootstrappers and MasterPlaytestSetup call this to avoid duplication.
+    /// Dev-specific providers add their own entries starting at slot 7.
+    /// </summary>
+    public static HotbarPage CreateSharedBuildPage()
+    {
+        var page = new HotbarPage("Build", PlayerInventory.HotbarSlots);
+
+        void Set(int slot, string id, string name, Color color)
+        {
+            page.Entries[slot] = new HotbarEntry { Id = id, DisplayName = name, Color = color };
+        }
+
+        Set(0, "foundation", "Found", new Color(0.4f, 0.4f, 0.4f, 0.8f));
+        Set(1, "wall", "Wall", new Color(0.5f, 0.5f, 0.5f, 0.8f));
+        Set(2, "ramp", "Ramp", new Color(0.5f, 0.6f, 0.5f, 0.8f));
+        Set(3, "belt", "Belt", new Color(0.3f, 0.5f, 0.7f, 0.8f));
+        Set(4, "machine", "Machine", new Color(0.7f, 0.5f, 0.2f, 0.8f));
+        Set(5, "storage", "Storage", new Color(0.6f, 0.4f, 0.3f, 0.8f));
+        Set(6, "delete", "Delete", new Color(0.8f, 0.2f, 0.2f, 0.8f));
+
+        return page;
+    }
+
+    public static GameObject CreateGroundPlane()
+    {
+        var ground = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        ground.name = "GridPlane";
+        ground.layer = PhysicsLayers.GridPlane;
+        ground.transform.position = new Vector3(
+            FactoryGrid.Width * FactoryGrid.CellSize * 0.5f,
+            -0.05f,
+            FactoryGrid.Height * FactoryGrid.CellSize * 0.5f);
+        ground.transform.localScale = new Vector3(
+            FactoryGrid.Width * FactoryGrid.CellSize,
+            0.1f,
+            FactoryGrid.Height * FactoryGrid.CellSize);
+        var renderer = ground.GetComponent<Renderer>();
+        if (renderer != null)
+            renderer.material.color = new Color(0.2f, 0.2f, 0.2f);
+        return ground;
+    }
+
+    public static void BakeNavMesh(GameObject groundPlane)
+    {
+#if UNITY_EDITOR
+        groundPlane.isStatic = true;
+        UnityEditor.AI.NavMeshBuilder.BuildNavMesh();
+        Debug.Log("playtest: navmesh baked");
+#else
+        Debug.LogWarning("playtest: navmesh baking not available outside editor");
+#endif
     }
 
     public void SetWaveController(WaveControllerBehaviour wc)
