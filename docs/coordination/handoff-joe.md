@@ -8,14 +8,17 @@ Updated by Joe's Claude at the end of each session.
 
 ### What was completed
 
-- **J-023 (Critical): Merge master into joe/main** -- merged 67 commits from master (Phase 5/6/8) and recovered Phase 4 turret work from Legion PC. Three conflicts in StructuralPlaytestSetup.cs resolved. Manual playtest verified.
-- **J-016 (High): Tower data model and simulation layer** -- Phase 7 start. Created TowerController (plain C#), FloorChunkDefinition (data class), TowerBuildingDefinitionSO (read-only SO). 41 EditMode tests. All D-004 pattern.
-- **J-017 (High): Tower loot system** -- TowerLootTable (plain C#), LootDropDefinition (data class), LootRarity enum. 23 EditMode tests. Weighted drops, floor/tier filtering, amount ranges. All tuning is data-driven.
-- **PR #9** created: joe/main -> master (Phase 4 turrets + master sync). Awaiting Kevin's review.
+- **J-023 (Critical): Merge master into joe/main** -- merged 67 commits from master (Phase 5/6/8) and recovered Phase 4 turret work from Legion PC.
+- **J-016 (High): Tower data model and simulation layer** -- TowerController, FloorChunkDefinition, TowerBuildingDefinitionSO. 41 tests.
+- **J-017 (High): Tower loot system** -- TowerLootTable, LootDropDefinition, LootRarity. 23 tests.
+- **J-022 (Medium): Integrate PlayerHUD into Dev_Test** -- Extended PlaytestSetup.cs with PlayerInventory, ItemPickupTrigger, InventoryUI, RecipeSelectionUI, DevTestHUDBootstrap. Wired inventory + camera on PlayerHUD.
+- **PR #9** created: joe/main -> master. Awaiting Kevin's review.
 
 ### Shared file changes (CRITICAL)
 
-No new shared file changes from J-016 or J-017 (all files in `Scripts/World/`, owned by Joe). Existing shared changes from Phase 4 still pending in PR #9:
+No new shared file changes from J-016, J-017, or J-022 (all files in `Scripts/World/` and `Scripts/UI/`, owned by Joe). Editor-only file `Scripts/Editor/PlaytestSetup.cs` modified (Joe's workflow).
+
+Existing shared changes from Phase 4 still pending in PR #9:
 - `Scripts/Core/PhysicsLayers.cs` -- FaunaMask
 - `Scripts/Automation/PortOwnerType.cs` -- Turret enum value
 - `Scripts/Automation/BuildingPlacementService.cs` -- PlaceTurret method
@@ -24,25 +27,24 @@ No new shared file changes from J-016 or J-017 (all files in `Scripts/World/`, o
 
 ### Next task
 
-**J-022 (Medium): Integrate consolidated PlayerHUD into Dev_Test.** Depends on J-012 (complete). Unblocked. J-018 (Tower MonoBehaviour + elevator) depends on Phase 5 complete from Kevin, so J-022 is next by priority rules.
+**J-018 (High): Tower MonoBehaviour wrapper + elevator system.** Depends on J-016 (complete) and Phase 5 complete from Kevin. Check if Phase 5 scene management is on master before starting.
 
-After J-022: J-018 when Phase 5 is confirmed merged to master.
+If J-018 is still blocked: no more unblocked tasks remain. All pending tasks (J-018, J-019, J-020, J-021) have unmet dependencies.
 
 ### Blockers
 
 - **J-018** blocked on Phase 5 scene management from Kevin being on master.
-- Pre-existing test flake: `BuildingIntegrationTests.BuildingLayout_GeneratedAtOffset_AllReferencesValid` intermittently fails due to MCP WebSocket error log during test run. Not a code bug.
+- **J-019, J-020, J-021** blocked transitively through J-018.
 
 ### Test status
 
-875/875 passing (852 previous + 23 new loot table tests), 0 compilation errors. 1 intermittent MCP-related test flake (see blockers).
+875/875 passing, 0 failing, 0 skipped, 0 compilation errors, 0 warnings.
 
 ### Key context
 
-- joe/main now has Phase 4 turrets + Phase 5/6/8 from Kevin + Phase 7 tower simulation + loot system.
-- Tower simulation files: `Scripts/World/TowerController.cs`, `FloorChunkDefinition.cs`, `TowerBuildingDefinitionSO.cs`.
-- Tower loot files: `Scripts/World/TowerLootTable.cs`, `LootDropDefinition.cs` (includes LootRarity enum and LootDrop struct).
-- TowerController uses `[NonSerialized] hasFragment` on FloorChunkDefinition for runtime fragment randomization.
-- TowerLootTable takes `System.Random` for deterministic testing. All drop tuning is in LootDropDefinition data.
-- TextMesh Pro "Can't Generate Mesh" warning in editor -- missing font asset, cosmetic only.
-- Pattern note from Kevin: `renderer.material.color` causes EditMode test failures due to material leak. Use `var mat = new Material(renderer.sharedMaterial); mat.color = color; renderer.sharedMaterial = mat;` instead.
+- joe/main has: Phase 4 turrets + Phase 5/6/8 from Kevin + Phase 7 tower simulation/loot + PlayerHUD integration.
+- Tower files: `Scripts/World/TowerController.cs`, `FloorChunkDefinition.cs`, `TowerBuildingDefinitionSO.cs`, `TowerLootTable.cs`, `LootDropDefinition.cs`.
+- Dev_Test HUD setup: run "Slopworks/Setup Playtest Scene" menu item, then play. DevTestHUDBootstrap.cs initializes InventoryUI one frame after Start.
+- PlayerHUD uses dual init path: serialized refs in editor (Dev_Test) or runtime Initialize() calls (StructuralPlaytest).
+- TextMesh Pro "Can't Generate Mesh" warning -- missing font asset, cosmetic only.
+- Pattern note from Kevin: `renderer.material.color` causes EditMode test failures due to material leak.

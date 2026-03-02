@@ -548,13 +548,15 @@ Build the boss floor as the tier-gating mechanic.
 
 ### TASK J-022: Integrate consolidated PlayerHUD into Dev_Test
 
-**Status:** Pending
+**Status:** Complete (2026-03-02)
 **Priority:** Medium
 **Branch:** `joe/main`
 **Ownership:** `Scripts/UI/`, `Scripts/Combat/`
 **Depends on:** J-012
 
 After merging master, Dev_Test should pick up the consolidated PlayerHUD, inventory system, and hotbar with pages. Wire these into Dev_Test's existing bootstrapper.
+
+**Result:** Extended PlaytestSetup.cs to add PlayerInventory, ItemPickupTrigger, ItemRegistry, InventoryUI, RecipeSelectionUI, and wire _playerInventory + _playerCamera on PlayerHUD. Created DevTestHUDBootstrap.cs for runtime InventoryUI initialization. Run "Slopworks/Setup Playtest Scene" menu then play to get full HUD with inventory.
 
 **What changed on master:**
 - `HUDController.cs` deleted, replaced by consolidated `PlayerHUD.cs`
