@@ -8,26 +8,22 @@ Updated by Joe's Claude at the end of each session.
 
 ### What was completed
 
-- **J-023 (Critical): Merge master into joe/main** (`5aaa09d`) -- merged 67 commits from master containing Phase 5 (UI/Inventory/Scenes), Phase 6 (Building Exploration), and Phase 8 (Supply Chain Network). Clean merge with zero conflicts. Zero compilation errors, 789/789 EditMode tests passing.
-
-### Phase 4 turret work status
-
-**J-013 through J-015 marked back to Pending.** The original turret implementation was done on the Legion PC but the commits (`6312a91`, `2e4cc15`, `0a99c34`, `04a3ecd`) never made it to `origin/joe/main` or master. They don't exist in the remote repo, any branch, or any reflog on this machine. The previous handoff notes described the work in detail, which serves as the re-implementation spec.
-
-Shared file changes described in the previous handoff (PhysicsLayers FaunaMask, PortOwnerType Turret, BuildingPlacementService PlaceTurret, ConnectionResolver Turret cases, PlayerController GridPlane) also do not exist and need to be re-implemented.
+- **J-023 (Critical): Merge master into joe/main** -- merged 67 commits from master (Phase 5/6/8) and recovered Phase 4 turret work from Legion PC. Three conflicts in StructuralPlaytestSetup.cs resolved: CreateEnvironment replaces CreateGroundPlane, combined OnGUI help lines and header comments. Zero compilation errors, 811/811 EditMode tests passing. Manual playtest verified.
 
 ### Shared file changes (CRITICAL)
 
-None this session. Only doc updates (tasks-joe.md, handoff-joe.md).
-
-### What needs attention
-
-- The previous handoff notes (preserved in git history) contain detailed implementation specs for the turret work. Reference those when re-implementing J-013 through J-015.
-- `worktree-j-007` local branch is stale and can be cleaned up.
+No new shared file changes this session. Existing shared changes from Phase 4 (now recovered):
+- `Scripts/Core/PhysicsLayers.cs` -- FaunaMask
+- `Scripts/Automation/PortOwnerType.cs` -- Turret enum value
+- `Scripts/Automation/BuildingPlacementService.cs` -- PlaceTurret method
+- `Scripts/Automation/ConnectionResolver.cs` -- Turret cases in CreateSource/CreateDestination
+- `Scripts/Player/PlayerController.cs` -- GridPlane in GroundMask
 
 ### Next task
 
-**J-013 (High): Auto-turret simulation layer.** Pure C# simulation following D-004 pattern. TurretController, TurretDefinitionSO, tests. Previous implementation details in the git history of this file.
+**J-016 (High): Tower data model and simulation layer.** Phase 7 start. Pure C# simulation following D-004 pattern. Read `docs/plans/2026-02-28-tower-design.md` before starting.
+
+After J-016: J-017 (Tower loot system), then J-022 (Integrate PlayerHUD into Dev_Test, unblocked).
 
 ### Blockers
 
@@ -35,12 +31,11 @@ None.
 
 ### Test status
 
-789/789 passing, 0 failing, 0 skipped, 0 compilation errors, 0 warnings.
+811/811 passing, 0 failing, 0 skipped, 0 compilation errors, 0 warnings.
 
 ### Key context
 
-- joe/main is 1 merge commit ahead of master (5aaa09d). No new code, just the merge.
-- Phase 5 systems now available: PlayerInventory, PlayerHUD (consolidated), HotbarSlotUI, HotbarPage, InventoryUI, RecipeSelectionUI, StorageUI, SceneLoader, ItemPickupTrigger, WorldItem.
-- Phase 6 systems now available: BuildingManager, BuildingLayoutGenerator, MEPRestorePointBehaviour, BuildingState, BuildingEntryTrigger, BuildingExitTrigger.
-- Phase 8 systems now available: SupplyLineManager, SupplyLine, OverworldMap, OverworldNode, OverworldMapUI.
+- joe/main now has all Phase 4 turret work + Phase 5/6/8 from Kevin. Ready for PR to master.
+- StructuralPlaytest scene uses CreateEnvironment() (PlaytestEnvironment) instead of CreateGroundPlane(), plus Kevin's building layout, MEP restore, and entry/exit methods.
+- TextMesh Pro "Can't Generate Mesh" warning in editor -- missing font asset, cosmetic only.
 - Pattern note from Kevin: `renderer.material.color` causes EditMode test failures due to material leak. Use `var mat = new Material(renderer.sharedMaterial); mat.color = color; renderer.sharedMaterial = mat;` instead.
