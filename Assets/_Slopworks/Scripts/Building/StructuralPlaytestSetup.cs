@@ -1,6 +1,8 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Reflection;
 using UnityEngine;
+using UnityEngine.AI;
 using UnityEngine.InputSystem;
 
 /// <summary>
@@ -66,6 +68,16 @@ public class StructuralPlaytestSetup : MonoBehaviour
     private PlayerHUD _playerHUD;
     private PlayerInventory _playerInventory;
     private WeaponBehaviour _weaponBehaviour;
+
+    // -- Combat definitions (created at runtime) --
+    private WeaponDefinitionSO _weaponDef;
+    private FaunaDefinitionSO _faunaDef;
+    private GameEventSO _enemyDiedEvent;
+
+    // -- Combat infrastructure --
+    private GameObject _enemyTemplate;
+    private WaveControllerBehaviour _waveController;
+    private EnemySpawner _enemySpawner;
 
     // -- Tracking --
     private readonly List<BuildingData> _foundations = new();
@@ -140,14 +152,19 @@ public class StructuralPlaytestSetup : MonoBehaviour
             PreSeedFactory();
 
         var player = CreatePlayer();
+        WirePlayerCombat(player);
         CreateWorldItems();
         CreateSmelterInteractable();
+        CreateEnemyTemplate();
+        CreateSpawnPointsAndWaves();
+        BakeNavMesh();
         CreateHUD(player);
 
         Debug.Log("playtest: setup complete");
         Debug.Log("controls: WASD=move, Mouse=look, Space=jump, Shift=sprint");
         Debug.Log("controls: B=toggle build/items, 1-9=select slot, Tab=inventory, E=interact");
         Debug.Log("controls: R=rotate, Esc=cancel, PgUp/PgDn=level, F=fill storage");
+        Debug.Log("controls: G=spawn next wave, LMB=fire weapon (items page)");
     }
 
     private void FixedUpdate()
@@ -166,6 +183,7 @@ public class StructuralPlaytestSetup : MonoBehaviour
         HandleDigitKeys(kb);
         HandleLevelChange(kb);
         HandleFillStorage(kb, mouse);
+        HandleWaveTrigger(kb);
 
         switch (_currentTool)
         {
@@ -202,7 +220,7 @@ public class StructuralPlaytestSetup : MonoBehaviour
         float w = 420;
         float h = 22;
 
-        int lineCount = 15;
+        int lineCount = 18;
         if (_currentTool == ToolMode.Wall && _pendingWall) lineCount++;
         if (_currentTool == ToolMode.Wall && !_pendingWall) lineCount++;
         if (_currentTool == ToolMode.Ramp) lineCount++;
@@ -229,11 +247,23 @@ public class StructuralPlaytestSetup : MonoBehaviour
         DrawLine(ref y, x, w, h, $"Auto-inserters: {inserterCount}  |  Belt links: {_simulation.BeltNetwork.ConnectionCount}");
         DrawLine(ref y, x, w, h, $"Port nodes: {_portRegistry.Count}");
 
+        // Combat stats (null-safe -- components initialize in Start, OnGUI runs before that)
+        var wc = _waveController != null ? _waveController.Controller : null;
+        string waveInfo = wc != null
+            ? $"Wave: {wc.CurrentWave}/{wc.TotalWaves}  |  Enemies: {wc.EnemiesRemaining}"
+            : "Wave: --";
+        var healthBeh = _playerInventory != null ? _playerInventory.GetComponent<HealthBehaviour>() : null;
+        var healthComp = healthBeh != null ? healthBeh.Health : null;
+        var weapon = _weaponBehaviour != null ? _weaponBehaviour.Weapon : null;
+        string healthInfo = healthComp != null ? $"HP: {healthComp.CurrentHealth:F0}/{healthComp.MaxHealth:F0}" : "HP: --";
+        string ammoInfo = weapon != null ? $"Ammo: {weapon.CurrentAmmo}/{_weaponDef.magazineSize}" : "Ammo: --";
+        DrawLine(ref y, x, w, h, $"{waveInfo}  |  {healthInfo}  |  {ammoInfo}");
+
         y += 4;
         DrawLine(ref y, x, w, h, "[B] Toggle build/items  [1-7] Select tool/slot  [V] FPS/Iso");
         DrawLine(ref y, x, w, h, "[PgUp/PgDn] Level  [R] Rotate  [Esc] Cancel  [F] Fill");
         DrawLine(ref y, x, w, h, "[Tab] Inventory  [E] Interact  [WASD] Move  [Space] Jump");
-        DrawLine(ref y, x, w, h, "Port colors: BLUE = input  RED = output");
+        DrawLine(ref y, x, w, h, "[G] Spawn wave  |  Port colors: BLUE=input RED=output");
 
         if (_currentTool == ToolMode.Wall)
         {
@@ -283,6 +313,10 @@ public class StructuralPlaytestSetup : MonoBehaviour
         if (_ironIngotDef != null) DestroyImmediate(_ironIngotDef);
         if (_ironScrapDef != null) DestroyImmediate(_ironScrapDef);
         if (_smeltRecipe != null) DestroyImmediate(_smeltRecipe);
+        if (_weaponDef != null) DestroyImmediate(_weaponDef);
+        if (_faunaDef != null) DestroyImmediate(_faunaDef);
+        if (_enemyDiedEvent != null) DestroyImmediate(_enemyDiedEvent);
+        if (_enemyTemplate != null) DestroyImmediate(_enemyTemplate);
     }
 
     // -- Setup --
@@ -379,6 +413,178 @@ public class StructuralPlaytestSetup : MonoBehaviour
         _smeltRecipe.outputs = new[] { new RecipeIngredient { itemId = IronIngot, count = 1 } };
         _smeltRecipe.craftDuration = 2f;
         _smeltRecipe.requiredMachineType = SmelterType;
+
+        // Combat
+        _weaponDef = ScriptableObject.CreateInstance<WeaponDefinitionSO>();
+        _weaponDef.weaponId = "test_rifle";
+        _weaponDef.damage = 25f;
+        _weaponDef.fireRate = 2f;
+        _weaponDef.range = 50f;
+        _weaponDef.damageType = DamageType.Kinetic;
+        _weaponDef.magazineSize = 12;
+        _weaponDef.reloadTime = 1.5f;
+
+        _faunaDef = ScriptableObject.CreateInstance<FaunaDefinitionSO>();
+        _faunaDef.faunaId = "test_grunt";
+        _faunaDef.maxHealth = 50f;
+        _faunaDef.moveSpeed = 3f;
+        _faunaDef.attackDamage = 10f;
+        _faunaDef.attackRange = 2.5f;
+        _faunaDef.attackCooldown = 1.5f;
+        _faunaDef.sightRange = 15f;
+        _faunaDef.sightAngle = 120f;
+        _faunaDef.hearingRange = 8f;
+        _faunaDef.attackDamageType = DamageType.Kinetic;
+        _faunaDef.alertRange = 20f;
+        _faunaDef.strafeSpeed = 2.5f;
+        _faunaDef.strafeRadius = 3f;
+        _faunaDef.baseBravery = 0.5f;
+
+        _enemyDiedEvent = ScriptableObject.CreateInstance<GameEventSO>();
+    }
+
+    private void WirePlayerCombat(GameObject player)
+    {
+        var flags = BindingFlags.NonPublic | BindingFlags.Instance;
+        var fpsCam = player.GetComponentInChildren<Camera>();
+
+        // Camera effects on FPS camera object (before WeaponBehaviour.Start finds them)
+        var camObj = fpsCam.gameObject;
+        if (camObj.GetComponent<CameraRecoil>() == null)
+            camObj.AddComponent<CameraRecoil>();
+        if (camObj.GetComponent<CameraShake>() == null)
+            camObj.AddComponent<CameraShake>();
+
+        // Muzzle flash as child of camera
+        var muzzleObj = new GameObject("MuzzleFlashPoint");
+        muzzleObj.transform.SetParent(camObj.transform);
+        muzzleObj.transform.localPosition = new Vector3(0f, -0.1f, 0.5f);
+        muzzleObj.AddComponent<MuzzleFlash>();
+
+        // WeaponBehaviour -- must set _weaponDefinition before Awake creates WeaponController
+        // Temporarily deactivate player so AddComponent doesn't trigger Awake
+        player.SetActive(false);
+        _weaponBehaviour = player.AddComponent<WeaponBehaviour>();
+        typeof(WeaponBehaviour).GetField("_weaponDefinition", flags)?.SetValue(_weaponBehaviour, _weaponDef);
+        typeof(WeaponBehaviour).GetField("_camera", flags)?.SetValue(_weaponBehaviour, fpsCam);
+        player.SetActive(true);
+
+        // HealthBehaviour max health via reflection
+        var health = player.GetComponent<HealthBehaviour>();
+        typeof(HealthBehaviour).GetField("_maxHealth", flags)?.SetValue(health, 100f);
+
+        Debug.Log("playtest: player combat wired (weapon, recoil, shake, muzzle flash)");
+    }
+
+    private void CreateEnemyTemplate()
+    {
+        var flags = BindingFlags.NonPublic | BindingFlags.Instance;
+
+        _enemyTemplate = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+        _enemyTemplate.name = "EnemyTemplate";
+        _enemyTemplate.layer = PhysicsLayers.Fauna;
+        SetColor(_enemyTemplate, new Color(0.8f, 0.2f, 0.2f));
+
+        // Deactivate before adding components to prevent Awake/Start from running
+        _enemyTemplate.SetActive(false);
+
+        // Physics
+        var rb = _enemyTemplate.AddComponent<Rigidbody>();
+        rb.freezeRotation = true;
+
+        // NavMeshAgent
+        var agent = _enemyTemplate.AddComponent<NavMeshAgent>();
+        agent.speed = _faunaDef.moveSpeed;
+        agent.stoppingDistance = _faunaDef.attackRange * 0.8f;
+
+        // Health
+        var health = _enemyTemplate.AddComponent<HealthBehaviour>();
+        typeof(HealthBehaviour).GetField("_maxHealth", flags)?.SetValue(health, _faunaDef.maxHealth);
+
+        // Fauna controller
+        var controller = _enemyTemplate.AddComponent<FaunaController>();
+        typeof(FaunaController).GetField("_def", flags)?.SetValue(controller, _faunaDef);
+        typeof(FaunaController).GetField("_onDeathEvent", flags)?.SetValue(controller, _enemyDiedEvent);
+
+        // Hit effects
+        _enemyTemplate.AddComponent<EnemyHitFlash>();
+        _enemyTemplate.AddComponent<EnemyKnockback>();
+
+        // Keep deactivated -- EnemySpawner will Instantiate clones
+        Debug.Log("playtest: enemy template created (inactive)");
+    }
+
+    private void CreateSpawnPointsAndWaves()
+    {
+        var flags = BindingFlags.NonPublic | BindingFlags.Instance;
+        float centerX = 10f * FactoryGrid.CellSize;
+        float centerZ = 10f * FactoryGrid.CellSize;
+
+        // Spawn points around the build area, all within ground plane (0 to 200)
+        var spawnParent = new GameObject("SpawnPoints");
+        Vector3[] positions =
+        {
+            new Vector3(centerX + 20, 0, centerZ + 20),
+            new Vector3(Mathf.Max(1f, centerX - 20), 0, centerZ + 20),
+            new Vector3(centerX + 20, 0, Mathf.Max(1f, centerZ - 20)),
+            new Vector3(Mathf.Max(1f, centerX - 20), 0, Mathf.Max(1f, centerZ - 20)),
+        };
+
+        var spawnTransforms = new Transform[positions.Length];
+        for (int i = 0; i < positions.Length; i++)
+        {
+            var point = new GameObject($"SpawnPoint_{i}");
+            point.transform.SetParent(spawnParent.transform);
+            point.transform.position = positions[i];
+            point.transform.LookAt(new Vector3(centerX, 0, centerZ));
+            spawnTransforms[i] = point.transform;
+        }
+
+        // Wave controller object -- inactive so we can set fields before Awake
+        var waveObj = new GameObject("WaveController");
+        waveObj.SetActive(false);
+
+        // EnemySpawner
+        _enemySpawner = waveObj.AddComponent<EnemySpawner>();
+        typeof(EnemySpawner).GetField("_enemyPrefab", flags)?.SetValue(_enemySpawner, _enemyTemplate);
+        typeof(EnemySpawner).GetField("_spawnPoints", flags)?.SetValue(_enemySpawner, spawnTransforms);
+
+        // WaveControllerBehaviour -- must set _waves before Awake creates WaveController
+        var waves = new List<WaveDefinition>
+        {
+            new WaveDefinition { enemyCount = 3, spawnDelay = 1f, timeBetweenWaves = 5f },
+            new WaveDefinition { enemyCount = 5, spawnDelay = 0.8f, timeBetweenWaves = 5f },
+            new WaveDefinition { enemyCount = 8, spawnDelay = 0.5f, timeBetweenWaves = 0f },
+        };
+        _waveController = waveObj.AddComponent<WaveControllerBehaviour>();
+        typeof(WaveControllerBehaviour).GetField("_waves", flags)?.SetValue(_waveController, waves);
+        typeof(WaveControllerBehaviour).GetField("_spawner", flags)?.SetValue(_waveController, _enemySpawner);
+        typeof(WaveControllerBehaviour).GetField("_enemyDiedEvent", flags)?.SetValue(_waveController, _enemyDiedEvent);
+        typeof(WaveControllerBehaviour).GetField("_autoStartDelay", flags)?.SetValue(_waveController, -1f);
+
+        waveObj.SetActive(true);
+
+        Debug.Log("playtest: wave system created (3 waves: 3, 5, 8 enemies, press G to start)");
+    }
+
+    private void BakeNavMesh()
+    {
+#if UNITY_EDITOR
+        _groundPlane.isStatic = true;
+        UnityEditor.AI.NavMeshBuilder.BuildNavMesh();
+        Debug.Log("playtest: navmesh baked");
+#else
+        Debug.LogWarning("playtest: navmesh baking not available outside editor");
+#endif
+    }
+
+    private void HandleWaveTrigger(Keyboard kb)
+    {
+        if (kb.gKey.wasPressedThisFrame && _waveController != null)
+        {
+            _waveController.BeginNextWave();
+            Debug.Log("playtest: wave triggered via G key");
+        }
     }
 
     private void CreateInfrastructure()
@@ -492,8 +698,7 @@ public class StructuralPlaytestSetup : MonoBehaviour
         player.AddComponent<PlayerController>();
         player.AddComponent<HealthBehaviour>();
 
-        // Weapon (Joe's combat)
-        _weaponBehaviour = player.AddComponent<WeaponBehaviour>();
+        // WeaponBehaviour added later in WirePlayerCombat (needs definition set before Awake)
 
         // Pickup trigger (child)
         var pickupObj = new GameObject("PickupTrigger");
@@ -582,6 +787,11 @@ public class StructuralPlaytestSetup : MonoBehaviour
         canvasObj.AddComponent<RecipeSelectionUI>();
         canvasObj.AddComponent<StorageUI>();
         var inventoryUI = canvasObj.AddComponent<InventoryUI>();
+        var hitMarker = canvasObj.AddComponent<HitMarkerUI>();
+
+        // Wire hit marker to weapon
+        if (_weaponBehaviour != null)
+            _weaponBehaviour.SetHitMarker(hitMarker);
 
         StartCoroutine(WireHUD(_playerHUD, inventoryUI, player));
     }
@@ -595,10 +805,14 @@ public class StructuralPlaytestSetup : MonoBehaviour
         var weapon = player.GetComponent<WeaponBehaviour>();
         var cam = player.GetComponentInChildren<Camera>();
 
+        // Combat refs
+        var cameraShake = cam != null ? cam.GetComponent<CameraShake>() : null;
+        var wc = _waveController != null ? _waveController.Controller : null;
+
         hud.Initialize(
             health != null ? health.Health : null,
             weapon != null ? weapon.Weapon : null,
-            null, null);
+            cameraShake, wc);
         hud.InitializeInventory(inventory, cam);
         inventoryUI.Initialize(inventory);
 
@@ -611,7 +825,7 @@ public class StructuralPlaytestSetup : MonoBehaviour
         hud.OnBuildToolSelected += OnHotbarBuildToolSelected;
         hud.OnPageChanged += OnHotbarPageChanged;
 
-        Debug.Log("playtest: HUD wired to player");
+        Debug.Log("playtest: HUD wired to player (combat + inventory)");
     }
 
     // -- Build tool ID to ToolMode mapping --
