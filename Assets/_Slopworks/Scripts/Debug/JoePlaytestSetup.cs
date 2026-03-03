@@ -80,6 +80,7 @@ public class JoePlaytestSetup : MonoBehaviour, IPlaytestFeatureProvider
     {
         _toolCtrl = toolCtrl;
         toolCtrl.RegisterToolHandler(PlaytestToolController.ToolMode.TurretPlace, HandleTurretPlaceInput);
+        toolCtrl.RegisterToolCleanup(DestroyTurretGhost);
     }
 
     public void CreateWorldObjects(PlaytestContext ctx, PlaytestToolController toolCtrl)

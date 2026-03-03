@@ -168,7 +168,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Slopworks.Runtime::PlaytestValidator
   _runOnPlay: 1
   _delayFrames: 5
-  _autoQuit: 1
+  _autoQuit: 0
 --- !u!114 &2019789579
 MonoBehaviour:
   m_ObjectHideFlags: 0
