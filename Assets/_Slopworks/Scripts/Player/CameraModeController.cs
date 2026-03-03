@@ -51,8 +51,8 @@ public class CameraModeController : MonoBehaviour
         _controls.Factory.Disable();
         _controls.Exploration.Enable();
 
-        _fpsCamera.gameObject.SetActive(true);
-        _isometricCamera.gameObject.SetActive(false);
+        if (_fpsCamera != null) _fpsCamera.gameObject.SetActive(true);
+        if (_isometricCamera != null) _isometricCamera.gameObject.SetActive(false);
 
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
@@ -68,8 +68,8 @@ public class CameraModeController : MonoBehaviour
         _controls.Exploration.Disable();
         _controls.Factory.Enable();
 
-        _fpsCamera.gameObject.SetActive(false);
-        _isometricCamera.gameObject.SetActive(true);
+        if (_fpsCamera != null) _fpsCamera.gameObject.SetActive(false);
+        if (_isometricCamera != null) _isometricCamera.gameObject.SetActive(true);
 
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
