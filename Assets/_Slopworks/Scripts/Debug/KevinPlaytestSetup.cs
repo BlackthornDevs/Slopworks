@@ -68,6 +68,13 @@ public class KevinPlaytestSetup : MonoBehaviour, IPlaytestFeatureProvider
     // -- Ground plane --
     private GameObject _groundPlane;
 
+    // -- Turret --
+    private TurretDefinitionSO _turretDef;
+    private readonly List<TurretBehaviour> _turrets = new();
+    private int _turretRotation;
+    private GameObject _turretGhost;
+    private readonly List<GameObject> _turretGhostPorts = new();
+
     // -- Supply dock grid position --
     private static readonly Vector2Int SupplyDockCell = new Vector2Int(15, 7);
 
@@ -79,17 +86,24 @@ public class KevinPlaytestSetup : MonoBehaviour, IPlaytestFeatureProvider
     {
         _ctx = ctx;
         CreateBuildingDefinitions();
+        CreateTurretDefinition();
     }
 
     public void ConfigureBuildPage(HotbarPage buildPage)
     {
-        // No Kevin-specific build page slots currently (slots 0-6 are shared)
+        buildPage.Entries[7] = new HotbarEntry
+        {
+            Id = "turret",
+            DisplayName = "Turret",
+            Color = new Color(0.8f, 0.3f, 0.3f, 0.8f)
+        };
     }
 
     public void RegisterToolHandlers(PlaytestToolController toolCtrl)
     {
         _toolCtrl = toolCtrl;
-        // No custom tool handlers currently
+        toolCtrl.RegisterToolHandler(PlaytestToolController.ToolMode.TurretPlace, HandleTurretPlaceInput);
+        toolCtrl.RegisterToolCleanup(DestroyTurretGhost);
     }
 
     public void CreateWorldObjects(PlaytestContext ctx, PlaytestToolController toolCtrl)
@@ -179,10 +193,12 @@ public class KevinPlaytestSetup : MonoBehaviour, IPlaytestFeatureProvider
     public void Cleanup()
     {
         _warehouseSupplyLine?.Dispose();
+        DestroyTurretGhost();
 
         if (_warehouseDef != null) DestroyImmediate(_warehouseDef);
         if (_buildingClaimedEvent != null) DestroyImmediate(_buildingClaimedEvent);
         if (_supplyDockDef != null) DestroyImmediate(_supplyDockDef);
+        if (_turretDef != null) DestroyImmediate(_turretDef);
     }
 
     // ========== Standalone Awake ==========
@@ -211,8 +227,10 @@ public class KevinPlaytestSetup : MonoBehaviour, IPlaytestFeatureProvider
 
         // 5. Shared tool controller
         var buildPage = PlaytestToolController.CreateSharedBuildPage();
+        ConfigureBuildPage(buildPage);
         _toolCtrl = gameObject.AddComponent<PlaytestToolController>();
         _toolCtrl.Initialize(_ctx, buildPage, _groundPlane);
+        RegisterToolHandlers(_toolCtrl);
 
         // 6. Pre-seed (optional)
         if (_preSeedFactory)
@@ -243,6 +261,184 @@ public class KevinPlaytestSetup : MonoBehaviour, IPlaytestFeatureProvider
         Debug.Log("controls: R=rotate, Esc=cancel, PgUp/PgDn=level, F=fill storage");
         Debug.Log("controls: G=spawn next wave, LMB=fire weapon (items page)");
         Debug.Log("controls: [Portal] Enter/exit building, [M] Overworld map");
+    }
+
+    // -- Turret --
+
+    private void CreateTurretDefinition()
+    {
+        _turretDef = ScriptableObject.CreateInstance<TurretDefinitionSO>();
+        _turretDef.turretId = "turret_basic";
+        _turretDef.displayName = "Basic Turret";
+        _turretDef.range = 20f;
+        _turretDef.fireInterval = 0.5f;
+        _turretDef.damagePerShot = 10f;
+        _turretDef.damageType = DamageType.Kinetic;
+        _turretDef.ammoItemId = "iron_scrap";
+        _turretDef.size = Vector2Int.one;
+        _turretDef.ammoSlotCount = 1;
+        _turretDef.ammoMaxStackSize = 64;
+        _turretDef.ports = new[]
+        {
+            new MachinePort
+            {
+                localOffset = Vector2Int.zero,
+                direction = new Vector2Int(-1, 0),
+                type = PortType.Input
+            }
+        };
+        _ctx.RuntimeSOs.Add(_turretDef);
+    }
+
+    private void HandleTurretPlaceInput(Keyboard kb, Mouse mouse)
+    {
+        var cell = _toolCtrl.GetCellUnderCursor();
+
+        if (kb.rKey.wasPressedThisFrame)
+        {
+            _turretRotation = (_turretRotation + 90) % 360;
+            Debug.Log($"turret rotation: {_turretRotation}");
+        }
+
+        if (cell.HasValue)
+        {
+            UpdateTurretGhost(cell.Value);
+            UpdateTurretGhostPorts(cell.Value);
+        }
+        else
+        {
+            DestroyTurretGhost();
+        }
+
+        if (mouse.leftButton.wasPressedThisFrame && cell.HasValue)
+        {
+            ClearTurretGhostPorts();
+            var result = _ctx.AutomationService.PlaceTurret(
+                _turretDef, cell.Value, _turretRotation, _toolCtrl.CurrentLevel);
+            if (result != null)
+            {
+                _toolCtrl.AutomationBuildings.Add(result);
+                SpawnTurretVisual(result, cell.Value);
+                _toolCtrl.SpawnPortIndicators(result);
+
+                var inputDir = GridRotation.Rotate(new Vector2Int(-1, 0), _turretRotation);
+                Debug.Log($"turret placed at ({cell.Value.x},{cell.Value.y}) rotation {_turretRotation}");
+            }
+            else
+            {
+                Debug.Log($"cannot place turret at ({cell.Value.x},{cell.Value.y}): overlap");
+            }
+        }
+    }
+
+    private void SpawnTurretVisual(PlacementResult result, Vector2Int cell)
+    {
+        var worldPos = _ctx.Grid.CellToWorld(cell, _toolCtrl.CurrentLevel);
+        var turretController = (TurretController)result.SimulationObject;
+
+        var baseObj = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        baseObj.name = $"Turret_{cell.x}_{cell.y}";
+        var defaultCollider = baseObj.GetComponent<Collider>();
+        if (defaultCollider != null) Destroy(defaultCollider);
+        baseObj.layer = PhysicsLayers.Interactable;
+        baseObj.AddComponent<BoxCollider>();
+
+        baseObj.transform.position = worldPos + Vector3.up * 0.4f;
+        baseObj.transform.localScale = new Vector3(0.8f, 0.4f, 0.8f);
+        PlaytestToolController.SetColor(baseObj, new Color(0.5f, 0.15f, 0.15f));
+
+        var pivot = new GameObject("BarrelPivot");
+        pivot.transform.SetParent(baseObj.transform);
+        pivot.transform.localPosition = Vector3.up * 0.4f;
+
+        var barrel = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        barrel.name = "Barrel";
+        var barrelCollider = barrel.GetComponent<Collider>();
+        if (barrelCollider != null) Destroy(barrelCollider);
+        barrel.transform.SetParent(pivot.transform);
+        barrel.transform.localPosition = new Vector3(0f, 0f, 0.3f);
+        barrel.transform.localScale = new Vector3(0.15f, 0.15f, 0.6f);
+        PlaytestToolController.SetColor(barrel, new Color(0.3f, 0.1f, 0.1f));
+
+        baseObj.SetActive(false);
+        var behaviour = baseObj.AddComponent<TurretBehaviour>();
+        behaviour.Initialize(_turretDef, turretController, pivot.transform);
+        baseObj.SetActive(true);
+
+        _turrets.Add(behaviour);
+        result.BuildingData.Instance = baseObj;
+
+        turretController.AmmoStorage.TryInsertStack("iron_scrap", 32);
+        Debug.Log("turret visual spawned, pre-loaded 32 ammo");
+    }
+
+    private void UpdateTurretGhost(Vector2Int cell)
+    {
+        if (_turretGhost == null)
+        {
+            _turretGhost = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            _turretGhost.name = "TurretGhost";
+            var col = _turretGhost.GetComponent<Collider>();
+            if (col != null) Destroy(col);
+        }
+
+        var worldPos = _ctx.Grid.CellToWorld(cell, _toolCtrl.CurrentLevel) + Vector3.up * 0.5f;
+        _turretGhost.transform.position = worldPos;
+        _turretGhost.transform.localScale = new Vector3(
+            _turretDef.size.x * 0.9f * FactoryGrid.CellSize, 1f,
+            _turretDef.size.y * 0.9f * FactoryGrid.CellSize);
+        PlaytestToolController.SetColor(_turretGhost, new Color(0.8f, 0.3f, 0.3f, 0.4f));
+    }
+
+    private void UpdateTurretGhostPorts(Vector2Int cell)
+    {
+        ClearTurretGhostPorts();
+
+        float cellSize = FactoryGrid.CellSize;
+        var worldPos = _ctx.Grid.CellToWorld(cell, _toolCtrl.CurrentLevel);
+
+        foreach (var portDef in _turretDef.ports)
+        {
+            var rotatedDir = GridRotation.Rotate(portDef.direction, _turretRotation);
+            bool isInput = portDef.type == PortType.Input;
+            var color = isInput ? new Color(0.2f, 0.6f, 1f, 0.8f) : new Color(1f, 0.3f, 0.2f, 0.8f);
+
+            var indicator = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            indicator.name = isInput ? "GhostPortIn" : "GhostPortOut";
+            var col = indicator.GetComponent<Collider>();
+            if (col != null) DestroyImmediate(col);
+
+            var dir3 = new Vector3(rotatedDir.x, 0, rotatedDir.y);
+            indicator.transform.position = worldPos + Vector3.up * 0.6f + dir3 * (cellSize * 0.45f);
+
+            if (rotatedDir.x != 0)
+                indicator.transform.localScale = new Vector3(0.15f, 0.3f, 0.6f);
+            else
+                indicator.transform.localScale = new Vector3(0.6f, 0.3f, 0.15f);
+
+            PlaytestToolController.SetColor(indicator, color);
+            _turretGhostPorts.Add(indicator);
+        }
+    }
+
+    private void DestroyTurretGhost()
+    {
+        if (_turretGhost != null)
+        {
+            Destroy(_turretGhost);
+            _turretGhost = null;
+        }
+        ClearTurretGhostPorts();
+    }
+
+    private void ClearTurretGhostPorts()
+    {
+        for (int i = 0; i < _turretGhostPorts.Count; i++)
+        {
+            if (_turretGhostPorts[i] != null)
+                Destroy(_turretGhostPorts[i]);
+        }
+        _turretGhostPorts.Clear();
     }
 
     // -- Kevin-specific definitions --

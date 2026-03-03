@@ -21,9 +21,11 @@ public class RampPlacementController
 
     /// <summary>
     /// Find the best ramp placement near the cursor. The ramp extends outward from
-    /// the foundation edge into empty space on the lower level.
+    /// the foundation edge. When directionFilter is set, only snap points with
+    /// a matching edge direction are considered.
     /// </summary>
-    public void UpdateFromCursor(Vector3 cursorWorldPos, int level, int footprintLength)
+    public void UpdateFromCursor(Vector3 cursorWorldPos, int level, int footprintLength,
+        Vector2Int? directionFilter = null)
     {
         SelectedBaseSnap = null;
         RampDirection = Vector2Int.zero;
@@ -47,6 +49,10 @@ public class RampPlacementController
                     if (snap.Type != SnapPointType.FoundationEdge)
                         continue;
 
+                    // Skip snaps that don't match the locked direction
+                    if (directionFilter.HasValue && snap.EdgeDirection != directionFilter.Value)
+                        continue;
+
                     var snapWorldPos = WallPlacementController.GetSnapWorldPosition(snap, _grid);
                     float dist = Vector3.Distance(cursorWorldPos, snapWorldPos);
 
@@ -65,12 +71,16 @@ public class RampPlacementController
         // Ramp extends outward from the foundation edge
         var direction = bestSnap.EdgeDirection;
 
-        // Check if all ramp footprint cells are empty on the base level
+        // Check if all ramp footprint cells are passable (empty or structural)
         var rampStart = bestSnap.Cell + direction;
         for (int i = 0; i < footprintLength; i++)
         {
             var cell = rampStart + direction * i;
-            if (!_grid.CanPlace(cell, Vector2Int.one, level))
+            if (!_grid.IsInBounds(cell))
+                return;
+
+            var existing = _grid.GetAt(cell, level);
+            if (existing != null && !existing.IsStructural)
                 return;
         }
 

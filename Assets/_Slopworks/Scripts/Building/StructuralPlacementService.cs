@@ -313,18 +313,8 @@ public class StructuralPlacementService
                     if (isInternal)
                         continue;
 
-                    // Check if neighbor cell has an adjacent foundation -- if so, suppress both edges
-                    var neighborData = _grid.GetAt(neighborCell, level);
-                    if (neighborData != null && neighborData != data)
-                    {
-                        // Suppress: remove neighbor's edge snap point facing us
-                        var neighborSnapPoint = _snapRegistry.GetAt(neighborCell, level, -dir);
-                        if (neighborSnapPoint != null)
-                            _snapRegistry.Unregister(neighborSnapPoint);
-
-                        // Don't create our own edge snap point either
-                        continue;
-                    }
+                    // Adjacent foundation: keep both edge snap points so walls can be placed
+                    // on interior edges between foundations.
 
                     var snapPoint = new SnapPoint(cell, level, dir, SnapPointType.FoundationEdge, data);
                     _snapRegistry.Register(snapPoint);

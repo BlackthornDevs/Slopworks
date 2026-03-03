@@ -53,38 +53,38 @@ public class StructuralPlacementServiceTests
         Assert.IsNotNull(_snapRegistry.GetAt(new Vector2Int(5, 5), 0, Vector2Int.left));
     }
 
-    // -- Adjacent foundations suppress shared edge --
+    // -- Adjacent foundations keep shared edges for interior walls --
 
     [Test]
-    public void AdjacentFoundations_SuppressSharedEdge()
+    public void AdjacentFoundations_KeepSharedEdges()
     {
         _service.PlaceFoundation(_foundationDef, new Vector2Int(5, 5), 0);
         _service.PlaceFoundation(_foundationDef, new Vector2Int(6, 5), 0);
 
-        // Shared edge: (5,5) east and (6,5) west should be suppressed
-        Assert.IsNull(_snapRegistry.GetAt(new Vector2Int(5, 5), 0, Vector2Int.right));
-        Assert.IsNull(_snapRegistry.GetAt(new Vector2Int(6, 5), 0, Vector2Int.left));
+        // Shared edges preserved so interior walls can be placed
+        Assert.IsNotNull(_snapRegistry.GetAt(new Vector2Int(5, 5), 0, Vector2Int.right));
+        Assert.IsNotNull(_snapRegistry.GetAt(new Vector2Int(6, 5), 0, Vector2Int.left));
 
         // Non-shared edges should still exist
         Assert.IsNotNull(_snapRegistry.GetAt(new Vector2Int(5, 5), 0, Vector2Int.left));
         Assert.IsNotNull(_snapRegistry.GetAt(new Vector2Int(6, 5), 0, Vector2Int.right));
     }
 
-    // -- Foundation removal restores neighbor edges --
+    // -- Foundation removal keeps remaining edges --
 
     [Test]
-    public void RemoveFoundation_RestoresNeighborEdges()
+    public void RemoveFoundation_KeepsNeighborEdges()
     {
         var data1 = _service.PlaceFoundation(_foundationDef, new Vector2Int(5, 5), 0);
         var data2 = _service.PlaceFoundation(_foundationDef, new Vector2Int(6, 5), 0);
 
-        // Shared edges are suppressed
-        Assert.IsNull(_snapRegistry.GetAt(new Vector2Int(5, 5), 0, Vector2Int.right));
+        // Shared edges exist
+        Assert.IsNotNull(_snapRegistry.GetAt(new Vector2Int(5, 5), 0, Vector2Int.right));
 
         // Remove second foundation
         _service.RemoveFoundation(data2);
 
-        // First foundation's east edge should be restored
+        // First foundation's east edge should still exist
         Assert.IsNotNull(_snapRegistry.GetAt(new Vector2Int(5, 5), 0, Vector2Int.right));
     }
 

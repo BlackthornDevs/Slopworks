@@ -33,6 +33,7 @@ public class PlaytestToolController : MonoBehaviour
     private GameObject _groundPlane;
     private WaveControllerBehaviour _waveController;
     private readonly Dictionary<ToolMode, Action<Keyboard, Mouse>> _customToolHandlers = new();
+    private readonly List<Action> _toolCleanupCallbacks = new();
 
     // -- Static data --
 
@@ -90,6 +91,9 @@ public class PlaytestToolController : MonoBehaviour
     // Legacy preview for CancelPendingWall cleanup
     private GameObject _pendingWallPreview;
 
+    // Ramp state
+    private int _pendingRampDirIndex = -1; // -1=auto, 0-3=locked direction
+
     // Belt 2-click
     private bool _beltStartSet;
     private Vector2Int _beltStartCell;
@@ -109,13 +113,7 @@ public class PlaytestToolController : MonoBehaviour
     private int _levelOverrideFrames;
 
     // Level indicator plane
-    private GameObject _levelIndicatorPlane;
-    private static readonly Color[] LevelColors =
-    {
-        new Color(0.2f, 0.4f, 0.8f, 0.15f), // level 0: blue
-        new Color(0.8f, 0.7f, 0.2f, 0.15f), // level 1: yellow
-        new Color(0.8f, 0.2f, 0.2f, 0.15f), // level 2: red
-    };
+    // Level indicator plane removed -- ghost previews show placement target.
 
     // Wall ghost + zoop
     private GameObject _wallGhost;
@@ -220,6 +218,11 @@ public class PlaytestToolController : MonoBehaviour
         _customToolHandlers[mode] = handler;
     }
 
+    public void RegisterToolCleanup(Action cleanup)
+    {
+        _toolCleanupCallbacks.Add(cleanup);
+    }
+
     // -- HUD wiring coroutine --
 
     private IEnumerator WireHUD()
@@ -275,7 +278,7 @@ public class PlaytestToolController : MonoBehaviour
         HandleAutoLevel(mouse);
         HandleFillStorage(kb, mouse);
         HandleWaveTrigger(kb);
-        UpdateLevelIndicator(mouse);
+        // Level indicator removed -- ghost previews show placement target.
 
         switch (_currentTool)
         {
@@ -398,7 +401,7 @@ public class PlaytestToolController : MonoBehaviour
             _ctx.PlayerHUD.OnBuildToolSelected -= OnHotbarBuildToolSelected;
             _ctx.PlayerHUD.OnPageChanged -= OnHotbarPageChanged;
         }
-        if (_levelIndicatorPlane != null) Destroy(_levelIndicatorPlane);
+        // Level indicator plane removed.
         if (_wallGhost != null) Destroy(_wallGhost);
         if (_rampGhost != null) Destroy(_rampGhost);
         foreach (var g in _wallZoopGhosts) if (g != null) Destroy(g);
@@ -481,7 +484,6 @@ public class PlaytestToolController : MonoBehaviour
             int old = _currentLevel;
             _currentLevel = Mathf.Min(_currentLevel + 1, FactoryGrid.MaxLevels - 1);
             _levelOverrideFrames = 90;
-            UpdateGroundPlaneHeight();
             PlaytestLogger.Log($"input: level {old} -> {_currentLevel}");
             Debug.Log($"Level: {_currentLevel} (manual override)");
         }
@@ -490,7 +492,6 @@ public class PlaytestToolController : MonoBehaviour
             int old = _currentLevel;
             _currentLevel = Mathf.Max(_currentLevel - 1, 0);
             _levelOverrideFrames = 90;
-            UpdateGroundPlaneHeight();
             PlaytestLogger.Log($"input: level {old} -> {_currentLevel}");
             Debug.Log($"Level: {_currentLevel} (manual override)");
         }
@@ -550,17 +551,10 @@ public class PlaytestToolController : MonoBehaviour
         HideWallGhost();
         HideRampGhost();
         ClearGhostPortIndicators();
+        for (int i = 0; i < _toolCleanupCallbacks.Count; i++)
+            _toolCleanupCallbacks[i]();
     }
 
-    private void UpdateGroundPlaneHeight()
-    {
-        if (_groundPlane != null)
-        {
-            var pos = _groundPlane.transform.position;
-            pos.y = _currentLevel * FactoryGrid.LevelHeight - 0.05f;
-            _groundPlane.transform.position = pos;
-        }
-    }
 
     // -- Auto-level detection --
 
@@ -604,48 +598,11 @@ public class PlaytestToolController : MonoBehaviour
         {
             int old = _currentLevel;
             _currentLevel = hit.Value.level;
-            UpdateGroundPlaneHeight();
             PlaytestLogger.Log($"auto-level: {old} -> {_currentLevel}");
         }
     }
 
-    private void UpdateLevelIndicator(Mouse mouse)
-    {
-        bool show = IsStructuralTool(_currentTool);
-
-        if (!show)
-        {
-            if (_levelIndicatorPlane != null)
-                _levelIndicatorPlane.SetActive(false);
-            return;
-        }
-
-        // Lazy-create
-        if (_levelIndicatorPlane == null)
-        {
-            _levelIndicatorPlane = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            _levelIndicatorPlane.name = "LevelIndicator";
-            var col = _levelIndicatorPlane.GetComponent<Collider>();
-            if (col != null) DestroyImmediate(col);
-            _levelIndicatorPlane.transform.rotation = Quaternion.Euler(90f, 0f, 0f);
-            _levelIndicatorPlane.transform.localScale = new Vector3(10f, 10f, 1f);
-        }
-
-        _levelIndicatorPlane.SetActive(true);
-
-        // Follow cursor horizontally
-        var worldPos = GetWorldPosUnderCursor(mouse);
-        float planeY = _currentLevel * FactoryGrid.LevelHeight + 0.01f;
-        if (worldPos.HasValue)
-            _levelIndicatorPlane.transform.position = new Vector3(worldPos.Value.x, planeY, worldPos.Value.z);
-        else
-            _levelIndicatorPlane.transform.position = new Vector3(
-                _levelIndicatorPlane.transform.position.x, planeY,
-                _levelIndicatorPlane.transform.position.z);
-
-        int colorIndex = Mathf.Clamp(_currentLevel, 0, LevelColors.Length - 1);
-        SetColor(_levelIndicatorPlane, LevelColors[colorIndex]);
-    }
+    // Level indicator plane removed -- ghost previews show placement target directly.
 
     // -- Foundation batch placement --
 
@@ -670,6 +627,13 @@ public class PlaytestToolController : MonoBehaviour
 
         if (_isDragging)
         {
+            _dragEnd = cell.Value;
+            UpdateFoundationGhosts();
+        }
+        else
+        {
+            // Show single-cell preview before drag starts
+            _dragStart = cell.Value;
             _dragEnd = cell.Value;
             UpdateFoundationGhosts();
         }
@@ -843,6 +807,12 @@ public class PlaytestToolController : MonoBehaviour
         return null;
     }
 
+    private Vector2Int? GetRampDirectionFilter()
+    {
+        if (_pendingRampDirIndex < 0) return null;
+        return CardinalDirections[_pendingRampDirIndex];
+    }
+
     private void UpdateWallGhost(Vector3 worldPos)
     {
         _wallPlacementCtrl.UpdateFromCursor(worldPos, _ctx.Grid, _currentLevel);
@@ -953,6 +923,15 @@ public class PlaytestToolController : MonoBehaviour
 
     private void HandleRampInput(Keyboard kb, Mouse mouse)
     {
+        // R cycles direction lock: -1=auto, 0=north, 1=east, 2=south, 3=west
+        if (kb.rKey.wasPressedThisFrame)
+        {
+            _pendingRampDirIndex = (_pendingRampDirIndex + 2) % 5 - 1;
+            Debug.Log(_pendingRampDirIndex < 0
+                ? "Ramp direction: auto"
+                : $"Ramp direction: {DirectionNames[_pendingRampDirIndex]}");
+        }
+
         var worldPos = GetWorldPosUnderCursor(mouse);
 
         if (worldPos.HasValue)
@@ -962,11 +941,12 @@ public class PlaytestToolController : MonoBehaviour
 
         if (mouse.leftButton.wasPressedThisFrame && worldPos.HasValue)
         {
-            _rampPlacementCtrl.UpdateFromCursor(worldPos.Value, _currentLevel, _ctx.RampDef.footprintLength);
+            _rampPlacementCtrl.UpdateFromCursor(worldPos.Value, _currentLevel,
+                _ctx.RampDef.footprintLength, GetRampDirectionFilter());
             if (_rampPlacementCtrl.IsValid)
             {
                 var snap = _rampPlacementCtrl.SelectedBaseSnap;
-                var dir = _rampPlacementCtrl.RampDirection;
+                var dir = snap.EdgeDirection;
                 PlaytestLogger.Log($"input: LMB | tool=Ramp cell=({snap.Cell.x},{snap.Cell.y}) dir=({dir.x},{dir.y})");
                 var rampData = _ctx.PlacementService.PlaceRamp(_ctx.RampDef, snap.Cell, _currentLevel, dir);
                 if (rampData != null)
@@ -985,18 +965,19 @@ public class PlaytestToolController : MonoBehaviour
 
     private void UpdateRampGhost(Vector3 worldPos)
     {
-        _rampPlacementCtrl.UpdateFromCursor(worldPos, _currentLevel, _ctx.RampDef.footprintLength);
+        _rampPlacementCtrl.UpdateFromCursor(worldPos, _currentLevel,
+            _ctx.RampDef.footprintLength, GetRampDirectionFilter());
 
-        if (_rampPlacementCtrl.SelectedBaseSnap == null)
+        if (!_rampPlacementCtrl.IsValid || _rampPlacementCtrl.SelectedBaseSnap == null)
         {
             HideRampGhost();
             return;
         }
 
+        var snap = _rampPlacementCtrl.SelectedBaseSnap;
         EnsureRampGhost();
 
-        var snap = _rampPlacementCtrl.SelectedBaseSnap;
-        var dir2D = _rampPlacementCtrl.RampDirection;
+        var dir2D = snap.EdgeDirection;
 
         var startPos = SnapPointToWorld(new SnapPoint(snap.Cell, _currentLevel, dir2D, SnapPointType.FoundationEdge, null));
         startPos.y = _currentLevel * FactoryGrid.LevelHeight;

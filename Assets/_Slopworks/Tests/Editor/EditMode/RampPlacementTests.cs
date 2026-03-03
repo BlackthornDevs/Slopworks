@@ -274,8 +274,8 @@ public class RampPlacementTests
         _service.PlaceFoundation(_foundationDef, new Vector2Int(5, 6), 0);
         _service.PlaceFoundation(_foundationDef, new Vector2Int(5, 7), 0);
 
-        // (5,6) has no north/south snap points (interior edges suppressed)
-        Assert.IsNull(_snapRegistry.GetAt(new Vector2Int(5, 6), 0, Vector2Int.up));
+        // (5,6) now has north/south snap points (interior edges kept for walls)
+        Assert.IsNotNull(_snapRegistry.GetAt(new Vector2Int(5, 6), 0, Vector2Int.up));
 
         // Place ramp going east from interior cell (5,6) using cell+direction overload
         var ramp = _service.PlaceRamp(_rampDef, new Vector2Int(5, 6), 0, Vector2Int.right);
