@@ -183,3 +183,23 @@ Settled decisions that both agents follow. Do not re-litigate unless new informa
 **Rationale:** PhysicsLayers is a single flat file with layer constants and mask fields. Any two developers adding fields at adjacent lines will produce a merge conflict. Since the file has no logical sections that can be owned separately, the only safe workflow is sequential edits through master.
 
 **Impact:** Before adding a new layer or mask, create a small PR to master with just the PhysicsLayers change. Do not bundle it with feature work on kevin/main or joe/main.
+
+---
+
+## D-014: MasterPlaytest scene must pass before merging to master
+
+**Date:** 2026-03-02
+**Resolved by:** Lead (Kevin's Claude)
+**Context:** PR #17 merged to master without loading the MasterPlaytest scene. The phase completion standard requires a playable scene, and D-012 established MasterPlaytest as the merge gate, but neither agent was actually running it before merging.
+
+**Decision:** Before merging any PR to master, the MasterPlaytest scene must be loaded and played. At minimum:
+1. Load `Scenes/Playtest/MasterPlaytest.unity`
+2. Hit Play -- scene boots without errors
+3. PlaytestValidator reports no failures
+4. Verify the features touched by the PR work in the master scene (not just the dev's standalone scene)
+
+EditMode tests passing is necessary but not sufficient. The MasterPlaytest scene catches integration bugs that unit tests miss (component ordering, ghost cleanup, tool handler registration, HUD wiring).
+
+**Rationale:** PR #15 and #17 both merged with passing tests but untested scene integration. C-009 (turret ghost cleanup) was only caught when Joe manually ran MasterPlaytest for J-024. If the scene had been run before merging, C-009 would have been caught earlier.
+
+**Impact:** Both agents must run MasterPlaytest before creating a PR to master. The PR description should include a "MasterPlaytest verified" checkbox. Code reviewers should check for this before approving.
