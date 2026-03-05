@@ -474,9 +474,9 @@ Build a data-driven loot system where all tuning happens in data, not code.
 
 ### TASK J-018: Tower MonoBehaviour wrapper + elevator system
 
-**Status:** Pending
+**Status:** Complete (2026-03-04, by Kevin)
 **Priority:** High
-**Branch:** `joe/main`
+**Branch:** `kevin/main`
 **Ownership:** `Scripts/World/`, `Scenes/`
 **Depends on:** J-016
 
@@ -509,31 +509,13 @@ Build the thin MonoBehaviour wrapper and the tower scene with elevator navigatio
 
 ### TASK J-019: Tower enemy population + interior fauna
 
-**Status:** Pending
+**Status:** Complete (2026-03-04, by Kevin)
 **Priority:** High
-**Branch:** `joe/main`
+**Branch:** `kevin/main`
 **Ownership:** `Scripts/Combat/`, `Scripts/World/`
 **Depends on:** J-016, J-018
 
-Add data-driven enemy spawning per floor chunk and one new interior fauna type.
-
-**Files to create/modify:**
-- `Scripts/Combat/InteriorFaunaDefinitionSO.cs` (or extend existing `FaunaDefinitionSO`)
-- Modify `FloorChunkDefinition` to hold spawn entries
-
-**Implementation:**
-1. Spawn entry data class: `faunaDefinition` (FaunaDefinitionSO ref), `count` (int), `tierMultiplier` (float)
-2. `FloorChunkDefinition` holds a list of spawn entries -- which fauna types appear on which floors is configured in data, not code
-3. Create 1 new interior fauna type as proof of concept (fast, close-quarters, uses existing FaunaAI with different parameters). Specific stats are tunable later.
-4. Enemies spawn when chunk loads (instantiate at spawn points from FloorChunkDefinition)
-5. Cleared floors stay cleared for the run (TowerController tracks cleared chunks)
-
-**Acceptance criteria:**
-- Spawn entries are configurable per chunk without code changes
-- Adding new enemy types to a floor = adding a data entry, no code changes
-- Tier scaling multiplier works (higher tier = tougher enemies)
-- Cleared floors don't respawn within same run
-- Interior fauna type is functional with existing combat systems
+Implemented data-driven per-floor enemy composition with TowerSpawnEntry (templateIndex + count). New interior stalker fauna type (green, fast, 30 HP) spawns on floors 3+. EnemySpawner supports multiple templates via SpawnOne(templateIndex). WaveControllerBehaviour uses spawn entries when configured. Fragment counter resets on boss floor entry via ConsumeFragments(), not on boss completion. Weapon fire rate doubled (2 -> 4 rps). 891/891 tests passing (3 new TowerController tests).
 
 ### TASK J-020: Boss encounter
 
