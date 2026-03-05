@@ -45,26 +45,6 @@ public class TowerControllerTests
     }
 
     [Test]
-    public void StartRunResetsCarriedLoot()
-    {
-        _tower.StartRun(_building);
-        _tower.CollectLoot(ItemInstance.Create("rare_ore"));
-        _tower.StartRun(_building);
-
-        Assert.AreEqual(0, _tower.CarriedLoot.Count);
-    }
-
-    [Test]
-    public void StartRunResetsCarriedFragments()
-    {
-        _tower.StartRun(_building);
-        _tower.CollectFragment();
-        _tower.StartRun(_building);
-
-        Assert.AreEqual(0, _tower.CarriedFragments);
-    }
-
-    [Test]
     public void StartRunResetsClearedChunks()
     {
         _tower.StartRun(_building);
@@ -137,187 +117,62 @@ public class TowerControllerTests
         Assert.IsTrue(_tower.IsChunkCleared(2));
     }
 
-    // -- loot collection --
-
-    [Test]
-    public void CollectLootAddsToCarried()
-    {
-        _tower.StartRun(_building);
-        _tower.CollectLoot(ItemInstance.Create("rare_ore"));
-
-        Assert.AreEqual(1, _tower.CarriedLoot.Count);
-        Assert.AreEqual("rare_ore", _tower.CarriedLoot[0].definitionId);
-    }
-
-    [Test]
-    public void CollectMultipleLootItems()
-    {
-        _tower.StartRun(_building);
-        _tower.CollectLoot(ItemInstance.Create("rare_ore"));
-        _tower.CollectLoot(ItemInstance.Create("power_shard"));
-        _tower.CollectLoot(ItemInstance.Create("blueprint_a"));
-
-        Assert.AreEqual(3, _tower.CarriedLoot.Count);
-    }
-
-    // -- fragment collection --
-
-    [Test]
-    public void CollectFragmentIncrementsCarried()
-    {
-        _tower.StartRun(_building);
-        _tower.CollectFragment();
-
-        Assert.AreEqual(1, _tower.CarriedFragments);
-    }
-
-    [Test]
-    public void CollectMultipleFragments()
-    {
-        _tower.StartRun(_building);
-        _tower.CollectFragment();
-        _tower.CollectFragment();
-        _tower.CollectFragment();
-
-        Assert.AreEqual(3, _tower.CarriedFragments);
-    }
-
     // -- extraction --
 
     [Test]
-    public void ExtractBanksCarriedFragments()
+    public void ExtractBanksFragments()
     {
         _tower.StartRun(_building);
-        _tower.CollectFragment();
-        _tower.CollectFragment();
-        int banked = _tower.Extract();
+        int banked = _tower.Extract(2);
 
         Assert.AreEqual(2, banked);
         Assert.AreEqual(2, _tower.BankedFragments);
     }
 
     [Test]
-    public void ExtractClearsCarriedFragments()
-    {
-        _tower.StartRun(_building);
-        _tower.CollectFragment();
-        _tower.Extract();
-
-        Assert.AreEqual(0, _tower.CarriedFragments);
-    }
-
-    [Test]
-    public void ExtractBanksCarriedLoot()
-    {
-        _tower.StartRun(_building);
-        _tower.CollectLoot(ItemInstance.Create("rare_ore"));
-        _tower.CollectLoot(ItemInstance.Create("power_shard"));
-        _tower.Extract();
-
-        Assert.AreEqual(2, _tower.BankedLoot.Count);
-    }
-
-    [Test]
-    public void ExtractClearsCarriedLoot()
-    {
-        _tower.StartRun(_building);
-        _tower.CollectLoot(ItemInstance.Create("rare_ore"));
-        _tower.Extract();
-
-        Assert.AreEqual(0, _tower.CarriedLoot.Count);
-    }
-
-    [Test]
     public void ExtractAccumulatesFragmentsAcrossRuns()
     {
         _tower.StartRun(_building);
-        _tower.CollectFragment();
-        _tower.Extract();
+        _tower.Extract(1);
 
         _tower.StartRun(_building);
-        _tower.CollectFragment();
-        _tower.CollectFragment();
-        int banked = _tower.Extract();
+        int banked = _tower.Extract(2);
 
         Assert.AreEqual(3, banked);
         Assert.AreEqual(3, _tower.BankedFragments);
     }
 
     [Test]
-    public void ExtractAccumulatesLootAcrossRuns()
-    {
-        _tower.StartRun(_building);
-        _tower.CollectLoot(ItemInstance.Create("ore_a"));
-        _tower.Extract();
-
-        _tower.StartRun(_building);
-        _tower.CollectLoot(ItemInstance.Create("ore_b"));
-        _tower.Extract();
-
-        Assert.AreEqual(2, _tower.BankedLoot.Count);
-    }
-
-    [Test]
     public void ExtractEndsRun()
     {
         _tower.StartRun(_building);
-        _tower.Extract();
+        _tower.Extract(0);
 
         Assert.IsFalse(_tower.IsRunActive);
+    }
+
+    [Test]
+    public void ExtractWithZeroFragments()
+    {
+        _tower.StartRun(_building);
+        int banked = _tower.Extract(0);
+
+        Assert.AreEqual(0, banked);
+        Assert.AreEqual(0, _tower.BankedFragments);
     }
 
     // -- death --
 
     [Test]
-    public void DieRemovesCarriedLoot()
-    {
-        _tower.StartRun(_building);
-        _tower.CollectLoot(ItemInstance.Create("rare_ore"));
-        _tower.CollectLoot(ItemInstance.Create("power_shard"));
-        _tower.Die();
-
-        Assert.AreEqual(0, _tower.CarriedLoot.Count);
-    }
-
-    [Test]
-    public void DieRemovesCarriedFragments()
-    {
-        _tower.StartRun(_building);
-        _tower.CollectFragment();
-        _tower.CollectFragment();
-        _tower.Die();
-
-        Assert.AreEqual(0, _tower.CarriedFragments);
-    }
-
-    [Test]
     public void DieKeepsBankedFragments()
     {
         _tower.StartRun(_building);
-        _tower.CollectFragment();
-        _tower.CollectFragment();
-        _tower.Extract();
+        _tower.Extract(2);
 
         _tower.StartRun(_building);
-        _tower.CollectFragment();
         _tower.Die();
 
         Assert.AreEqual(2, _tower.BankedFragments);
-    }
-
-    [Test]
-    public void DieKeepsBankedLoot()
-    {
-        _tower.StartRun(_building);
-        _tower.CollectLoot(ItemInstance.Create("rare_ore"));
-        _tower.Extract();
-
-        _tower.StartRun(_building);
-        _tower.CollectLoot(ItemInstance.Create("will_be_lost"));
-        _tower.Die();
-
-        Assert.AreEqual(1, _tower.BankedLoot.Count);
-        Assert.AreEqual("rare_ore", _tower.BankedLoot[0].definitionId);
     }
 
     [Test]
@@ -335,38 +190,52 @@ public class TowerControllerTests
     public void BossLockedWithInsufficientFragments()
     {
         _tower.StartRun(_building);
-        _tower.CollectFragment();
-        _tower.CollectFragment();
-        _tower.CollectFragment();
-        _tower.Extract();
 
-        Assert.IsFalse(_tower.UnlockBoss());
+        Assert.IsFalse(_tower.UnlockBoss(3));
     }
 
     [Test]
-    public void BossUnlocksWithExactFragments()
+    public void BossUnlocksWithExactBankedFragments()
     {
         BankFragments(4);
 
-        Assert.IsTrue(_tower.UnlockBoss());
+        Assert.IsTrue(_tower.UnlockBoss(0));
+    }
+
+    [Test]
+    public void BossUnlocksWithExactCarriedFragments()
+    {
+        _tower.StartRun(_building);
+
+        Assert.IsTrue(_tower.UnlockBoss(4));
+    }
+
+    [Test]
+    public void BossUnlocksWithMixedCarriedAndBanked()
+    {
+        // Bank 2, carry 2 = 4 total, meets requirement
+        _tower.StartRun(_building);
+        _tower.Extract(2);
+
+        _tower.StartRun(_building);
+
+        Assert.IsTrue(_tower.UnlockBoss(2));
     }
 
     [Test]
     public void BossUnlocksWithExcessFragments()
     {
-        // Edge case: accumulated more than required across many runs
         BankFragments(6);
 
-        Assert.IsTrue(_tower.UnlockBoss());
+        Assert.IsTrue(_tower.UnlockBoss(0));
     }
 
     [Test]
     public void BossLockedWithZeroFragments()
     {
         _tower.StartRun(_building);
-        _tower.Extract();
 
-        Assert.IsFalse(_tower.UnlockBoss());
+        Assert.IsFalse(_tower.UnlockBoss(0));
     }
 
     // -- boss completion --
@@ -383,24 +252,12 @@ public class TowerControllerTests
     }
 
     [Test]
-    public void CompleteBossResetsBankedFragments()
+    public void CompleteBossDoesNotResetBankedFragments()
     {
         BankFragments(4);
         _tower.CompleteBoss();
 
-        Assert.AreEqual(0, _tower.BankedFragments);
-    }
-
-    [Test]
-    public void CompleteBossKeepsBankedLoot()
-    {
-        _tower.StartRun(_building);
-        _tower.CollectLoot(ItemInstance.Create("rare_ore"));
-        _tower.Extract();
-
-        _tower.CompleteBoss();
-
-        Assert.AreEqual(1, _tower.BankedLoot.Count);
+        Assert.AreEqual(4, _tower.BankedFragments);
     }
 
     [Test]
@@ -436,16 +293,52 @@ public class TowerControllerTests
     }
 
     [Test]
-    public void FragmentsResetEachCycle()
+    public void FragmentsResetEachCycleViaConsume()
     {
         BankFragments(4);
-        Assert.IsTrue(_tower.UnlockBoss());
+        Assert.IsTrue(_tower.UnlockBoss(0));
 
+        _tower.ConsumeFragments();
         _tower.CompleteBoss();
-        Assert.IsFalse(_tower.UnlockBoss());
+        Assert.IsFalse(_tower.UnlockBoss(0));
 
         BankFragments(4);
-        Assert.IsTrue(_tower.UnlockBoss());
+        Assert.IsTrue(_tower.UnlockBoss(0));
+    }
+
+    // -- fragment consumption --
+
+    [Test]
+    public void ConsumeFragmentsResetsBankedToZero()
+    {
+        BankFragments(3);
+        int consumed = _tower.ConsumeFragments();
+
+        Assert.AreEqual(3, consumed);
+        Assert.AreEqual(0, _tower.BankedFragments);
+    }
+
+    [Test]
+    public void ConsumeFragmentsWithZeroBanked()
+    {
+        _tower.StartRun(_building);
+        int consumed = _tower.ConsumeFragments();
+
+        Assert.AreEqual(0, consumed);
+        Assert.AreEqual(0, _tower.BankedFragments);
+    }
+
+    [Test]
+    public void ConsumeThenCompleteBossTiersUpWithZeroFragments()
+    {
+        BankFragments(4);
+        _tower.ConsumeFragments();
+        _tower.StartRun(_building);
+        _tower.CompleteBoss();
+
+        Assert.AreEqual(2, _tower.CurrentTier);
+        Assert.AreEqual(0, _tower.BankedFragments);
+        Assert.IsFalse(_tower.IsRunActive);
     }
 
     // -- edge cases --
@@ -483,17 +376,6 @@ public class TowerControllerTests
 
         Assert.DoesNotThrow(() => _tower.ClearChunk(99));
         Assert.IsFalse(_tower.IsChunkCleared(99));
-    }
-
-    [Test]
-    public void DoubleExtractDoesNotDuplicateLoot()
-    {
-        _tower.StartRun(_building);
-        _tower.CollectLoot(ItemInstance.Create("rare_ore"));
-        _tower.Extract();
-        _tower.Extract(); // second extract with nothing carried
-
-        Assert.AreEqual(1, _tower.BankedLoot.Count);
     }
 
     [Test]
@@ -550,7 +432,7 @@ public class TowerControllerTests
 
         BankFragments(2);
 
-        Assert.IsTrue(_tower.UnlockBoss());
+        Assert.IsTrue(_tower.UnlockBoss(0));
     }
 
     // -- helpers --
@@ -558,8 +440,6 @@ public class TowerControllerTests
     private void BankFragments(int count)
     {
         _tower.StartRun(_building);
-        for (int i = 0; i < count; i++)
-            _tower.CollectFragment();
-        _tower.Extract();
+        _tower.Extract(count);
     }
 }

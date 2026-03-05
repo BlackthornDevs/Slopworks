@@ -1900,7 +1900,7 @@ public class PlaytestToolController : MonoBehaviour
             _beltItemPool[i].SetActive(false);
     }
 
-    private static Color GetItemColor(string itemId)
+    internal static Color GetItemColor(string itemId)
     {
         return itemId switch
         {
@@ -1908,6 +1908,10 @@ public class PlaytestToolController : MonoBehaviour
             PlaytestContext.IronOre => new Color(0.5f, 0.3f, 0.3f),
             PlaytestContext.IronIngot => new Color(0.7f, 0.7f, 0.8f),
             PlaytestContext.TurretAmmo => new Color(0.9f, 0.8f, 0.2f),
+            PlaytestContext.PowerCell => new Color(0.1f, 0.7f, 0.7f),
+            PlaytestContext.SignalDecoder => new Color(0.6f, 0.2f, 0.8f),
+            PlaytestContext.ReinforcedPlating => new Color(0.9f, 0.5f, 0.1f),
+            PlaytestContext.KeyFragment => new Color(0.0f, 0.9f, 0.9f),
             _ => new Color(0.5f, 0.5f, 0.5f)
         };
     }
