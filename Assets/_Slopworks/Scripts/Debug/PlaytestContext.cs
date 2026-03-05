@@ -31,6 +31,12 @@ public class PlaytestContext
     public RecipeSO SmeltRecipe;
     public RecipeSO TurretAmmoRecipe;
 
+    // Tower loot item definitions
+    public ItemDefinitionSO PowerCellDef;
+    public ItemDefinitionSO SignalDecoderDef;
+    public ItemDefinitionSO ReinforcedPlatingDef;
+    public ItemDefinitionSO KeyFragmentDef;
+
     // Player
     public GameObject PlayerObject;
     public PlayerHUD PlayerHUD;
@@ -51,6 +57,10 @@ public class PlaytestContext
     public const string IronIngot = "iron_ingot";
     public const string IronScrap = "iron_scrap";
     public const string TurretAmmo = "turret_ammo";
+    public const string PowerCell = "power_cell";
+    public const string SignalDecoder = "signal_decoder";
+    public const string ReinforcedPlating = "reinforced_plating";
+    public const string KeyFragment = "key_fragment";
     public const string SmeltIronRecipeId = "smelt_iron";
     public const string TurretAmmoRecipeId = "craft_turret_ammo";
     public const string SmelterType = "smelter";

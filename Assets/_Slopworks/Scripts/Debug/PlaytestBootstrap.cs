@@ -131,6 +131,38 @@ public class PlaytestBootstrap
         ctx.TurretAmmoDef.maxStackSize = 64;
         ctx.RuntimeSOs.Add(ctx.TurretAmmoDef);
 
+        ctx.PowerCellDef = ScriptableObject.CreateInstance<ItemDefinitionSO>();
+        ctx.PowerCellDef.itemId = PlaytestContext.PowerCell;
+        ctx.PowerCellDef.displayName = "Power Cell";
+        ctx.PowerCellDef.category = ItemCategory.Component;
+        ctx.PowerCellDef.isStackable = true;
+        ctx.PowerCellDef.maxStackSize = 16;
+        ctx.RuntimeSOs.Add(ctx.PowerCellDef);
+
+        ctx.SignalDecoderDef = ScriptableObject.CreateInstance<ItemDefinitionSO>();
+        ctx.SignalDecoderDef.itemId = PlaytestContext.SignalDecoder;
+        ctx.SignalDecoderDef.displayName = "Signal Decoder";
+        ctx.SignalDecoderDef.category = ItemCategory.Component;
+        ctx.SignalDecoderDef.isStackable = true;
+        ctx.SignalDecoderDef.maxStackSize = 16;
+        ctx.RuntimeSOs.Add(ctx.SignalDecoderDef);
+
+        ctx.ReinforcedPlatingDef = ScriptableObject.CreateInstance<ItemDefinitionSO>();
+        ctx.ReinforcedPlatingDef.itemId = PlaytestContext.ReinforcedPlating;
+        ctx.ReinforcedPlatingDef.displayName = "Reinforced Plating";
+        ctx.ReinforcedPlatingDef.category = ItemCategory.Component;
+        ctx.ReinforcedPlatingDef.isStackable = true;
+        ctx.ReinforcedPlatingDef.maxStackSize = 16;
+        ctx.RuntimeSOs.Add(ctx.ReinforcedPlatingDef);
+
+        ctx.KeyFragmentDef = ScriptableObject.CreateInstance<ItemDefinitionSO>();
+        ctx.KeyFragmentDef.itemId = PlaytestContext.KeyFragment;
+        ctx.KeyFragmentDef.displayName = "Key Fragment";
+        ctx.KeyFragmentDef.category = ItemCategory.Component;
+        ctx.KeyFragmentDef.isStackable = true;
+        ctx.KeyFragmentDef.maxStackSize = 16;
+        ctx.RuntimeSOs.Add(ctx.KeyFragmentDef);
+
         ctx.SmeltRecipe = ScriptableObject.CreateInstance<RecipeSO>();
         ctx.SmeltRecipe.recipeId = PlaytestContext.SmeltIronRecipeId;
         ctx.SmeltRecipe.displayName = "Smelt Iron";
@@ -189,7 +221,11 @@ public class PlaytestBootstrap
         var itemRegistry = registryObj.AddComponent<ItemRegistry>();
         var itemsField = typeof(ItemRegistry).GetField("_items",
             BindingFlags.NonPublic | BindingFlags.Instance);
-        itemsField?.SetValue(itemRegistry, new[] { ctx.IronOreDef, ctx.IronIngotDef, ctx.IronScrapDef, ctx.TurretAmmoDef });
+        itemsField?.SetValue(itemRegistry, new[] {
+            ctx.IronOreDef, ctx.IronIngotDef, ctx.IronScrapDef, ctx.TurretAmmoDef,
+            ctx.PowerCellDef, ctx.SignalDecoderDef, ctx.ReinforcedPlatingDef,
+            ctx.KeyFragmentDef
+        });
 
         var recipeRegistry = registryObj.AddComponent<RecipeRegistry>();
         var recipesField = typeof(RecipeRegistry).GetField("_recipes",

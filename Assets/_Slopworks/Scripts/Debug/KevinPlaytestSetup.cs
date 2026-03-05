@@ -78,6 +78,20 @@ public class KevinPlaytestSetup : MonoBehaviour, IPlaytestFeatureProvider
     // -- Supply dock grid position --
     private static readonly Vector2Int SupplyDockCell = new Vector2Int(15, 7);
 
+    // -- Tower --
+    private TowerController _towerController;
+    private TowerBuildingDefinitionSO _towerBuildingDef;
+    private TowerLootTable _towerLootTable;
+    private TowerElevatorUI _towerElevatorUI;
+    private readonly List<TowerChunkLayout> _towerChunkLayouts = new();
+    private readonly List<GameObject> _towerInteractables = new();
+    private readonly List<WaveControllerBehaviour> _towerWaveControllers = new();
+    private readonly List<EnemySpawner> _towerEnemySpawners = new();
+    private int _currentTowerChunk = -1;
+    private bool _insideTower;
+
+    private static readonly Vector3 TowerBasePosition = new Vector3(400f, 0f, 400f);
+
     // ========== IPlaytestFeatureProvider ==========
 
     public string ProviderName => "Kevin";
@@ -87,6 +101,7 @@ public class KevinPlaytestSetup : MonoBehaviour, IPlaytestFeatureProvider
         _ctx = ctx;
         CreateBuildingDefinitions();
         CreateTurretDefinition();
+        CreateTowerDefinitions();
     }
 
     public void ConfigureBuildPage(HotbarPage buildPage)
@@ -116,12 +131,14 @@ public class KevinPlaytestSetup : MonoBehaviour, IPlaytestFeatureProvider
         CreateSmelterInteractable();
         CreateSupplyDock();
         CreateSupplyChain();
+        CreateTowerWorld();
     }
 
     public WaveControllerBehaviour CreateCombatSetup(PlaytestContext ctx)
     {
         CreateSpawnPointsAndWaves();
         CreateBuildingEnemies();
+        CreateTowerEnemies();
         return _waveController;
     }
 
@@ -185,6 +202,29 @@ public class KevinPlaytestSetup : MonoBehaviour, IPlaytestFeatureProvider
         int delivered = _supplyLineManager != null ? _supplyLineManager.TotalDelivered : 0;
         PlaytestToolController.DrawLine(ref y, x, w, h, $"Supply: {inTransit} in transit | {delivered} delivered");
 
+        // Tower status
+        if (_towerController != null)
+        {
+            string towerStatus;
+            if (_insideTower)
+            {
+                int floor = _currentTowerChunk + 1;
+                int carriedFrag = _ctx.PlayerInventory.Inventory.GetCount(PlaytestContext.KeyFragment);
+                int bankedFrag = _towerController.BankedFragments;
+                int required = _towerBuildingDef.requiredFragments;
+                int tier = _towerController.CurrentTier;
+                int totalFrag = carriedFrag + bankedFrag;
+                towerStatus = $"Tower: Floor {floor} | Frag: {totalFrag}/{required} ({carriedFrag}c+{bankedFrag}b) | Tier {tier}";
+            }
+            else
+            {
+                int bankedFrag = _towerController.BankedFragments;
+                int tier = _towerController.CurrentTier;
+                towerStatus = $"Tower: Outside | Frag banked: {bankedFrag} | Tier {tier}";
+            }
+            PlaytestToolController.DrawLine(ref y, x, w, h, towerStatus);
+        }
+
         PlaytestToolController.DrawLine(ref y, x, w, h, "[Portal] Enter/exit building  [M] Overworld map");
     }
 
@@ -192,11 +232,13 @@ public class KevinPlaytestSetup : MonoBehaviour, IPlaytestFeatureProvider
     {
         _warehouseSupplyLine?.Dispose();
         DestroyTurretGhost();
+        CleanupTowerInteractables();
 
         if (_warehouseDef != null) DestroyImmediate(_warehouseDef);
         if (_buildingClaimedEvent != null) DestroyImmediate(_buildingClaimedEvent);
         if (_supplyDockDef != null) DestroyImmediate(_supplyDockDef);
         if (_turretDef != null) DestroyImmediate(_turretDef);
+        if (_towerBuildingDef != null) DestroyImmediate(_towerBuildingDef);
     }
 
     // ========== Standalone Awake ==========
@@ -243,14 +285,22 @@ public class KevinPlaytestSetup : MonoBehaviour, IPlaytestFeatureProvider
         CreateBuildingEnemies();
         _toolCtrl.SetWaveController(_waveController);
 
-        // 9. NavMesh
-        PlaytestToolController.BakeNavMesh(_groundPlane);
-
-        // 10. Supply chain
+        // 9. Supply chain
         CreateSupplyDock();
         CreateSupplyChain();
 
-        // 11. Kevin-specific HUD wiring (yield 2 frames -- after tool controller's HUD wiring)
+        // 10. Tower (must be before NavMesh bake so tower floors get coverage)
+        CreateTowerWorld();
+        CreateTowerEnemies();
+
+        // 10b. Spawn tower loot/fragments now (in Awake), not inside physics callback
+        _towerController.StartRun(_towerBuildingDef);
+        SpawnTowerInteractables();
+
+        // 11. NavMesh -- bake AFTER all static geometry exists (including tower floors)
+        PlaytestToolController.BakeNavMesh(_groundPlane);
+
+        // 12. Kevin-specific HUD wiring (yield 2 frames -- after tool controller's HUD wiring)
         StartCoroutine(WireKevinHUDDelayed());
 
         Debug.Log("playtest: setup complete (Kevin)");
@@ -752,6 +802,403 @@ public class KevinPlaytestSetup : MonoBehaviour, IPlaytestFeatureProvider
         Debug.Log("playtest: supply chain created (warehouse -> dock, 10s delay)");
     }
 
+    // -- Tower --
+
+    private void CreateTowerDefinitions()
+    {
+        _towerBuildingDef = ScriptableObject.CreateInstance<TowerBuildingDefinitionSO>();
+        _towerBuildingDef.buildingName = "Broadcast Tower";
+        _towerBuildingDef.bossChunkIndex = 6;
+        _towerBuildingDef.requiredFragments = 4;
+
+        for (int i = 0; i < 7; i++)
+        {
+            var chunk = new FloorChunkDefinition();
+
+            int spawnCount = i < 3 ? 3 : (i < 6 ? 5 : 8);
+            int lootCount = i < 3 ? 2 : (i < 6 ? 3 : 4);
+
+            for (int s = 0; s < spawnCount; s++)
+                chunk.spawnPoints.Add(Vector3.zero);
+            for (int l = 0; l < lootCount; l++)
+                chunk.lootNodes.Add(Vector3.zero);
+
+            _towerBuildingDef.chunks.Add(chunk);
+        }
+
+        var lootEntries = new List<LootDropDefinition>
+        {
+            new LootDropDefinition { itemId = PlaytestContext.IronScrap, rarity = LootRarity.Common, dropWeight = 3f, minAmount = 2, maxAmount = 5 },
+            new LootDropDefinition { itemId = PlaytestContext.IronIngot, rarity = LootRarity.Uncommon, dropWeight = 2f, minAmount = 1, maxAmount = 3 },
+            new LootDropDefinition { itemId = PlaytestContext.PowerCell, rarity = LootRarity.Uncommon, dropWeight = 1.5f, minAmount = 1, maxAmount = 2, minFloorElevation = 2 },
+            new LootDropDefinition { itemId = PlaytestContext.SignalDecoder, rarity = LootRarity.Rare, dropWeight = 1f, minAmount = 1, maxAmount = 1, minFloorElevation = 3 },
+            new LootDropDefinition { itemId = PlaytestContext.ReinforcedPlating, rarity = LootRarity.Rare, dropWeight = 0.8f, minAmount = 1, maxAmount = 1, minFloorElevation = 4, tierRequirement = 2 },
+        };
+        _towerLootTable = new TowerLootTable(lootEntries);
+        _towerController = new TowerController();
+
+        Debug.Log("playtest: tower definitions created (7 chunks, boss at index 6, 4 required fragments)");
+    }
+
+    private void CreateTowerWorld()
+    {
+        // Generate all 7 chunks stacked vertically
+        for (int i = 0; i < _towerBuildingDef.chunks.Count; i++)
+        {
+            var chunkDef = _towerBuildingDef.chunks[i];
+            bool isBoss = i == _towerBuildingDef.bossChunkIndex;
+            var origin = TowerChunkLayoutGenerator.GetChunkOrigin(TowerBasePosition, i);
+
+            var layout = TowerChunkLayoutGenerator.GenerateChunk(
+                origin, i, isBoss,
+                chunkDef.spawnPoints.Count, chunkDef.lootNodes.Count,
+                false); // fragments spawned dynamically per run
+
+            _towerChunkLayouts.Add(layout);
+        }
+
+        // Tower entry portal near factory
+        float centerX = 10f * FactoryGrid.CellSize;
+        float centerZ = 10f * FactoryGrid.CellSize;
+
+        var entryObj = new GameObject("TowerEntryPortal");
+        entryObj.layer = PhysicsLayers.VolumeTrigger;
+        entryObj.transform.position = new Vector3(centerX + 25, 1f, centerZ + 15);
+
+        var entryRb = entryObj.AddComponent<Rigidbody>();
+        entryRb.isKinematic = true;
+        var entryCollider = entryObj.AddComponent<BoxCollider>();
+        entryCollider.isTrigger = true;
+        entryCollider.size = new Vector3(3f, 3f, 3f);
+
+        // Entry trigger teleports to floor 0 and starts a run
+        var floor0Elevator = _towerChunkLayouts[0].ElevatorPosition;
+        var entryTrigger = entryObj.AddComponent<BuildingEntryTrigger>();
+        entryTrigger.Initialize(floor0Elevator, StartTowerRun);
+
+        // Cyan pillar visual for the portal
+        var entryVisual = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        entryVisual.name = "TowerPortalVisual";
+        entryVisual.transform.position = entryObj.transform.position;
+        entryVisual.transform.localScale = new Vector3(2f, 3f, 0.3f);
+        PlaytestToolController.SetColor(entryVisual, new Color(0.1f, 0.8f, 0.9f, 0.6f));
+        var visCol = entryVisual.GetComponent<Collider>();
+        if (visCol != null) Destroy(visCol);
+
+        // Create TowerElevatorUI on the HUD canvas
+        var canvas = FindAnyObjectByType<Canvas>();
+        if (canvas != null)
+        {
+            var uiObj = new GameObject("TowerElevatorUI");
+            uiObj.transform.SetParent(canvas.transform, false);
+            _towerElevatorUI = uiObj.AddComponent<TowerElevatorUI>();
+        }
+
+        // Create elevator behaviours at each chunk
+        for (int i = 0; i < _towerChunkLayouts.Count; i++)
+        {
+            var layout = _towerChunkLayouts[i];
+            var elevObj = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            elevObj.name = $"TowerElevator_F{i}";
+            elevObj.transform.position = layout.ElevatorPosition.position + Vector3.up * 0.5f;
+            elevObj.transform.localScale = new Vector3(1.5f, 1f, 1.5f);
+            elevObj.layer = PhysicsLayers.Interactable;
+            PlaytestToolController.SetColor(elevObj, new Color(0.3f, 0.3f, 0.8f));
+
+            var elevBehaviour = elevObj.AddComponent<TowerElevatorBehaviour>();
+            elevBehaviour.Initialize(_towerElevatorUI, _towerController, _ctx.PlayerInventory, NavigateToFloor, OnTowerExtract);
+        }
+
+        Debug.Log($"playtest: tower world created at ({TowerBasePosition.x}, {TowerBasePosition.y}, {TowerBasePosition.z}), 7 chunks stacked");
+    }
+
+    private void CreateTowerEnemies()
+    {
+        var flags = BindingFlags.NonPublic | BindingFlags.Instance;
+
+        for (int i = 0; i < _towerChunkLayouts.Count; i++)
+        {
+            var layout = _towerChunkLayouts[i];
+            bool isBoss = i == _towerBuildingDef.bossChunkIndex;
+
+            int enemyCount = i < 3 ? 3 : (i < 6 ? 5 : 8);
+
+            var waveObj = new GameObject($"TowerWaveController_F{i}");
+            waveObj.SetActive(false);
+
+            var spawner = waveObj.AddComponent<EnemySpawner>();
+            typeof(EnemySpawner).GetField("_enemyPrefab", flags)?.SetValue(spawner, _ctx.EnemyTemplate);
+            typeof(EnemySpawner).GetField("_spawnPoints", flags)?.SetValue(spawner, layout.EnemySpawnPoints);
+
+            var waves = new List<WaveDefinition>
+            {
+                new WaveDefinition { enemyCount = enemyCount, spawnDelay = isBoss ? 0.3f : 0.8f, timeBetweenWaves = 0f }
+            };
+
+            var wc = waveObj.AddComponent<WaveControllerBehaviour>();
+            typeof(WaveControllerBehaviour).GetField("_waves", flags)?.SetValue(wc, waves);
+            typeof(WaveControllerBehaviour).GetField("_spawner", flags)?.SetValue(wc, spawner);
+            typeof(WaveControllerBehaviour).GetField("_enemyDiedEvent", flags)?.SetValue(wc, _ctx.EnemyDiedEvent);
+            typeof(WaveControllerBehaviour).GetField("_autoStartDelay", flags)?.SetValue(wc, -1f);
+
+            waveObj.SetActive(true);
+
+            _towerWaveControllers.Add(wc);
+            _towerEnemySpawners.Add(spawner);
+        }
+
+        Debug.Log("playtest: tower enemies created (7 floors with wave controllers)");
+    }
+
+    private void StartTowerRun()
+    {
+        if (!_towerController.IsRunActive)
+            _towerController.StartRun(_towerBuildingDef);
+        _insideTower = true;
+
+        // Reset all tower wave controllers so they can fire again on subsequent runs
+        ResetTowerWaveControllers();
+
+        // Items already spawned in Awake -- only re-spawn on subsequent runs
+        if (_towerInteractables.Count == 0)
+            SpawnTowerInteractables();
+
+        NavigateToFloor(0);
+        Debug.Log("tower: run started");
+    }
+
+    private void ResetTowerWaveControllers()
+    {
+        var flags = BindingFlags.NonPublic | BindingFlags.Instance;
+        var wcCurrentWaveField = typeof(WaveController).GetField("_currentWave", flags);
+        var wcWaveActiveField = typeof(WaveController).GetField("_waveActive", flags);
+        var wcEnemiesField = typeof(WaveController).GetField("_enemiesRemaining", flags);
+
+        foreach (var wc in _towerWaveControllers)
+        {
+            if (wc == null || wc.Controller == null) continue;
+            wcCurrentWaveField?.SetValue(wc.Controller, -1);
+            wcWaveActiveField?.SetValue(wc.Controller, false);
+            wcEnemiesField?.SetValue(wc.Controller, 0);
+        }
+    }
+
+    private void NavigateToFloor(int floorIndex)
+    {
+        if (floorIndex < 0 || floorIndex >= _towerChunkLayouts.Count)
+            return;
+
+        _currentTowerChunk = floorIndex;
+
+        // Teleport player
+        var elevPos = _towerChunkLayouts[floorIndex].ElevatorPosition.position;
+        var player = _ctx.PlayerObject;
+        if (player != null)
+        {
+            var cc = player.GetComponent<CharacterController>();
+            if (cc != null) cc.enabled = false;
+            player.transform.position = elevPos + Vector3.up * 0.5f;
+            if (cc != null) cc.enabled = true;
+
+            // Reset all child local positions (teleport displaces compound collider children)
+            foreach (Transform child in player.transform)
+                child.localPosition = Vector3.zero;
+        }
+
+        // Start wave if floor not cleared
+        if (!_towerController.IsChunkCleared(floorIndex))
+        {
+            bool isBoss = floorIndex == _towerBuildingDef.bossChunkIndex;
+            int carriedFrags = _ctx.PlayerInventory.Inventory.GetCount(PlaytestContext.KeyFragment);
+            if (isBoss && !_towerController.UnlockBoss(carriedFrags))
+            {
+                Debug.Log($"tower: floor {floorIndex} is boss floor, locked");
+                return;
+            }
+
+            if (floorIndex < _towerWaveControllers.Count)
+            {
+                var wc = _towerWaveControllers[floorIndex];
+
+                // Subscribe to wave completion to mark floor cleared
+                // Each tower floor has a single wave, so OnWaveEnded = floor cleared
+                int capturedFloor = floorIndex;
+                System.Action onEnded = null;
+                onEnded = () =>
+                {
+                    wc.Controller.OnWaveEnded -= onEnded;
+                    _towerController.ClearChunk(capturedFloor);
+                    Debug.Log($"tower: floor {capturedFloor} cleared");
+
+                    if (capturedFloor == _towerBuildingDef.bossChunkIndex)
+                    {
+                        _towerController.CompleteBoss();
+                        Debug.Log($"tower: BOSS DEFEATED -- tier now {_towerController.CurrentTier}");
+                    }
+                };
+                wc.Controller.OnWaveEnded += onEnded;
+
+                wc.BeginNextWave();
+            }
+        }
+
+        Debug.Log($"tower: navigated to floor {floorIndex}");
+    }
+
+    private void OnTowerExtract()
+    {
+        // Count and remove fragments from inventory, bank them
+        int carriedFrags = _ctx.PlayerInventory.Inventory.GetCount(PlaytestContext.KeyFragment);
+        if (carriedFrags > 0)
+            _ctx.PlayerInventory.TryRemove(PlaytestContext.KeyFragment, carriedFrags);
+
+        int bankedFrags = _towerController.Extract(carriedFrags);
+        _insideTower = false;
+        _currentTowerChunk = -1;
+        CleanupTowerInteractables();
+
+        TeleportPlayerToHomeBase();
+
+        Debug.Log($"tower: extracted, {carriedFrags} fragments banked ({bankedFrags} total)");
+    }
+
+    private static readonly string[] TowerItemIds =
+    {
+        PlaytestContext.PowerCell, PlaytestContext.SignalDecoder,
+        PlaytestContext.ReinforcedPlating, PlaytestContext.KeyFragment
+    };
+
+    private void OnPlayerDiedInTower()
+    {
+        _towerController.Die();
+        _insideTower = false;
+        _currentTowerChunk = -1;
+        CleanupTowerInteractables();
+
+        // Remove tower loot from inventory (pre-existing items are safe)
+        foreach (var itemId in TowerItemIds)
+        {
+            int count = _ctx.PlayerInventory.Inventory.GetCount(itemId);
+            if (count > 0)
+                _ctx.PlayerInventory.TryRemove(itemId, count);
+        }
+
+        // Heal player and teleport home
+        var health = _ctx.PlayerObject?.GetComponent<HealthBehaviour>();
+        if (health != null && health.Health != null)
+            health.Health.Heal(health.Health.MaxHealth);
+
+        TeleportPlayerToHomeBase();
+
+        Debug.Log("tower: player died, tower loot lost, teleported to home base");
+    }
+
+    private void TeleportPlayerToHomeBase()
+    {
+        float centerX = 10f * FactoryGrid.CellSize;
+        float centerZ = 10f * FactoryGrid.CellSize;
+        var homePos = new Vector3(centerX, 1.5f, centerZ - 5f);
+
+        var player = _ctx.PlayerObject;
+        if (player == null) return;
+
+        var cc = player.GetComponent<CharacterController>();
+        if (cc != null) cc.enabled = false;
+        player.transform.position = homePos;
+        if (cc != null) cc.enabled = true;
+
+        // Reset all child local positions (teleport displaces compound collider children)
+        foreach (Transform child in player.transform)
+            child.localPosition = Vector3.zero;
+    }
+
+    private ItemDefinitionSO GetItemDefinition(string itemId)
+    {
+        return itemId switch
+        {
+            PlaytestContext.IronScrap => _ctx.IronScrapDef,
+            PlaytestContext.IronOre => _ctx.IronOreDef,
+            PlaytestContext.IronIngot => _ctx.IronIngotDef,
+            PlaytestContext.TurretAmmo => _ctx.TurretAmmoDef,
+            PlaytestContext.PowerCell => _ctx.PowerCellDef,
+            PlaytestContext.SignalDecoder => _ctx.SignalDecoderDef,
+            PlaytestContext.ReinforcedPlating => _ctx.ReinforcedPlatingDef,
+            PlaytestContext.KeyFragment => _ctx.KeyFragmentDef,
+            _ => null
+        };
+    }
+
+    private void SpawnTowerInteractables()
+    {
+        CleanupTowerInteractables();
+        var rng = new System.Random();
+
+        for (int i = 0; i < _towerChunkLayouts.Count; i++)
+        {
+            var layout = _towerChunkLayouts[i];
+
+            // Loot nodes: resolve drops at spawn time, create WorldItem for walk-over pickup
+            foreach (var lootPos in layout.LootNodePositions)
+            {
+                var drop = _towerLootTable.ResolveDrop(i, _towerController.CurrentTier, rng);
+                if (!drop.HasValue) continue;
+
+                var def = GetItemDefinition(drop.Value.itemId);
+                if (def == null) continue;
+
+                var obj = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                obj.name = $"TowerLoot_F{i}_{drop.Value.itemId}";
+                obj.transform.position = lootPos.position;
+                obj.transform.localScale = new Vector3(0.4f, 0.4f, 0.4f);
+
+                DestroyImmediate(obj.GetComponent<BoxCollider>());
+
+                var renderer = obj.GetComponent<Renderer>();
+                renderer.material.color = PlaytestToolController.GetItemColor(drop.Value.itemId);
+
+                var worldItem = obj.AddComponent<WorldItem>();
+                worldItem.Initialize(def, drop.Value.amount);
+                _towerInteractables.Add(obj);
+            }
+
+            // Fragment node (if this floor has a fragment this run)
+            if (_towerController.HasFragment(i) && layout.EnemySpawnPoints.Length > 0)
+            {
+                // Place fragment at the back of the room
+                bool isBoss = i == _towerBuildingDef.bossChunkIndex;
+                float size = isBoss ? TowerChunkLayoutGenerator.BossSize : TowerChunkLayoutGenerator.NormalSize;
+                var origin = TowerChunkLayoutGenerator.GetChunkOrigin(TowerBasePosition, i);
+                var fragWorldPos = origin + new Vector3(size * 0.5f, 0.5f, size * 0.7f);
+
+                var obj = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                obj.name = $"FragmentNode_F{i}";
+                obj.transform.position = fragWorldPos;
+                obj.transform.localScale = new Vector3(0.7f, 0.7f, 0.7f);
+
+                DestroyImmediate(obj.GetComponent<BoxCollider>());
+
+                var renderer = obj.GetComponent<Renderer>();
+                renderer.material.color = PlaytestToolController.GetItemColor(PlaytestContext.KeyFragment);
+
+                var worldItem = obj.AddComponent<WorldItem>();
+                worldItem.Initialize(_ctx.KeyFragmentDef, 1);
+                _towerInteractables.Add(obj);
+            }
+        }
+
+        Debug.Log($"tower: spawned {_towerInteractables.Count} interactables");
+    }
+
+    private void CleanupTowerInteractables()
+    {
+        for (int i = 0; i < _towerInteractables.Count; i++)
+        {
+            if (_towerInteractables[i] != null)
+                Destroy(_towerInteractables[i]);
+        }
+        _towerInteractables.Clear();
+    }
+
     // -- World items --
 
     private void CreateWorldItems()
@@ -834,7 +1281,18 @@ public class KevinPlaytestSetup : MonoBehaviour, IPlaytestFeatureProvider
             };
         }
 
-        Debug.Log("playtest: Kevin HUD extensions wired (building status)");
+        // Wire player death for tower runs
+        var health = _ctx.PlayerObject?.GetComponent<HealthBehaviour>();
+        if (health != null && health.Health != null)
+        {
+            health.Health.OnDeath += () =>
+            {
+                if (_insideTower)
+                    OnPlayerDiedInTower();
+            };
+        }
+
+        Debug.Log("playtest: Kevin HUD extensions wired (building status, tower death)");
         yield break;
     }
 

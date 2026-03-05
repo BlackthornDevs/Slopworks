@@ -3,24 +3,18 @@ using System.Collections.Generic;
 
 /// <summary>
 /// Pure C# tower run state manager. Tracks the current run: building, cleared chunks,
-/// carried loot, banked loot/fragments, difficulty tier. No MonoBehaviour dependency.
+/// banked fragments, difficulty tier. Loot and carried fragments live in PlayerInventory.
 /// </summary>
 public class TowerController
 {
     private TowerBuildingDefinitionSO _building;
     private readonly HashSet<int> _clearedChunks = new HashSet<int>();
     private readonly HashSet<int> _fragmentChunks = new HashSet<int>();
-    private readonly List<ItemInstance> _carriedLoot = new List<ItemInstance>();
-    private readonly List<ItemInstance> _bankedLoot = new List<ItemInstance>();
-    private int _carriedFragments;
     private int _bankedFragments;
     private int _currentTier = 1;
     private bool _isRunActive;
 
     public TowerBuildingDefinitionSO CurrentBuilding => _building;
-    public IReadOnlyList<ItemInstance> CarriedLoot => _carriedLoot;
-    public IReadOnlyList<ItemInstance> BankedLoot => _bankedLoot;
-    public int CarriedFragments => _carriedFragments;
     public int BankedFragments => _bankedFragments;
     public int CurrentTier => _currentTier;
     public bool IsRunActive => _isRunActive;
@@ -34,15 +28,13 @@ public class TowerController
     }
 
     /// <summary>
-    /// Initialize a new run. Resets carried state and randomizes fragment placement.
+    /// Initialize a new run. Resets cleared chunks and randomizes fragment placement.
     /// </summary>
     public void StartRun(TowerBuildingDefinitionSO building)
     {
         _building = building;
         _clearedChunks.Clear();
         _fragmentChunks.Clear();
-        _carriedLoot.Clear();
-        _carriedFragments = 0;
         _isRunActive = true;
 
         RandomizeFragments();
@@ -68,56 +60,33 @@ public class TowerController
     }
 
     /// <summary>
-    /// Add an item to carried loot.
+    /// Bank carried fragments (from inventory). Returns total banked fragment count.
     /// </summary>
-    public void CollectLoot(ItemInstance item)
+    public int Extract(int carriedFragments)
     {
-        _carriedLoot.Add(item);
-    }
-
-    /// <summary>
-    /// Collect a key fragment (carried, not yet banked).
-    /// </summary>
-    public void CollectFragment()
-    {
-        _carriedFragments++;
-    }
-
-    /// <summary>
-    /// Bank all carried loot and fragments. Returns total banked fragment count.
-    /// </summary>
-    public int Extract()
-    {
-        _bankedFragments += _carriedFragments;
-        _carriedFragments = 0;
-
-        _bankedLoot.AddRange(_carriedLoot);
-        _carriedLoot.Clear();
-
+        _bankedFragments += carriedFragments;
         _isRunActive = false;
-
         return _bankedFragments;
     }
 
     /// <summary>
-    /// Player died. Clear all carried loot and fragments. Banked items are safe.
+    /// Player died. Ends the run. Banked fragments are safe.
+    /// Caller is responsible for clearing tower items from inventory.
     /// </summary>
     public void Die()
     {
-        _carriedLoot.Clear();
-        _carriedFragments = 0;
         _isRunActive = false;
     }
 
     /// <summary>
-    /// Check if the boss floor can be unlocked. Requires banked fragments >= building requirement.
+    /// Check if the boss floor can be unlocked. Carried + banked fragments must meet requirement.
     /// </summary>
-    public bool UnlockBoss()
+    public bool UnlockBoss(int carriedFragments)
     {
         if (_building == null)
             return false;
 
-        return _bankedFragments >= _building.requiredFragments;
+        return (_bankedFragments + carriedFragments) >= _building.requiredFragments;
     }
 
     /// <summary>

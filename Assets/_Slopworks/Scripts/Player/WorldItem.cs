@@ -1,8 +1,8 @@
 using UnityEngine;
 
 /// <summary>
-/// An item sitting in the world that the player can pick up.
-/// Placed on the Interactable physics layer.
+/// Universal walk-over pickup. Placed on the Interactable physics layer.
+/// Any item type uses this -- loot, fragments, resources. All go to PlayerInventory.
 /// </summary>
 public class WorldItem : MonoBehaviour
 {
@@ -22,18 +22,21 @@ public class WorldItem : MonoBehaviour
     {
         gameObject.layer = PhysicsLayers.Interactable;
 
-        var col = GetComponent<Collider>();
-        if (col == null)
-        {
-            var sphere = gameObject.AddComponent<SphereCollider>();
-            sphere.isTrigger = true;
-            sphere.radius = 0.5f;
-        }
+        // Ensure we have a trigger SphereCollider -- remove any leftover solid collider first
+        var existing = GetComponent<Collider>();
+        if (existing != null && existing is not SphereCollider)
+            DestroyImmediate(existing);
+
+        var sphere = GetComponent<SphereCollider>();
+        if (sphere == null)
+            sphere = gameObject.AddComponent<SphereCollider>();
+        sphere.isTrigger = true;
+        sphere.radius = 0.5f;
+
     }
 
     public bool TryCollect(PlayerInventory inventory)
     {
-        PlaytestLogger.Log($"event: item pickup attempt {(_definition != null ? _definition.displayName : "null")} x{_count}");
         if (_definition == null || _count <= 0) return false;
 
         var instance = ItemInstance.Create(_definition.itemId);
