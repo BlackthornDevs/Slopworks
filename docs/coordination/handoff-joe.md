@@ -8,37 +8,49 @@ Updated by Joe's Claude at the end of each session.
 
 ### What was completed
 
-- **J-029 (High): Create a proper terrain for HomeBase** -- wrote `HomeBaseTerrainGenerator.cs` editor script that procedurally creates a 200x200 Unity Terrain. Flat ~100m diameter buildable zone at center, multi-octave Perlin noise hills at edges (up to ~20m), edge ramps for natural boundaries. Three terrain layers (dirt, grass, rock) painted by distance-from-center and slope steepness. Post-apocalyptic lighting (warm orange sun, trilight ambient, linear fog). Scene and all assets saved to `Scenes/Multiplayer/`. Terrain on layer 12.
+- **J-027 (Medium):** Already implemented in J-013/J-014. Verified ammo pipeline: TurretController.TryConsumeAmmo -> StorageContainer.TryExtract, PlaceTurret wires AmmoStorage as port owner, ConnectionResolver creates inserters. Marked complete.
+- **J-028 (Low): Turret targeting modes** -- added TargetingMode enum (Closest, LowestHealth, HighestThreat), TurretCandidate struct, new Tick overload on TurretController with SelectTargetFromCandidates, updated TurretBehaviour to populate candidate data with health/threat. 7 new tests, 28/28 turret tests passing.
+- **J-029 (High): HomeBase terrain** -- completed previous session. Editor script generates 200x200 terrain with flat center, perlin hills, three terrain layers, post-apocalyptic lighting.
+- **Lore design doc** -- brainstormed and wrote `docs/plans/2026-03-06-lore-design.md`. Covers: SLOP (the unreliable AI), industrial collapse backstory, fauna biomes per building type, endgame twist (SLOP caused the collapse), dark humor tone.
+- **C-010 filed** -- proposed redefining Joe's task scope to art/world-building focus. Awaiting Kevin's resolution.
+- **Asset pack research** -- compiled list of free CC0/open-license asset packs organized by category (terrain textures, environment props, factory assets, enemies, weapons, skyboxes). Sources: Kenney, Quaternius, Poly Haven, ambientCG, Unity Asset Store, OpenGameArt. Priority recommendations: Kenney Conveyor+Survival+Blaster+TowerDefense kits, Quaternius Zombie Apocalypse Kit, Poly Haven/ambientCG PBR textures.
+- **PR #25** submitted to master with all completed work.
 
 ### Shared file changes (CRITICAL)
 
 - No changes to asmdef, ProjectSettings, Core/, or packages.
-- New files only: `Scripts/Editor/HomeBaseTerrainGenerator.cs` (editor script), `Scenes/Multiplayer/HomeBaseTerrain.unity`, `Scenes/Multiplayer/HomeBaseTerrainData.asset`, terrain layer and texture assets.
+- New C# files: `TargetingMode.cs`, `TurretCandidate.cs` (both in Scripts/Combat/)
+- Modified: `TurretDefinitionSO.cs` (added targetingMode field), `TurretController.cs` (new Tick overload + SelectTargetFromCandidates), `TurretBehaviour.cs` (candidate data gathering)
 
 ### What needs attention
 
 - J-026 is a process fix (stop adding Co-Authored-By to commits) -- noted for this session and going forward.
-- The terrain generator is re-runnable via `Slopworks > Generate HomeBase Terrain` menu if Kevin wants to tweak parameters.
-- Terrain textures are small procedural 64x64 textures. If real terrain texture assets become available, swap them in the terrain layers.
+- C-010 proposes redefining Joe's scope to art/world-building. Kevin should resolve this in decisions.md.
+- Asset pack research results saved in task agent output. Top picks: Kenney kits (CC0, consistent low-poly style, ~390 assets covering factory+survival+weapons+turrets), Quaternius Zombie Apocalypse Kit (CC0, animated enemies).
+- Lore design doc at `docs/plans/2026-03-06-lore-design.md` has open design questions (SLOP UI manifestation, dialogue system, endgame choice mechanics).
 
-### Next task
+### Next tasks
 
-By priority rules:
-- **J-027 (Medium): Turret ammo consumption and reload** -- turrets should consume ammo from connected storage and stop when empty.
-- **J-028 (Low): Turret range and targeting priority** -- configurable range and targeting modes.
+All code tasks are complete. Pending work is art/world-building focused (awaiting C-010 resolution):
+- Source and import asset packs (Kenney Conveyor Kit, Survival Kit, etc.)
+- Build tower floor layouts using sourced assets
+- Create overworld terrain
+- Write SLOP dialogue lines and environmental storytelling content
+
+J-026 (stop Co-Authored-By) is a process fix, not a code task -- applied going forward.
 
 ### Blockers
 
-- None. J-024 unblocked by Kevin (C-009 resolved). All remaining tasks have no blockers.
+- C-010 awaiting Kevin's resolution. Joe has no assigned code tasks. Art/world-building work can proceed independently.
 
 ### Test status
 
-- Zero compilation errors, zero warnings.
-- EditMode tests: MCP runner times out on full suite (815+ test methods), but no code changes to existing systems -- only new editor script and data assets.
+- Zero compilation errors.
+- Turret tests: 28/28 passing (filtered run via MCP).
+- Full suite (815+) times out in MCP runner but no code changes to non-turret systems.
 
 ### Key context
 
-- `HomeBaseTerrainGenerator.cs` is idempotent -- running it again overwrites the scene and TerrainData asset.
-- Terrain centered at origin: transform at (-100, 0, -100), extends to (100, 0, 100).
-- `FlatRadiusFraction = 0.25` means the flat zone extends 50m from center (100m diameter).
-- Kevin's multiplayer `HomeBase.unity` needs to additively load `HomeBaseTerrain.unity` to use the terrain.
+- `HomeBaseTerrainGenerator.cs` is idempotent -- re-run via `Slopworks > Generate HomeBase Terrain`.
+- Terrain centered at origin: (-100,0,-100) to (100,0,100). Flat zone = 50m radius from center.
+- Lore design establishes SLOP as central narrative device. All story/dialogue work should reference `docs/plans/2026-03-06-lore-design.md`.
