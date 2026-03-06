@@ -473,6 +473,7 @@ GameObject:
   - component: {fileID: 1659165652}
   - component: {fileID: 1659165651}
   - component: {fileID: 1659165653}
+  - component: {fileID: 1659165654}
   m_Layer: 0
   m_Name: GridManager
   m_TagString: Untagged
@@ -567,6 +568,23 @@ MonoBehaviour:
   _foundationPrefab: {fileID: 8845405300912603951, guid: 439264b42deb9754aab0bb5282d7c025, type: 3}
   _wallPrefab: {fileID: 9218640769510569313, guid: 3c7af1740a258a745a15dd604a17cebe, type: 3}
   _rampPrefab: {fileID: 8720958824011492957, guid: be1a2c68504b07a4da6a83642bad39fd, type: 3}
+--- !u!114 &1659165654
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1659165650}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 294202ac9200e1c40bd4f04049fbcde0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Slopworks.Runtime::TestItemSpawner
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 1659165651}
+  _networkObjectCache: {fileID: 0}
+  _worldItemPrefab: {fileID: 8405697378481831486, guid: ad4cda546e185cd4b8c117332077f765, type: 3}
+  _itemCount: 5
 --- !u!1 &1726383191
 GameObject:
   m_ObjectHideFlags: 0

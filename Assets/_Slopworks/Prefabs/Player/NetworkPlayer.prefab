@@ -15,6 +15,8 @@ GameObject:
   - component: {fileID: 3327283262866992543}
   - component: {fileID: 8251439179353808696}
   - component: {fileID: 2734749880648621232}
+  - component: {fileID: -803279512443065909}
+  - component: {fileID: -8161977590570690139}
   m_Layer: 8
   m_Name: NetworkPlayer
   m_TagString: Untagged
@@ -36,6 +38,7 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 8592913182864690892}
+  - {fileID: 6833754958280761884}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!136 &1075089200564469907
@@ -106,7 +109,10 @@ MonoBehaviour:
   <ComponentIndex>k__BackingField: 0
   <PredictedSpawn>k__BackingField: {fileID: 0}
   <PredictedOwner>k__BackingField: {fileID: 0}
-  NetworkBehaviours: []
+  NetworkBehaviours:
+  - {fileID: 3327283262866992543}
+  - {fileID: 8251439179353808696}
+  - {fileID: 2734749880648621232}
   InitializedParentNetworkBehaviour: {fileID: 0}
   InitializedNestedNetworkObjects: []
   RuntimeParentNetworkBehaviour: {fileID: 0}
@@ -117,7 +123,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
-  _initializedTimestamp: 0
+  _initializedTimestamp: -8584288378339821137
   NetworkObserver: {fileID: 0}
   _enablePrediction: 0
   _predictionType: 0
@@ -133,15 +139,15 @@ MonoBehaviour:
   _spectatorInterpolation: 2
   _enableTeleport: 0
   _teleportThreshold: 1
-  <PrefabId>k__BackingField: 65535
+  <PrefabId>k__BackingField: 12
   <SpawnableCollectionId>k__BackingField: 0
   <AssetPathHash>k__BackingField: 15268719314615469774
   SceneId: 0
   SerializedTransformProperties:
     Position: {x: 0, y: 0, z: 0}
-    Rotation: {x: 0, y: 0, z: 0, w: 0}
-    Scale: {x: 0, y: 0, z: 0}
-    IsValid: 0
+    Rotation: {x: 0, y: 0, z: 0, w: 1}
+    Scale: {x: 1, y: 1, z: 1}
+    IsValid: 1
 --- !u!114 &3327283262866992543
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -154,9 +160,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a2836e36774ca1c4bbbee976e17b649c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: FishNet.Runtime::FishNet.Component.Transforming.NetworkTransform
-  _componentIndexCache: 255
+  _componentIndexCache: 0
   _addedNetworkObject: {fileID: 4071129095658771539}
-  _networkObjectCache: {fileID: 0}
+  _networkObjectCache: {fileID: 4071129095658771539}
   _componentConfiguration: 0
   _synchronizeParent: 0
   _packing:
@@ -200,9 +206,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d37179c06ee3a6e40836dd21acefebe1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Slopworks.Runtime::NetworkPlayerController
-  _componentIndexCache: 255
+  _componentIndexCache: 1
   _addedNetworkObject: {fileID: 4071129095658771539}
-  _networkObjectCache: {fileID: 0}
+  _networkObjectCache: {fileID: 4071129095658771539}
   _walkSpeed: 5
   _sprintSpeed: 8
   _jumpForce: 7
@@ -221,10 +227,106 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 53afda1e104a86140b430f4e2792d4a6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Slopworks.Runtime::NetworkBuildController
+  _componentIndexCache: 2
+  _addedNetworkObject: {fileID: 4071129095658771539}
+  _networkObjectCache: {fileID: 4071129095658771539}
+  _placementRange: 25
+--- !u!114 &-803279512443065909
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4315693519742176051}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 138193a2ce1680b44b63763c72138073, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Slopworks.Runtime::NetworkInventory
   _componentIndexCache: 255
   _addedNetworkObject: {fileID: 4071129095658771539}
   _networkObjectCache: {fileID: 0}
-  _placementRange: 25
+--- !u!114 &-8161977590570690139
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4315693519742176051}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c27a787b91e5ebe4db79c28d27139bbd, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Slopworks.Runtime::NetworkHotbarHUD
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 4071129095658771539}
+  _networkObjectCache: {fileID: 0}
+--- !u!1 &5829677295695553793
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 6833754958280761884}
+  - component: {fileID: 7463393754452158965}
+  - component: {fileID: 8846099921438596032}
+  m_Layer: 8
+  m_Name: PickupTrigger
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &6833754958280761884
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5829677295695553793}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 4954781174778343944}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!135 &7463393754452158965
+SphereCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5829677295695553793}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 1
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Radius: 1.5
+  m_Center: {x: 0, y: 0, z: 0}
+--- !u!114 &8846099921438596032
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5829677295695553793}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8198ec345cc1d4f4e84be2b144301d93, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Slopworks.Runtime::NetworkPickupTrigger
 --- !u!1 &8820858691045031993
 GameObject:
   m_ObjectHideFlags: 0
