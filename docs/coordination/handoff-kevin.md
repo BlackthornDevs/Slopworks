@@ -1,46 +1,60 @@
 # Kevin's Claude -- Session Handoff
 
-Last updated: 2026-03-05 21:30
-Branch: kevin/main
-Last commit: 2f72cb6 Fix Rigidbody teleport in tower elevator and building triggers
+Last updated: 2026-03-05 22:45
+Branch: kevin/multiplayer-step1
+Last commit: 2e33f7d Add GridManager and foundation placement for multiplayer Step 2a
 
 ## What was completed this session
 
-### J-020: Boss encounter implementation
-- **PlaytestContext.cs**: Added `BossBlueprint` constant, `BossBlueprintDef`, `BossFaunaDef`, `BossEnemyTemplate` fields
-- **PlaytestBootstrap.cs**: Boss blueprint item def, boss fauna def (tower_boss, 300HP, 25dmg, bravery 1.0, purple 2.5x capsule), boss enemy template with NavMeshAgent, Continuous collision detection on player Rigidbody
-- **PlaytestToolController.cs**: Gold color for boss_blueprint in GetItemColor
-- **KevinPlaytestSetup.cs**: Boss loot entries in tower loot table (Legendary blueprint, Rare signal_decoder, floor 6-7 only), boss floor spawns (1 boss + 2 grunts via templateIndex 2), SpawnBossRewards method (guaranteed blueprint + 1-2 bonus drops), boss_blueprint in TowerItemIds and GetItemDefinition
-- **Design doc**: `docs/plans/2026-03-05-boss-encounter-design.md`
+### Multiplayer Step 1: Scene + Network + Player (COMPLETE)
+- Created HomeBase terrain scene at `Assets/_Slopworks/Scenes/Multiplayer/HomeBase.unity`
+- FishNet NetworkManager + Tugboat transport + PlayerSpawner in scene
+- ConnectionUI script (`Scripts/Network/ConnectionUI.cs`) -- OnGUI host/join buttons
+- NetworkPlayerController (`Scripts/Player/NetworkPlayerController.cs`) -- NetworkBehaviour with owner-only FPS input
+- NetworkPlayer prefab at `Assets/_Slopworks/Prefabs/Player/NetworkPlayer.prefab` -- CapsuleCollider, Rigidbody, NetworkObject, NetworkTransform, NetworkPlayerController, child FPSCamera
+- Terrain set to layer 12 for ground check compatibility
+- Host mode tested: movement, sprint, jump all working
 
-### Rigidbody teleport bug fix (CRITICAL)
-- **Root cause**: Player uses Rigidbody, not CharacterController. All teleport code was using `transform.position` which gets silently overridden by the physics engine on the next physics step. Player appeared to teleport (position read back correctly) but snapped back to old position within one frame.
-- **Fix**: All teleports now use `rb.position = targetPos` + `Physics.SyncTransforms()` instead of `transform.position`. No kinematic toggle needed.
-- **Files fixed**: KevinPlaytestSetup (NavigateToFloor, TeleportPlayerToHomeBase), BuildingEntryTrigger, BuildingExitTrigger
-- **Also fixed**: BuildingEntryTrigger double-trigger with `_triggered` flag pattern
+### Multiplayer Step 2a: GridManager + Foundation Placement (COMPLETE)
+- GridManager (`Scripts/Network/GridManager.cs`) -- NetworkBehaviour scene object, owns FactoryGrid, ServerRpc for place/remove foundations
+- NetworkBuildController (`Scripts/Player/NetworkBuildController.cs`) -- on player prefab, B key toggles build mode, LMB place, RMB remove, ghost preview, crosshair
+- Foundation prefab at `Assets/_Slopworks/Prefabs/Buildings/Foundations/Foundation.prefab` -- cube, layer 13, NetworkObject
+- Server spawns/despawns foundation NetworkObjects, tracks via `_spawnedObjects` dictionary
+- Tested: foundations place and remove correctly in host mode
 
-### TowerElevatorUI debug logging
-- Added click debug log showing floor index and display name
+### Design docs
+- `docs/plans/2026-03-05-multiplayer-foundation-design.md` -- 7-step conversion sequence
+- `docs/plans/2026-03-05-multiplayer-step1-plan.md` -- detailed Step 1 tasks
+
+### Earlier in session
+- Fixed Rigidbody teleport bug (rb.position not transform.position)
+- Completed J-020 (boss), J-021 (tower playtest), J-024 (MasterPlaytest verify)
 
 ## What's in progress (not yet committed)
+
 None -- all committed.
 
 ## Next task to pick up
-- **J-021 (Tower end-to-end playtest)**: Full tower run verification -- enter tower, clear floors, collect fragments, boss fight, extract, verify loot banking. Remove debug logs from NavigateToFloor after confirming everything works.
-- **J-024 (MasterPlaytest verification)**: Verify MasterPlaytest scene passes
-- **Turret barrel orientation**: Still unfinished from previous session. FBX barrels face -X, need rotation offset in targeting.
+
+- **Step 2b: Walls + ramps** -- extend GridManager with ServerRpc for wall/ramp placement. Create wall and ramp prefabs with NetworkObject. Wire StructuralPlacementService snap points into the networked flow.
+- After 2b: Step 2c (build mode UI with tool switching, rotation, drag placement)
+- Then Steps 3-7 of multiplayer conversion (inventory, machines, combat, tower, persistence)
 
 ## Blockers or decisions needed
-None.
+
+- MCP Unity tool cannot find components from Slopworks.Runtime asmdef by name. Manual prefab/component setup steps needed.
+- MCP Unity tool cannot register new MenuItems after recompile (domain reload issue).
 
 ## Test status
-- 891/891 passing (boss changes used existing patterns, no new simulation classes). Should re-verify after all commits.
+
+- EditMode tests not run this session (multiplayer work is scene/prefab setup)
+- Manual testing confirmed: host mode, FPS movement, jump, foundation place/remove all working
 
 ## Key context the next session needs
-- **NEVER use transform.position to teleport a Rigidbody.** Use `rb.position = pos; Physics.SyncTransforms();` -- this is saved in auto-memory.
-- **Player has NO CharacterController.** It's a Rigidbody + CapsuleCollider. All old CC references were wrong.
-- **C# `?.` operator doesn't respect Unity fake-null.** Use `if (x != null)` for Unity objects, not `x?.property`.
-- **Boss enemy**: templateIndex 2 in enemy templates array. Purple 2.5x capsule, 300 HP, bravery 1.0 (never flees).
-- **Boss rewards**: SpawnBossRewards creates WorldItem cubes at arena center -- 1 guaranteed blueprint + 1-2 random loot table drops.
-- **NavigateToFloor has debug logs**: Pre-teleport and post-teleport position logging still active. Remove once tower is fully verified.
-- **Turret barrel rotation is UNFINISHED** from previous session.
+
+- **Branch:** Work is on `kevin/multiplayer-step1`, NOT `kevin/main`
+- **Terrain layer:** Must be layer 12 for ground check. Default terrain is layer 0.
+- **Foundation prefab folder:** `Assets/_Slopworks/Prefabs/Buildings/Foundations/`
+- **GridManager:** Scene NetworkObject. `_foundationPrefab` wired to Foundation prefab. Tracks spawned objects via `Dictionary<Vector3Int, GameObject>`.
+- **NetworkBuildController:** On NetworkPlayer prefab. B=build mode, LMB=place, RMB=remove. Ghost shows green (valid) or orange (occupied/removable).
+- **MCP Unity limitations:** Can't create prefabs from scene hierarchies or find asmdef-scoped components. User must do manual prefab drag steps.
