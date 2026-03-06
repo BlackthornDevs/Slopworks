@@ -1097,20 +1097,35 @@ public class KevinPlaytestSetup : MonoBehaviour, IPlaytestFeatureProvider
 
     private void NavigateToFloor(int floorIndex)
     {
+        Debug.Log($"tower: NavigateToFloor called with index {floorIndex} (display: Floor {floorIndex + 1}), current chunk: {_currentTowerChunk}");
+
         if (floorIndex < 0 || floorIndex >= _towerChunkLayouts.Count)
+        {
+            Debug.Log($"tower: floor index {floorIndex} out of range (0-{_towerChunkLayouts.Count - 1}), aborting");
             return;
+        }
 
         _currentTowerChunk = floorIndex;
 
         // Teleport player
         var elevPos = _towerChunkLayouts[floorIndex].ElevatorPosition.position;
+        // Offset into the room (north) to avoid CC overlap with elevator cube
+        var spawnPos = elevPos + Vector3.up * 1.0f + Vector3.forward * 3f;
+        Debug.Log($"tower: teleporting to {spawnPos} (elevator at {elevPos})");
         var player = _ctx.PlayerObject;
         if (player != null)
         {
-            var cc = player.GetComponent<CharacterController>();
-            if (cc != null) cc.enabled = false;
-            player.transform.position = elevPos + Vector3.up * 0.5f;
-            if (cc != null) cc.enabled = true;
+            var rb = player.GetComponent<Rigidbody>();
+            Debug.Log($"tower: pre-teleport player pos={player.transform.position} rb.pos={rb?.position}");
+            if (rb != null)
+            {
+                rb.linearVelocity = Vector3.zero;
+                rb.angularVelocity = Vector3.zero;
+                rb.position = spawnPos;
+            }
+            player.transform.position = spawnPos;
+            Physics.SyncTransforms();
+            Debug.Log($"tower: post-teleport player pos={player.transform.position} rb.pos={rb?.position}");
 
             // Reset all child local positions (teleport displaces compound collider children)
             foreach (Transform child in player.transform)
@@ -1225,10 +1240,15 @@ public class KevinPlaytestSetup : MonoBehaviour, IPlaytestFeatureProvider
         var player = _ctx.PlayerObject;
         if (player == null) return;
 
-        var cc = player.GetComponent<CharacterController>();
-        if (cc != null) cc.enabled = false;
+        var rb = player.GetComponent<Rigidbody>();
+        if (rb != null)
+        {
+            rb.linearVelocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+            rb.position = homePos;
+        }
         player.transform.position = homePos;
-        if (cc != null) cc.enabled = true;
+        Physics.SyncTransforms();
 
         // Reset all child local positions (teleport displaces compound collider children)
         foreach (Transform child in player.transform)

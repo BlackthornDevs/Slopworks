@@ -314,6 +314,7 @@ public class PlaytestBootstrap
         var rb = player.AddComponent<Rigidbody>();
         rb.freezeRotation = true;
         rb.interpolation = RigidbodyInterpolation.Interpolate;
+        rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
 
         // Repurpose existing Main Camera as isometric camera
         var isoCam = Camera.main;
