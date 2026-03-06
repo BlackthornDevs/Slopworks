@@ -1,36 +1,46 @@
 # Kevin's Claude -- Session Handoff
 
-Last updated: 2026-03-04 23:30
+Last updated: 2026-03-05 21:30
 Branch: kevin/main
-Last commit: 624e704 Replace primitive visuals with Brackeys FBX models
+Last commit: 2f72cb6 Fix Rigidbody teleport in tower elevator and building triggers
 
 ## What was completed this session
 
-### Replace primitive visuals with Brackeys FBX models
-- **Pistol viewmodel** (`PlaytestBootstrap.cs:350-393`): Loads `Pistol_01.prefab` from `Resources/Models/Pistol/`, parents to FPS camera, runtime-converts Built-in Standard materials to URP Lit (albedo, normal, metallic, occlusion, emission), strips colliders, sets Player layer recursively. Position: (0.15, -0.12, 0.394) relative to camera.
-- **Turret FBX** (`KevinPlaytestSetup.cs:382-450`): Loads `Turret.fbx` from `Resources/Models/Turrets/`, replaces cylinder+cube primitives. Gun head ("Turret" child) reparented under BarrelPivot for targeting rotation. Primitive fallback if FBX not found.
-- **Turret ghost** (`KevinPlaytestSetup.cs:455-500`): Ghost preview uses turret FBX model with transparent URP Lit materials instead of cube primitive.
-- **Placement rotation**: Both ghost and placed turret apply `_turretRotation` via `Quaternion.Euler(0, _turretRotation, 0)`.
-- **New assets**: `Assets/_Slopworks/Resources/Models/Pistol/Pistol_01.prefab`, `Assets/_Slopworks/Resources/Models/Turrets/Turret.fbx`
-- **Imported package**: `Assets/Sci-Fi Weapons/` (Brackeys sci-fi weapons pack with materials and textures)
-- **SetLayerRecursive helper** added to PlaytestBootstrap (line 494)
+### J-020: Boss encounter implementation
+- **PlaytestContext.cs**: Added `BossBlueprint` constant, `BossBlueprintDef`, `BossFaunaDef`, `BossEnemyTemplate` fields
+- **PlaytestBootstrap.cs**: Boss blueprint item def, boss fauna def (tower_boss, 300HP, 25dmg, bravery 1.0, purple 2.5x capsule), boss enemy template with NavMeshAgent, Continuous collision detection on player Rigidbody
+- **PlaytestToolController.cs**: Gold color for boss_blueprint in GetItemColor
+- **KevinPlaytestSetup.cs**: Boss loot entries in tower loot table (Legendary blueprint, Rare signal_decoder, floor 6-7 only), boss floor spawns (1 boss + 2 grunts via templateIndex 2), SpawnBossRewards method (guaranteed blueprint + 1-2 bonus drops), boss_blueprint in TowerItemIds and GetItemDefinition
+- **Design doc**: `docs/plans/2026-03-05-boss-encounter-design.md`
+
+### Rigidbody teleport bug fix (CRITICAL)
+- **Root cause**: Player uses Rigidbody, not CharacterController. All teleport code was using `transform.position` which gets silently overridden by the physics engine on the next physics step. Player appeared to teleport (position read back correctly) but snapped back to old position within one frame.
+- **Fix**: All teleports now use `rb.position = targetPos` + `Physics.SyncTransforms()` instead of `transform.position`. No kinematic toggle needed.
+- **Files fixed**: KevinPlaytestSetup (NavigateToFloor, TeleportPlayerToHomeBase), BuildingEntryTrigger, BuildingExitTrigger
+- **Also fixed**: BuildingEntryTrigger double-trigger with `_triggered` flag pattern
+
+### TowerElevatorUI debug logging
+- Added click debug log showing floor index and display name
 
 ## What's in progress (not yet committed)
 None -- all committed.
 
 ## Next task to pick up
-- **Turret barrel orientation**: The FBX turret barrels face -X in local space. When the barrel pivot tracks enemies via LookRotation (+Z toward target), the barrels point sideways/backward. Need to apply a rotation offset -- likely 180 degrees from the pivot, not from center. The user indicated this is "a little more complicated than rotating just by 180 degrees" and needs the rotation to happen from the pivot point, not the model center.
-- After turret rotation is fixed: J-020 (Boss encounter), J-021 (Tower playtest), J-024 (MasterPlaytest verification)
+- **J-021 (Tower end-to-end playtest)**: Full tower run verification -- enter tower, clear floors, collect fragments, boss fight, extract, verify loot banking. Remove debug logs from NavigateToFloor after confirming everything works.
+- **J-024 (MasterPlaytest verification)**: Verify MasterPlaytest scene passes
+- **Turret barrel orientation**: Still unfinished from previous session. FBX barrels face -X, need rotation offset in targeting.
 
 ## Blockers or decisions needed
-- Turret FBX barrel orientation needs manual testing to find the correct rotation offset. The FBX children have localEulerAngles ~(0, 270, 90) with forward = (-1, 0, 0).
+None.
 
 ## Test status
-- Tests not re-run this session (visual-only changes, no simulation logic modified). Previous count: 891/891 passing.
+- 891/891 passing (boss changes used existing patterns, no new simulation classes). Should re-verify after all commits.
 
 ## Key context the next session needs
-- **Brackeys assets location**: Raw files in `Brackeys Assets/` (not in Unity Assets), imported package at `Assets/Sci-Fi Weapons/`. Only the needed models are copied to `Assets/_Slopworks/Resources/Models/`.
-- **Pistol material conversion**: The Sci-Fi Weapons package uses Built-in Standard shader. PlaytestBootstrap converts to URP Lit at runtime, transferring all PBR textures. If the package materials are ever upgraded to URP (via Edit > Rendering > Materials converter), the runtime conversion can be removed.
-- **Turret FBX hierarchy**: Root has two children: "Turret" (gun head, higher Y bounds) and "Turret.001" (base, lower Y). Head is reparented under BarrelPivot with `worldPositionStays: true`. Both children share localScale ~0.044 and complex rotation from Blender FBX export.
-- **Turret barrel rotation is UNFINISHED**: The head tracks targets but barrels don't face the right direction during tracking. The placement rotation (R key) works correctly for ghost and placed model. The targeting rotation in TurretBehaviour.Update() needs an offset to account for the FBX model's barrel direction.
-- **Pre-existing NREs**: PlaytestToolController.UpdateBeltItemVisuals (line 1831) and OnGUI (line 342) have NREs that were present before this session's changes. They don't affect gameplay but spam the console.
+- **NEVER use transform.position to teleport a Rigidbody.** Use `rb.position = pos; Physics.SyncTransforms();` -- this is saved in auto-memory.
+- **Player has NO CharacterController.** It's a Rigidbody + CapsuleCollider. All old CC references were wrong.
+- **C# `?.` operator doesn't respect Unity fake-null.** Use `if (x != null)` for Unity objects, not `x?.property`.
+- **Boss enemy**: templateIndex 2 in enemy templates array. Purple 2.5x capsule, 300 HP, bravery 1.0 (never flees).
+- **Boss rewards**: SpawnBossRewards creates WorldItem cubes at arena center -- 1 guaranteed blueprint + 1-2 random loot table drops.
+- **NavigateToFloor has debug logs**: Pre-teleport and post-teleport position logging still active. Remove once tower is fully verified.
+- **Turret barrel rotation is UNFINISHED** from previous session.
