@@ -896,6 +896,8 @@ public class KevinPlaytestSetup : MonoBehaviour, IPlaytestFeatureProvider
             new LootDropDefinition { itemId = PlaytestContext.PowerCell, rarity = LootRarity.Uncommon, dropWeight = 1.5f, minAmount = 1, maxAmount = 2, minFloorElevation = 2 },
             new LootDropDefinition { itemId = PlaytestContext.SignalDecoder, rarity = LootRarity.Rare, dropWeight = 1f, minAmount = 1, maxAmount = 1, minFloorElevation = 3 },
             new LootDropDefinition { itemId = PlaytestContext.ReinforcedPlating, rarity = LootRarity.Rare, dropWeight = 0.8f, minAmount = 1, maxAmount = 1, minFloorElevation = 4, tierRequirement = 2 },
+            new LootDropDefinition { itemId = PlaytestContext.BossBlueprint, rarity = LootRarity.Legendary, dropWeight = 10f, minAmount = 1, maxAmount = 1, minFloorElevation = 6, maxFloorElevation = 7 },
+            new LootDropDefinition { itemId = PlaytestContext.SignalDecoder, rarity = LootRarity.Rare, dropWeight = 8f, minAmount = 1, maxAmount = 2, minFloorElevation = 6, maxFloorElevation = 7 },
         };
         _towerLootTable = new TowerLootTable(lootEntries);
         _towerController = new TowerController();
@@ -978,7 +980,7 @@ public class KevinPlaytestSetup : MonoBehaviour, IPlaytestFeatureProvider
     private void CreateTowerEnemies()
     {
         var flags = BindingFlags.NonPublic | BindingFlags.Instance;
-        var templates = new[] { _ctx.EnemyTemplate, _ctx.InteriorEnemyTemplate };
+        var templates = new[] { _ctx.EnemyTemplate, _ctx.InteriorEnemyTemplate, _ctx.BossEnemyTemplate };
 
         // Set spawn entries per floor on FloorChunkDefinition
         for (int i = 0; i < _towerBuildingDef.chunks.Count; i++)
@@ -1012,11 +1014,11 @@ public class KevinPlaytestSetup : MonoBehaviour, IPlaytestFeatureProvider
             }
             else
             {
-                // F6 (boss): 4 grunts + 4 stalkers
+                // F6 (boss): 1 boss + 2 grunt adds
                 chunk.spawnEntries = new List<TowerSpawnEntry>
                 {
-                    new TowerSpawnEntry { templateIndex = 0, count = 4 },
-                    new TowerSpawnEntry { templateIndex = 1, count = 4 }
+                    new TowerSpawnEntry { templateIndex = 2, count = 1 },
+                    new TowerSpawnEntry { templateIndex = 0, count = 2 }
                 };
             }
         }
@@ -1153,6 +1155,7 @@ public class KevinPlaytestSetup : MonoBehaviour, IPlaytestFeatureProvider
                     {
                         _towerController.CompleteBoss();
                         Debug.Log($"tower: BOSS DEFEATED -- tier now {_towerController.CurrentTier}");
+                        SpawnBossRewards(capturedFloor);
                     }
                 };
                 wc.Controller.OnWaveEnded += onEnded;
@@ -1184,7 +1187,8 @@ public class KevinPlaytestSetup : MonoBehaviour, IPlaytestFeatureProvider
     private static readonly string[] TowerItemIds =
     {
         PlaytestContext.PowerCell, PlaytestContext.SignalDecoder,
-        PlaytestContext.ReinforcedPlating, PlaytestContext.KeyFragment
+        PlaytestContext.ReinforcedPlating, PlaytestContext.KeyFragment,
+        PlaytestContext.BossBlueprint
     };
 
     private void OnPlayerDiedInTower()
@@ -1243,6 +1247,7 @@ public class KevinPlaytestSetup : MonoBehaviour, IPlaytestFeatureProvider
             PlaytestContext.SignalDecoder => _ctx.SignalDecoderDef,
             PlaytestContext.ReinforcedPlating => _ctx.ReinforcedPlatingDef,
             PlaytestContext.KeyFragment => _ctx.KeyFragmentDef,
+            PlaytestContext.BossBlueprint => _ctx.BossBlueprintDef,
             _ => null
         };
     }
@@ -1306,6 +1311,49 @@ public class KevinPlaytestSetup : MonoBehaviour, IPlaytestFeatureProvider
         }
 
         Debug.Log($"tower: spawned {_towerInteractables.Count} interactables");
+    }
+
+    private void SpawnBossRewards(int bossFloorIndex)
+    {
+        var origin = TowerChunkLayoutGenerator.GetChunkOrigin(TowerBasePosition, bossFloorIndex);
+        float size = TowerChunkLayoutGenerator.BossSize;
+        var center = origin + new Vector3(size * 0.5f, 0.5f, size * 0.5f);
+
+        var rng = new System.Random();
+
+        // Guaranteed blueprint
+        var blueprintObj = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        blueprintObj.name = "BossReward_blueprint";
+        blueprintObj.transform.position = center + new Vector3(-1f, 0f, 0f);
+        blueprintObj.transform.localScale = new Vector3(0.5f, 0.5f, 0.5f);
+        DestroyImmediate(blueprintObj.GetComponent<BoxCollider>());
+        PlaytestToolController.SetColor(blueprintObj, PlaytestToolController.GetItemColor(PlaytestContext.BossBlueprint));
+        var bpWorldItem = blueprintObj.AddComponent<WorldItem>();
+        bpWorldItem.Initialize(_ctx.BossBlueprintDef, 1);
+        _towerInteractables.Add(blueprintObj);
+
+        // 1-2 bonus rare material drops from loot table
+        int bonusCount = rng.Next(1, 3);
+        for (int i = 0; i < bonusCount; i++)
+        {
+            var drop = _towerLootTable.ResolveDrop(bossFloorIndex, _towerController.CurrentTier, rng);
+            if (!drop.HasValue) continue;
+
+            var def = GetItemDefinition(drop.Value.itemId);
+            if (def == null) continue;
+
+            var obj = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            obj.name = $"BossReward_{drop.Value.itemId}_{i}";
+            obj.transform.position = center + new Vector3(1f + i * 0.8f, 0f, 0f);
+            obj.transform.localScale = new Vector3(0.4f, 0.4f, 0.4f);
+            DestroyImmediate(obj.GetComponent<BoxCollider>());
+            PlaytestToolController.SetColor(obj, PlaytestToolController.GetItemColor(drop.Value.itemId));
+            var worldItem = obj.AddComponent<WorldItem>();
+            worldItem.Initialize(def, drop.Value.amount);
+            _towerInteractables.Add(obj);
+        }
+
+        Debug.Log($"tower: boss rewards spawned at arena center ({1 + bonusCount} items)");
     }
 
     private void CleanupTowerInteractables()
