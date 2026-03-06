@@ -80,6 +80,38 @@ public class TurretController
         return Tick(deltaTime, candidates, 1f);
     }
 
+    /// <summary>
+    /// Tick with full candidate data (position, health, threat) for targeting modes.
+    /// </summary>
+    public TurretFireEvent? Tick(float deltaTime, IReadOnlyList<TurretCandidate> candidates, float powerSatisfaction = 1f)
+    {
+        _fireCooldown = Math.Max(0f, _fireCooldown - deltaTime);
+
+        SelectTargetFromCandidates(candidates);
+
+        if (!HasTarget)
+            return null;
+
+        if (powerSatisfaction < _def.powerThreshold)
+            return null;
+
+        if (_fireCooldown > 0f)
+            return null;
+
+        if (!TryConsumeAmmo())
+            return null;
+
+        _fireCooldown = _def.fireInterval;
+
+        return new TurretFireEvent
+        {
+            targetIndex = _currentTargetIndex,
+            damage = _def.damagePerShot,
+            damageType = _def.damageType,
+            sourceId = _def.turretId
+        };
+    }
+
     private void SelectTarget(IReadOnlyList<Vector3> candidates)
     {
         _currentTargetIndex = -1;
@@ -97,6 +129,53 @@ public class TurretController
             {
                 closestDist = distSq;
                 _currentTargetIndex = i;
+            }
+        }
+    }
+
+    private void SelectTargetFromCandidates(IReadOnlyList<TurretCandidate> candidates)
+    {
+        _currentTargetIndex = -1;
+
+        if (candidates == null || candidates.Count == 0)
+            return;
+
+        float rangeSq = _def.range * _def.range;
+        float bestScore = _def.targetingMode == TargetingMode.LowestHealth ? float.MaxValue : float.MinValue;
+        if (_def.targetingMode == TargetingMode.Closest)
+            bestScore = float.MaxValue;
+
+        for (int i = 0; i < candidates.Count; i++)
+        {
+            float distSq = candidates[i].position.sqrMagnitude;
+            if (distSq > rangeSq)
+                continue;
+
+            switch (_def.targetingMode)
+            {
+                case TargetingMode.Closest:
+                    if (distSq < bestScore)
+                    {
+                        bestScore = distSq;
+                        _currentTargetIndex = i;
+                    }
+                    break;
+
+                case TargetingMode.LowestHealth:
+                    if (candidates[i].health < bestScore)
+                    {
+                        bestScore = candidates[i].health;
+                        _currentTargetIndex = i;
+                    }
+                    break;
+
+                case TargetingMode.HighestThreat:
+                    if (candidates[i].threat > bestScore)
+                    {
+                        bestScore = candidates[i].threat;
+                        _currentTargetIndex = i;
+                    }
+                    break;
             }
         }
     }

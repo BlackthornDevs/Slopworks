@@ -32,6 +32,11 @@ public class TurretDefinitionSO : ScriptableObject, IPlaceableDefinition
     /// </summary>
     public int ammoMaxStackSize = 64;
 
+    /// <summary>
+    /// How the turret picks its target: nearest, lowest HP, or highest threat score.
+    /// </summary>
+    public TargetingMode targetingMode = TargetingMode.Closest;
+
     public string PlaceableId => turretId;
     Vector2Int IPlaceableDefinition.Size => size;
 }

@@ -673,13 +673,13 @@ The CLAUDE.md says "NEVER add 'Co-Authored-By' lines to git commits. No co-autho
 
 ### TASK J-027: Turret ammo consumption and reload
 
-**Status:** Pending
+**Status:** Complete (2026-03-06, already implemented in J-013/J-014)
 **Priority:** Medium
 **Branch:** `joe/main`
 **Ownership:** `Scripts/Combat/`, `Scripts/Automation/`
 **Depends on:** J-024
 
-Turrets currently fire indefinitely. They should consume ammo from a connected storage container and stop firing when empty.
+Task was already implemented during J-013/J-014. TurretController has TryConsumeAmmo() calling AmmoStorage.TryExtract() per shot. PlaceTurret wires AmmoStorage as port owner so ConnectionResolver creates inserters for belt→turret delivery. Tests verify: ConsumesOneAmmoPerShot, StopsFiringWhenOutOfAmmo, ResumesAfterAmmoLoaded. OnGUI shows total ammo across all turrets.
 
 **Implementation:**
 1. `AutoTurret` simulation class gets an ammo slot (single `ItemSlot`) and `ConsumeAmmo()` called per shot
@@ -697,7 +697,7 @@ Turrets currently fire indefinitely. They should consume ammo from a connected s
 
 ### TASK J-028: Turret range and targeting priority
 
-**Status:** Pending
+**Status:** Complete (2026-03-06)
 **Priority:** Low
 **Branch:** `joe/main`
 **Ownership:** `Scripts/Combat/`
@@ -723,7 +723,7 @@ Turrets should have configurable range and targeting priority (closest, lowest h
 
 ### TASK J-029: Create a proper terrain for HomeBase
 
-**Status:** Pending
+**Status:** Complete (2026-03-06)
 **Priority:** High
 **Branch:** `joe/main`
 **Ownership:** `Scenes/Multiplayer/`

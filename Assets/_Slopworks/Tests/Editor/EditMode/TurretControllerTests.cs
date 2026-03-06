@@ -298,11 +298,122 @@ public class TurretControllerTests
         Assert.AreEqual("bullet", _turret.AmmoItemId);
     }
 
+    // -- targeting modes --
+
+    [Test]
+    public void ClosestMode_SelectsNearestEnemy()
+    {
+        _def.targetingMode = TargetingMode.Closest;
+        var turret = new TurretController(_def);
+        LoadAmmo(turret, 5);
+
+        var candidates = new List<TurretCandidate>
+        {
+            new TurretCandidate { position = new Vector3(15f, 0f, 0f), health = 10f, threat = 1f },
+            new TurretCandidate { position = new Vector3(5f, 0f, 0f), health = 100f, threat = 0.5f },
+            new TurretCandidate { position = new Vector3(10f, 0f, 0f), health = 50f, threat = 2f },
+        };
+
+        var result = turret.Tick(1f, candidates);
+
+        Assert.IsNotNull(result);
+        Assert.AreEqual(1, result.Value.targetIndex); // 5 units, closest
+    }
+
+    [Test]
+    public void LowestHealthMode_SelectsLowestHP()
+    {
+        _def.targetingMode = TargetingMode.LowestHealth;
+        var turret = new TurretController(_def);
+        LoadAmmo(turret, 5);
+
+        var candidates = new List<TurretCandidate>
+        {
+            new TurretCandidate { position = new Vector3(10f, 0f, 0f), health = 50f, threat = 1f },
+            new TurretCandidate { position = new Vector3(5f, 0f, 0f), health = 100f, threat = 0.5f },
+            new TurretCandidate { position = new Vector3(15f, 0f, 0f), health = 10f, threat = 2f },
+        };
+
+        var result = turret.Tick(1f, candidates);
+
+        Assert.IsNotNull(result);
+        Assert.AreEqual(2, result.Value.targetIndex); // 10 HP, lowest
+    }
+
+    [Test]
+    public void HighestThreatMode_SelectsHighestThreat()
+    {
+        _def.targetingMode = TargetingMode.HighestThreat;
+        var turret = new TurretController(_def);
+        LoadAmmo(turret, 5);
+
+        var candidates = new List<TurretCandidate>
+        {
+            new TurretCandidate { position = new Vector3(10f, 0f, 0f), health = 50f, threat = 1f },
+            new TurretCandidate { position = new Vector3(5f, 0f, 0f), health = 100f, threat = 0.5f },
+            new TurretCandidate { position = new Vector3(15f, 0f, 0f), health = 10f, threat = 3f },
+        };
+
+        var result = turret.Tick(1f, candidates);
+
+        Assert.IsNotNull(result);
+        Assert.AreEqual(2, result.Value.targetIndex); // threat 3, highest
+    }
+
+    [Test]
+    public void LowestHealthMode_StillRespectsRange()
+    {
+        _def.targetingMode = TargetingMode.LowestHealth;
+        var turret = new TurretController(_def);
+        LoadAmmo(turret, 5);
+
+        var candidates = new List<TurretCandidate>
+        {
+            new TurretCandidate { position = new Vector3(10f, 0f, 0f), health = 50f, threat = 1f },
+            new TurretCandidate { position = new Vector3(25f, 0f, 0f), health = 1f, threat = 5f }, // lowest HP but out of range
+        };
+
+        var result = turret.Tick(1f, candidates);
+
+        Assert.IsNotNull(result);
+        Assert.AreEqual(0, result.Value.targetIndex); // index 0, the only one in range
+    }
+
+    [Test]
+    public void HighestThreatMode_StillRespectsRange()
+    {
+        _def.targetingMode = TargetingMode.HighestThreat;
+        var turret = new TurretController(_def);
+        LoadAmmo(turret, 5);
+
+        var candidates = new List<TurretCandidate>
+        {
+            new TurretCandidate { position = new Vector3(10f, 0f, 0f), health = 50f, threat = 1f },
+            new TurretCandidate { position = new Vector3(25f, 0f, 0f), health = 10f, threat = 99f }, // highest threat but out of range
+        };
+
+        var result = turret.Tick(1f, candidates);
+
+        Assert.IsNotNull(result);
+        Assert.AreEqual(0, result.Value.targetIndex);
+    }
+
+    [Test]
+    public void DefaultTargetingModeIsClosest()
+    {
+        Assert.AreEqual(TargetingMode.Closest, _def.targetingMode);
+    }
+
     // -- helpers --
 
     private void LoadAmmo(int count)
     {
         _turret.AmmoStorage.TryInsertStack("bullet", count);
+    }
+
+    private void LoadAmmo(TurretController turret, int count)
+    {
+        turret.AmmoStorage.TryInsertStack("bullet", count);
     }
 
     private List<Vector3> EnemyAt(float distance)
