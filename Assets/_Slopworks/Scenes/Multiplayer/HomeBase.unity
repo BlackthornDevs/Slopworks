@@ -565,6 +565,8 @@ MonoBehaviour:
   _addedNetworkObject: {fileID: 1659165651}
   _networkObjectCache: {fileID: 0}
   _foundationPrefab: {fileID: 8845405300912603951, guid: 439264b42deb9754aab0bb5282d7c025, type: 3}
+  _wallPrefab: {fileID: 9218640769510569313, guid: 3c7af1740a258a745a15dd604a17cebe, type: 3}
+  _rampPrefab: {fileID: 8720958824011492957, guid: be1a2c68504b07a4da6a83642bad39fd, type: 3}
 --- !u!1 &1726383191
 GameObject:
   m_ObjectHideFlags: 0
