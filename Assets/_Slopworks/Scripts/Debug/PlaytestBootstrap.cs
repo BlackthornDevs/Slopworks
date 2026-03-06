@@ -29,6 +29,7 @@ public class PlaytestBootstrap
         WirePlayerCombat(ctx);
         CreateEnemyTemplate(ctx);
         CreateInteriorEnemyTemplate(ctx);
+        CreateBossEnemyTemplate(ctx);
         CreateHUD(ctx);
         _host.StartCoroutine(PreloadInventory(ctx));
         return ctx;
@@ -164,6 +165,14 @@ public class PlaytestBootstrap
         ctx.KeyFragmentDef.maxStackSize = 16;
         ctx.RuntimeSOs.Add(ctx.KeyFragmentDef);
 
+        ctx.BossBlueprintDef = ScriptableObject.CreateInstance<ItemDefinitionSO>();
+        ctx.BossBlueprintDef.itemId = PlaytestContext.BossBlueprint;
+        ctx.BossBlueprintDef.displayName = "Boss Blueprint";
+        ctx.BossBlueprintDef.category = ItemCategory.Component;
+        ctx.BossBlueprintDef.isStackable = true;
+        ctx.BossBlueprintDef.maxStackSize = 16;
+        ctx.RuntimeSOs.Add(ctx.BossBlueprintDef);
+
         ctx.SmeltRecipe = ScriptableObject.CreateInstance<RecipeSO>();
         ctx.SmeltRecipe.recipeId = PlaytestContext.SmeltIronRecipeId;
         ctx.SmeltRecipe.displayName = "Smelt Iron";
@@ -227,6 +236,23 @@ public class PlaytestBootstrap
         ctx.InteriorFaunaDef.baseBravery = 0.3f;
         ctx.RuntimeSOs.Add(ctx.InteriorFaunaDef);
 
+        ctx.BossFaunaDef = ScriptableObject.CreateInstance<FaunaDefinitionSO>();
+        ctx.BossFaunaDef.faunaId = "tower_boss";
+        ctx.BossFaunaDef.maxHealth = 300f;
+        ctx.BossFaunaDef.moveSpeed = 2.5f;
+        ctx.BossFaunaDef.attackDamage = 25f;
+        ctx.BossFaunaDef.attackRange = 3f;
+        ctx.BossFaunaDef.attackCooldown = 0.8f;
+        ctx.BossFaunaDef.sightRange = 30f;
+        ctx.BossFaunaDef.sightAngle = 120f;
+        ctx.BossFaunaDef.hearingRange = 15f;
+        ctx.BossFaunaDef.attackDamageType = DamageType.Kinetic;
+        ctx.BossFaunaDef.alertRange = 30f;
+        ctx.BossFaunaDef.strafeSpeed = 2f;
+        ctx.BossFaunaDef.strafeRadius = 4f;
+        ctx.BossFaunaDef.baseBravery = 1.0f;
+        ctx.RuntimeSOs.Add(ctx.BossFaunaDef);
+
         ctx.EnemyDiedEvent = ScriptableObject.CreateInstance<GameEventSO>();
         ctx.RuntimeSOs.Add(ctx.EnemyDiedEvent);
     }
@@ -242,7 +268,7 @@ public class PlaytestBootstrap
         itemsField?.SetValue(itemRegistry, new[] {
             ctx.IronOreDef, ctx.IronIngotDef, ctx.IronScrapDef, ctx.TurretAmmoDef,
             ctx.PowerCellDef, ctx.SignalDecoderDef, ctx.ReinforcedPlatingDef,
-            ctx.KeyFragmentDef
+            ctx.KeyFragmentDef, ctx.BossBlueprintDef
         });
 
         var recipeRegistry = registryObj.AddComponent<RecipeRegistry>();
@@ -494,6 +520,40 @@ public class PlaytestBootstrap
         ctx.InteriorEnemyTemplate.AddComponent<EnemyKnockback>();
 
         Debug.Log("playtest: interior enemy template created (inactive, green stalker)");
+    }
+
+    private void CreateBossEnemyTemplate(PlaytestContext ctx)
+    {
+        var flags = BindingFlags.NonPublic | BindingFlags.Instance;
+
+        ctx.BossEnemyTemplate = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+        ctx.BossEnemyTemplate.name = "BossEnemyTemplate";
+        ctx.BossEnemyTemplate.layer = PhysicsLayers.Fauna;
+        ctx.BossEnemyTemplate.transform.localScale = new Vector3(2.5f, 2.5f, 2.5f);
+        PlaytestToolController.SetColor(ctx.BossEnemyTemplate, new Color(0.5f, 0.1f, 0.6f));
+
+        ctx.BossEnemyTemplate.SetActive(false);
+
+        var rb = ctx.BossEnemyTemplate.AddComponent<Rigidbody>();
+        rb.freezeRotation = true;
+
+        var agent = ctx.BossEnemyTemplate.AddComponent<UnityEngine.AI.NavMeshAgent>();
+        agent.speed = ctx.BossFaunaDef.moveSpeed;
+        agent.stoppingDistance = ctx.BossFaunaDef.attackRange * 0.8f;
+        agent.radius = 1.0f;
+        agent.height = 4.0f;
+
+        var health = ctx.BossEnemyTemplate.AddComponent<HealthBehaviour>();
+        typeof(HealthBehaviour).GetField("_maxHealth", flags)?.SetValue(health, ctx.BossFaunaDef.maxHealth);
+
+        var controller = ctx.BossEnemyTemplate.AddComponent<FaunaController>();
+        typeof(FaunaController).GetField("_def", flags)?.SetValue(controller, ctx.BossFaunaDef);
+        typeof(FaunaController).GetField("_onDeathEvent", flags)?.SetValue(controller, ctx.EnemyDiedEvent);
+
+        ctx.BossEnemyTemplate.AddComponent<EnemyHitFlash>();
+        ctx.BossEnemyTemplate.AddComponent<EnemyKnockback>();
+
+        Debug.Log("playtest: boss enemy template created (inactive, purple, 2.5x scale)");
     }
 
     private void CreateHUD(PlaytestContext ctx)
