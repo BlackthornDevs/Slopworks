@@ -32,4 +32,13 @@ Format:
 
 ## Open
 
-(none)
+## C-010: Redefine Joe's task scope to focus on art/world-building
+
+**Found by:** joe
+**Date:** 2026-03-06
+**Issue:** Joe's task list (tasks-joe.md) has been mostly C# code tasks (turret simulation, tower data model, bug fixes). Joe's actual strength and intended role is maps, terrain, textures, asset sourcing, lore/story, and visual polish. Kevin has been handling all mechanics, multiplayer, and systems code anyway -- when Joe's code tasks got blocked, Kevin completed them himself (J-018 through J-021).
+**Current state:** All Joe code tasks are complete. No pending tasks.
+**Options:**
+1. Redefine Joe's task scope: Joe focuses on terrain/levels, sourcing and integrating free asset packs, lore/story writing, visual polish, UI art. Kevin continues mechanics, multiplayer, simulation. Code tasks only go to Joe if they're directly related to his visual/world work (e.g., terrain generator scripts).
+2. Keep mixed scope: Kevin assigns whatever's needed, could be code or art.
+**Recommendation:** Option 1. Joe already built the terrain generator and PlaytestEnvironment. His next natural tasks are: finding post-apocalyptic asset packs, building tower floor layouts, creating overworld terrain, writing the game's backstory and lore. These don't require deep systems knowledge and avoid the dependency bottleneck where Joe's code tasks get blocked on Kevin's deliverables.
