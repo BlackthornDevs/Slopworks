@@ -6,9 +6,26 @@ using System.Collections.Generic;
 /// <summary>
 /// Dresses the HomeBaseTerrain scene with PBR textures, props, terrain features, and skybox.
 /// Run via Slopworks > Dress HomeBase Scenery. Idempotent — clears previous scenery on re-run.
+/// Auto-dresses when the scene is opened and HomeBaseScenery is missing.
 /// </summary>
+[InitializeOnLoad]
 public static class HomeBaseSceneryDresser
 {
+    static HomeBaseSceneryDresser()
+    {
+        EditorSceneManager.sceneOpened += OnSceneOpened;
+    }
+
+    private static void OnSceneOpened(UnityEngine.SceneManagement.Scene scene, OpenSceneMode mode)
+    {
+        if (!scene.name.Contains("HomeBaseTerrain")) return;
+        if (GameObject.Find("HomeBaseScenery") != null) return;
+        if (Terrain.activeTerrain == null) return;
+
+        Debug.Log("HomeBaseScenery missing — auto-dressing terrain");
+        Dress();
+    }
+
     private const int Seed = 42;
     private const float TerrainWidth = 1200f;
     private const float TerrainHeight = 220f;
@@ -257,8 +274,12 @@ public static class HomeBaseSceneryDresser
         PaintTerrainGrass(td, rng);
         SetupAmbientParticles();
 
+        // spawn terrain explorer if not already present
+        if (Object.FindAnyObjectByType<TerrainExplorer>() == null)
+            SpawnTerrainExplorer.Spawn();
+
         EditorSceneManager.MarkSceneDirty(EditorSceneManager.GetActiveScene());
-        Debug.Log("homebase scenery dressed — save the scene to persist");
+        Debug.Log("homebase scenery dressed — hit Play to walk around");
     }
 
     // === TEXTURE SYSTEM ===
@@ -1535,18 +1556,14 @@ public static class HomeBaseSceneryDresser
             y += terrainPos.y;
 
             var prop = IndustrialProps[rng.Next(IndustrialProps.Length)];
-            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(prop.Path);
-            if (prefab == null) continue;
-
-            var instance = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
-            float scale = prop.MinScale + (float)rng.NextDouble() * (prop.MaxScale - prop.MinScale);
+            var instance = InstantiateProp(prop, rng);
+            if (instance == null) continue;
 
             float tiltX = (float)(rng.NextDouble() - 0.5) * 15f;
             float tiltZ = (float)(rng.NextDouble() - 0.5) * 15f;
 
             instance.transform.position = new Vector3(wx, y, wz);
             instance.transform.rotation = Quaternion.Euler(tiltX, (float)rng.NextDouble() * 360f, tiltZ);
-            instance.transform.localScale = Vector3.one * scale;
             instance.transform.SetParent(parent);
             instance.isStatic = true;
 
@@ -2493,6 +2510,32 @@ public static class HomeBaseSceneryDresser
         return y + terrainPos.y;
     }
 
+    private static Material _survivalMat;
+    private static Material _conveyorMat;
+    private static Material _towerDefenseMat;
+    private static Material _blasterMat;
+
+    private static void EnsureKenneyMaterials()
+    {
+        if (_survivalMat == null)
+            _survivalMat = AssetDatabase.LoadAssetAtPath<Material>("Assets/_Slopworks/Materials/Kenney/Kenney_Survival.mat");
+        if (_conveyorMat == null)
+            _conveyorMat = AssetDatabase.LoadAssetAtPath<Material>("Assets/_Slopworks/Materials/Kenney/Kenney_Conveyor.mat");
+        if (_towerDefenseMat == null)
+            _towerDefenseMat = AssetDatabase.LoadAssetAtPath<Material>("Assets/_Slopworks/Materials/Kenney/Kenney_TowerDefense.mat");
+        if (_blasterMat == null)
+            _blasterMat = AssetDatabase.LoadAssetAtPath<Material>("Assets/_Slopworks/Materials/Kenney/Kenney_Blaster.mat");
+    }
+
+    private static Material GetKenneyMaterial(string assetPath)
+    {
+        if (assetPath.Contains("survival-kit")) return _survivalMat;
+        if (assetPath.Contains("conveyor-kit")) return _conveyorMat;
+        if (assetPath.Contains("tower-defense-kit")) return _towerDefenseMat;
+        if (assetPath.Contains("blaster-kit")) return _blasterMat;
+        return _survivalMat;
+    }
+
     private static GameObject InstantiateProp(PropDef prop, System.Random rng)
     {
         var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(prop.Path);
@@ -2504,6 +2547,20 @@ public static class HomeBaseSceneryDresser
 
         if (prop.AddCollider && instance.GetComponentInChildren<Collider>() == null)
             instance.AddComponent<MeshCollider>();
+
+        // assign URP-compatible Kenney material
+        EnsureKenneyMaterials();
+        var mat = GetKenneyMaterial(prop.Path);
+        if (mat != null)
+        {
+            foreach (var renderer in instance.GetComponentsInChildren<Renderer>())
+            {
+                var mats = renderer.sharedMaterials;
+                for (int i = 0; i < mats.Length; i++)
+                    mats[i] = mat;
+                renderer.sharedMaterials = mats;
+            }
+        }
 
         return instance;
     }

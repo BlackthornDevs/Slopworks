@@ -39,7 +39,7 @@ public class TerrainExplorer : MonoBehaviour
         camGo.transform.localRotation = Quaternion.identity;
         var cam = camGo.AddComponent<Camera>();
         cam.nearClipPlane = 0.1f;
-        cam.farClipPlane = 500f;
+        cam.farClipPlane = 1500f;
         cam.fieldOfView = 70f;
         camGo.AddComponent<AudioListener>();
         _camTransform = camGo.transform;
