@@ -68,11 +68,9 @@ import * as THREE from 'three';
     const grainCtx = grainCanvas.getContext('2d');
 
     let grainIntensity = 0.08;
+    const grainImageData = grainCtx.createImageData(grainCanvas.width, grainCanvas.height);
     function updateGrain() {
-        const w = grainCanvas.width;
-        const h = grainCanvas.height;
-        const imageData = grainCtx.createImageData(w, h);
-        const data = imageData.data;
+        const data = grainImageData.data;
         for (let i = 0; i < data.length; i += 4) {
             const v = Math.random() * 255;
             data[i] = v;
@@ -80,7 +78,7 @@ import * as THREE from 'three';
             data[i + 2] = v;
             data[i + 3] = 255;
         }
-        grainCtx.putImageData(imageData, 0, 0);
+        grainCtx.putImageData(grainImageData, 0, 0);
         grainCanvas.style.opacity = String(grainIntensity);
     }
 
@@ -293,7 +291,7 @@ import * as THREE from 'three';
     function animate() {
         requestAnimationFrame(animate);
 
-        const delta = clock.getDelta() * speedMultiplier;
+        const delta = Math.min(clock.getDelta(), 0.1) * speedMultiplier;
         const elapsed = clock.getElapsedTime() * speedMultiplier;
 
         // advance loop time
