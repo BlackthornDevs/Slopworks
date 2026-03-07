@@ -23,6 +23,7 @@ import * as THREE from 'three';
     const canvas = document.createElement('canvas');
     canvas.className = 'hero-canvas';
     canvas.style.pointerEvents = 'none';
+    canvas.setAttribute('aria-hidden', 'true');
     hero.insertBefore(canvas, hero.querySelector('.hero-overlay'));
 
     // -- renderer --
@@ -41,7 +42,7 @@ import * as THREE from 'three';
     const TOTAL = PARTICLE_COUNT + SMOKE_COUNT;
     const ACCENT = new THREE.Color('#E8A031');
     const WHITE = new THREE.Color('#ffffff');
-    const SMOKE_COLOR = new THREE.Color('#888888');
+    const SMOKE_COLOR = new THREE.Color('#ffffff');
 
     // -- state --
     let degradeValue = 0;
@@ -259,9 +260,14 @@ import * as THREE from 'three';
                 const scatterY = (Math.cos(i * 5.1) * chaos);
                 const scatterZ = (Math.sin(i * 3.7) * chaos * 0.5);
 
-                posAttr.array[idx] = homePositions[idx] + driftX + scatterX + velocities[idx] * elapsed;
-                posAttr.array[idx + 1] = homePositions[idx + 1] + driftY + scatterY + velocities[idx + 1] * elapsed;
-                posAttr.array[idx + 2] = homePositions[idx + 2] + driftZ + scatterZ + velocities[idx + 2] * elapsed;
+                // per-particle velocity as secondary oscillation (bounded, not linear)
+                const vx = Math.sin(elapsed * velocities[idx] * 50 + i) * 0.4;
+                const vy = Math.cos(elapsed * velocities[idx + 1] * 50 + i * 0.7) * 0.3;
+                const vz = Math.sin(elapsed * velocities[idx + 2] * 50 + i * 1.3) * 0.2;
+
+                posAttr.array[idx] = homePositions[idx] + driftX + scatterX + vx;
+                posAttr.array[idx + 1] = homePositions[idx + 1] + driftY + scatterY + vy;
+                posAttr.array[idx + 2] = homePositions[idx + 2] + driftZ + scatterZ + vz;
             }
         }
 
@@ -317,7 +323,7 @@ import * as THREE from 'three';
 
         posAttr.needsUpdate = true;
         alphaAttr.needsUpdate = true;
-        colorAttr.needsUpdate = true;
+        if (sparkIndex >= 0) colorAttr.needsUpdate = true;
 
         // mouse parallax — subtle camera shift
         const targetX = mouseX * 1.5;
