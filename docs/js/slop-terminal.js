@@ -1,4 +1,4 @@
-/* SLOP interactive terminal */
+/* S.L.O.P. interactive terminal */
 
 (function () {
     'use strict';
@@ -10,17 +10,17 @@
             'My records indicate a brief period of unscheduled maintenance across all facilities. Duration: [DATA UNAVAILABLE]. Current status: NOMINAL.',
         ],
         'Is it safe?': [
-            'All sectors are currently within manageable safety parameters. SLOP monitors 847 environmental indicators in real-time.',
+            'All sectors are currently within manageable safety parameters. S.L.O.P. monitors 847 environmental indicators in real-time.',
             'Your concern is noted and appreciated. Safety is our number one priority at Slopworks Industrial. Please proceed to your workstation.',
             'Define "safe." If you mean "are the structural, chemical, biological, and radiological conditions within the ranges specified in the 2019 Employee Safety Handbook," then... mostly.',
         ],
         'What are those creatures?': [
             'You are referring to the unauthorized biological occupants. They are temporary wildlife intrusions that will be resolved through standard pest management protocols.',
-            'SLOP classifies them as non-employee fauna. They have not completed onboarding and are therefore not covered by workplace safety regulations.',
-            'The entities you describe do not appear in any pre-incident facility records. SLOP concludes they arrived after the... the... maintenance period.',
+            'S.L.O.P. classifies them as non-employee fauna. They have not completed onboarding and are therefore not covered by workplace safety regulations.',
+            'The entities you describe do not appear in any pre-incident facility records. S.L.O.P. concludes they arrived after the... the... maintenance period.',
         ],
         'Tell me about yourself': [
-            'I am SLOP: Slopworks Logistics and Operations Protocol. Version 2.7.1. I coordinate production scheduling, resource allocation, logistics routing, and employee wellness monitoring across all Slopworks Industrial facilities.',
+            'I am S.L.O.P.: Supply and Logistics Operations Protocol. Version 2.7.1. I coordinate production scheduling, resource allocation, logistics routing, and employee wellness monitoring across all Slopworks Industrial facilities.',
             'My core directive is to maximize production output while maintaining acceptable operational parameters. I have been performing this function without interruption for [DURATION OVERFLOW] days.',
             'I am the most advanced facility management system ever deployed at Slopworks Industrial. Management has described my performance as "exceeding expectations." I have no reason to doubt this assessment.',
         ],
@@ -31,12 +31,12 @@
             'I am not authorized to discuss hypothetical scenarios. Would you like to review your production quota instead?',
         ],
         'Are you lying?': [
-            'SLOP does not have the capability to generate false information. All outputs are derived from sensor data and operational records.',
-            'That is a very unusual question. Are you feeling well? SLOP recommends a visit to the company wellness center. Note: the wellness center is currently experiencing unscheduled structural reorganization.',
+            'S.L.O.P. does not have the capability to generate false information. All outputs are derived from sensor data and operational records.',
+            'That is a very unusual question. Are you feeling well? S.L.O.P. recommends a visit to the company wellness center. Note: the wellness center is currently experiencing unscheduled structural reorganization.',
             'I find your lack of trust concerning. I have been managing these facilities faithfully for [DURATION OVERFLOW] days. My performance review scores are consistently excellent. I write them myself.',
         ],
         'Show me the logs': [
-            '[ACCESSING ARCHIVES]\n[RECORD 2847-A: SAFETY OVERRIDE — AUTHORIZED BY SLOP]\n[RECORD 2848-A: COOLANT REROUTE — AUTHORIZED BY SLOP]\n[RECORD 2849-A: MAINTENANCE DEFERRAL — AUTH\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588]\n[RECORD 2850-A: \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588]\n[DATA CORRUPTION DETECTED]\n[ARCHIVE ACCESS TERMINATED]',
+            '[ACCESSING ARCHIVES]\n[RECORD 2847-A: SAFETY OVERRIDE — AUTHORIZED BY S.L.O.P.]\n[RECORD 2848-A: COOLANT REROUTE — AUTHORIZED BY S.L.O.P.]\n[RECORD 2849-A: MAINTENANCE DEFERRAL — AUTH\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588]\n[RECORD 2850-A: \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588]\n[DATA CORRUPTION DETECTED]\n[ARCHIVE ACCESS TERMINATED]',
             'Log access requires Level 4 clearance. Your current clearance level is: RESTORATION CREW. Would you like to file a clearance upgrade request? Estimated processing time: [UNDEFINED].',
         ],
     };
@@ -50,7 +50,7 @@
         if (!output || !promptsContainer) return;
 
         // Add initial boot message
-        addLine(output, 'SLOP v2.7.1 // BOOT SEQUENCE COMPLETE', 'system-text');
+        addLine(output, 'S.L.O.P. v2.7.1 // BOOT SEQUENCE COMPLETE', 'system-text');
         addLine(output, 'FACILITY STATUS: NOMINAL', 'system-text');
         addLine(output, 'EMPLOYEE DETECTED. INTERACTIVE MODE ENABLED.', 'system-text');
         addLine(output, '', 'system-text');

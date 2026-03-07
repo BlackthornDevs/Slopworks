@@ -194,9 +194,21 @@ import * as THREE from 'three';
 
     particleGeo.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
 
+    // circular particle texture (default PointsMaterial renders squares)
+    const particleCanvas = document.createElement('canvas');
+    particleCanvas.width = 32;
+    particleCanvas.height = 32;
+    const pCtx = particleCanvas.getContext('2d');
+    pCtx.beginPath();
+    pCtx.arc(16, 16, 14, 0, Math.PI * 2);
+    pCtx.fillStyle = '#ffffff';
+    pCtx.fill();
+    const particleTexture = new THREE.CanvasTexture(particleCanvas);
+
     const particleMat = new THREE.PointsMaterial({
         color: COLORS.particle,
         size: 0.15,
+        map: particleTexture,
         transparent: true,
         opacity: 0.7,
         depthWrite: false,

@@ -154,7 +154,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
         screenCtx.fillStyle = COL_AMBER;
         screenCtx.font = 'bold 22px monospace';
         screenCtx.textAlign = 'center';
-        screenCtx.fillText('SLOP v2.7.1', w / 2, 36);
+        screenCtx.fillText('S.L.O.P. v2.7.1', w / 2, 36);
 
         screenCtx.font = '15px monospace';
         screenCtx.fillText('ALL SYSTEMS: NOMINAL', w / 2, 60);
