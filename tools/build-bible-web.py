@@ -56,11 +56,11 @@ def img_path(depth, entry_id):
 
 def bible_root(depth):
     """Return relative path from current page to docs/bible/."""
-    if depth == 2:
+    if depth == 1:
         return ""
-    elif depth == 3:
+    elif depth == 2:
         return "../"
-    return "../" * (depth - 2)
+    return "../" * (depth - 1)
 
 
 def entry_url(depth, entry_id):
@@ -572,8 +572,8 @@ def build_entry_card(entry, depth):
 
 
 def build_main_index(entries):
-    """Build the main bible index page at docs/bible/index.html (depth=2)."""
-    depth = 2
+    """Build the main bible index page at docs/bible/index.html (depth=1)."""
+    depth = 1
     count = len(entries)
 
     # Category cards
@@ -628,8 +628,8 @@ def build_main_index(entries):
 
 
 def build_category_page(category, entries):
-    """Build a category page at docs/bible/{category}/index.html (depth=3)."""
-    depth = 3
+    """Build a category page at docs/bible/{category}/index.html (depth=2)."""
+    depth = 2
     cat_name, cat_desc = CATEGORIES.get(category, (category, ""))
 
     # Group by subcategory
@@ -678,8 +678,8 @@ def build_category_page(category, entries):
 
 
 def build_entry_page(entry, all_ids):
-    """Build an entry detail page at docs/bible/{entry_id}/index.html (depth=3)."""
-    depth = 3
+    """Build an entry detail page at docs/bible/{entry_id}/index.html (depth=2)."""
+    depth = 2
     eid = entry["_id"]
     name = entry_display_name(entry)
     category = entry["_category"]
