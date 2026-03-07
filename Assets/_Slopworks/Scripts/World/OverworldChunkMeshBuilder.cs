@@ -51,12 +51,12 @@ public static class OverworldChunkMeshBuilder
                     vi++;
                 }
 
-                // 6 triangles: center to each edge
+                // 6 triangles: center to each edge (CCW winding for upward normals)
                 for (int c = 0; c < 6; c++)
                 {
                     triangles[ti++] = centerIdx;
-                    triangles[ti++] = centerIdx + 1 + c;
                     triangles[ti++] = centerIdx + 1 + (c + 1) % 6;
+                    triangles[ti++] = centerIdx + 1 + c;
                 }
             }
         }

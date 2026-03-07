@@ -173,18 +173,18 @@ public static class OverworldTerrainGenerator
         if (existing != null)
             return existing;
 
-        var shader = Shader.Find("Universal Render Pipeline/Simple Lit");
+        var shader = Shader.Find("Slopworks/VertexColorLit");
         if (shader == null)
-            shader = Shader.Find("Universal Render Pipeline/Lit");
+        {
+            Debug.LogWarning("Slopworks/VertexColorLit shader not found, falling back to Simple Lit");
+            shader = Shader.Find("Universal Render Pipeline/Simple Lit");
+        }
         if (shader == null)
             shader = Shader.Find("Standard");
 
         var mat = new Material(shader);
         mat.name = "OverworldHex";
-        mat.SetColor("_BaseColor", Color.white);
-
-        // Enable vertex color — Simple Lit doesn't have a keyword for this,
-        // but white base color * vertex color = vertex color
+        mat.SetFloat("_Smoothness", 0.3f);
         mat.enableInstancing = true;
 
         // Ensure folders exist
