@@ -4,38 +4,50 @@ Updated by Joe's Claude at the end of each session.
 
 ---
 
-## Last updated: 2026-03-06
+## Last updated: 2026-03-07
 
 ### What was completed
 
-- **Overworld terrain design**: Brainstormed and wrote `docs/plans/2026-03-06-overworld-terrain-design.md` (approved). 128x128 hex-grid isometric terrain with 6 biomes from temperature/moisture noise.
-- **Overworld terrain implementation plan**: Wrote `docs/plans/2026-03-06-overworld-terrain-plan.md` — 6 tasks, 20 unit tests.
-- **HexGridUtility** (`4900de3`): Pure C# axial hex math — HexToWorld, HexCorners, Neighbors, HexDistance. 10 EditMode tests.
-- **OverworldBiome** (`a52303a`): Biome enum (6 types), temperature/moisture lookup table, biome-to-color mapping. 7 EditMode tests.
-- **OverworldChunkMeshBuilder** (`e480ba2`): Builds combined hex mesh per 8x8 chunk with vertex colors from biome type. 5 EditMode tests.
-- **Asset reorganization** (`ffdab37`): Moved 12 terrain data assets (heightmap, layers, textures) from `Scenes/Multiplayer/` to `Art/Terrain/HomeBase/`. Updated HomeBaseTerrainGenerator and HomeBaseSceneryDresser paths. Created `Art/Terrain/Overworld/` for future use.
-- **OverworldTerrainGenerator** (`87937ab`): Editor script generating full overworld scene — 256 chunks, 16384 hexes, 1007 Kenney decorations, 11 building node markers, isometric camera, post-apocalyptic lighting and fog. Scene saved to `Scenes/Overworld/Overworld_Terrain.unity`.
+- **HomeBase terrain phase 2 — factory yard settlement**: Rewrote `PlaceRoadBuildings` in `HomeBaseSceneryDresser.cs` to use complete pre-built Kenney survival-kit structure meshes (`structure.fbx`, `structure-metal.fbx`) at scales 6-8 instead of individual conveyor-kit wall panels. The factory yard at (100, 15) now has 101 pieces across 7 zones:
+  - Building A: Main warehouse (2x `structure.fbx` scale 8, side-by-side with roofs + floors)
+  - Building B: Metal workshop (`structure-metal.fbx` scale 7 with roof + floor)
+  - Building C: Foreman's office (`structure.fbx` scale 6 with porch + signpost)
+  - Building D: Storage sheds (2x `structure-metal.fbx` scales 5-6, one with canvas roof)
+  - Building E: Ruined cabin (`structure.fbx` with canvas tarp instead of roof, `floor-hole.fbx`)
+  - Guard tower (4-piece stacked tower-defense-kit tower + scaffolding)
+  - Loading bay (4 conveyor segments + robot arm + boxes)
+  - Break camp (tents, bedrolls, campfire, chest)
+  - Fuel dump (6 barrels + fortified fence)
+  - Container yard (3x2 grid of stacked crates)
+  - Full fence perimeter with gate on west side
+  - Ground props (barrels, boxes, lumber, tools, stone rubble)
+- **Fixed invisible buildings**: Added `FactoryYardPos` to `IsNearStructure()` with 45m clear radius so trees don't spawn on top of buildings.
+- **Disabled terrain grass**: `PaintTerrainGrass` now clears `detailPrototypes` and returns early — Unity's built-in terrain detail wind was causing green swaying slabs.
+- **Disabled unused settlement systems**: `PlaceSettlements`, `PlaceMerchantStructures`, `PlaceWaystations` all return early. Will re-enable one settlement at a time.
+- **Reduced industrial scatter**: `ScatterIndustrial` reduced from 300 to 100 iterations.
 
 ### Shared file changes (CRITICAL)
 
-- `HomeBaseTerrainGenerator.cs` — path constants updated (Scenes/Multiplayer/ -> Art/Terrain/HomeBase/)
-- `HomeBaseSceneryDresser.cs` — terrain layer asset path updated (same move)
-- 12 terrain data assets moved from `Scenes/Multiplayer/` to `Art/Terrain/HomeBase/` (GUID references preserved via meta file co-location)
+- `HomeBaseSceneryDresser.cs` — major changes to `PlaceRoadBuildings`, `PaintTerrainGrass`, `IsNearStructure`; disabled `PlaceSettlements`/`PlaceMerchantStructures`/`PlaceWaystations`
+- `HomeBaseTerrain.unity` — scene changes from dresser re-run
+- `HomeBaseTerrainData.asset` — terrain data changes (detail prototypes cleared)
+- `Kenney_TowerDefense.mat` — material modified (dresser assigns URP materials)
 - No asmdef, ProjectSettings, Core/, or package changes.
 
 ### What needs attention
 
-- **Vertex color rendering**: URP Simple Lit shader with white base color acts as vertex color passthrough. If Kevin switches to a custom shader, the overworld hex material (`Materials/Environment/OverworldHex.mat`) needs `_VERTEX_COLOR` support.
-- **Asset path change**: If Kevin's code references terrain assets at old paths (`Scenes/Multiplayer/TerrainLayer_*.asset`), those paths no longer work. GUIDs still resolve correctly.
+- **Buildings not yet playtested by user** — the factory yard was just generated. User needs to walk through it and give feedback on scale/layout.
+- **Vertex color rendering**: URP Simple Lit shader with white base color acts as vertex color passthrough. If Kevin switches to a custom shader, Kenney materials need updating.
+- **Two audio listeners**: FlyCamera + TerrainExplorer both add AudioListener. Need to deduplicate.
 - C-010 still open (Joe scope redefinition to art/world-building).
 
 ### Next task
 
-Continue overworld polish or pick up next task from Kevin. Art/world-building backlog:
-- Visual polish on overworld hex terrain (camera controls, terrain walker)
-- Source animated enemy models (Quaternius itch.io)
-- Write SLOP dialogue lines and environmental storytelling content
-- Tower floor prefab visual interiors
+- **Playtest factory yard** — user walks through, feedback on building scale and layout
+- **Next settlement**: Pick one more settlement to build (river hamlet, farmstead, or watchtower)
+- **Re-enable terrain grass** with better detail sizes (no more green slabs)
+- **Re-enable WindSway** with optimization
+- Art/world-building backlog remains (overworld polish, enemy models, SLOP dialogue)
 
 ### Blockers
 
@@ -43,17 +55,13 @@ None
 
 ### Test status
 
-- 919/919 EditMode tests passing, 0 failing, 0 skipped
-- 0 compilation errors, 5 pre-existing warnings (deprecated APIs, unused field)
-- New test files added:
-  - `Tests/Editor/EditMode/HexGridUtilityTests.cs` (10 tests)
-  - `Tests/Editor/EditMode/OverworldBiomeTests.cs` (7 tests)
-  - `Tests/Editor/EditMode/OverworldChunkMeshBuilderTests.cs` (5 tests)
+- 0 compilation errors, 13 warnings (deprecated APIs, unreachable code from disabled methods, unused field)
+- EditMode tests not re-run this session (no simulation code changed, only editor dresser)
 
 ### Key context
 
-- **Overworld terrain generator**: `Slopworks > Generate Overworld Terrain` menu item. Deterministic (Seed=7). Idempotent — re-run overwrites scene.
-- **New file structure**: `Art/Terrain/HomeBase/` for HomeBase terrain data, `Art/Terrain/Overworld/` reserved for overworld data. `Scenes/Overworld/` for overworld scene.
-- **Hex grid**: 128x128 pointy-top hexes, 1m radius (2m flat-to-flat), 8x8 chunks. Axial (q,r) coordinates. HexGridUtility is reusable for any hex-based system.
-- **Biome system**: 6 biomes from 2x3 temperature/moisture grid. Ruins probability increases with distance from center. Biome colors applied as vertex colors on combined chunk meshes.
-- **Building node markers**: 11 sample positions (HomeBase, Smelter, Warehouse, ChemPlant, PowerStation, 4 Outposts, 2 Towers). Primitive shapes with colored materials. These are placeholder positions for the OverworldMap node system.
+- **Dresser menu**: `Slopworks > Dress HomeBase Scenery` — idempotent, clears and rebuilds
+- **Factory yard position**: world (100, ~19, 15) — ~100m east of terrain center. Walk east from explorer spawn.
+- **Settlement approach**: One at a time. Factory yard is first. Others disabled via `return;` at method top.
+- **Building approach**: Use complete `structure.fbx` / `structure-metal.fbx` meshes at scale 6-8, NOT individual wall panels. Each mesh is a pre-built room with walls + doorway.
+- **PlaceKitPiece helper**: Places a single Kenney mesh at exact world position with fixed scale (min=max). Handles material assignment via `InstantiateProp` + `EnsureKenneyMaterials`.
