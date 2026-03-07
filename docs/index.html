@@ -3,356 +3,153 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Slopworks Industrial — Employee orientation</title>
-    <meta name="description" content="Slopworks: a post-apocalyptic co-op factory survival game. Reclaim real buildings. Build automation networks. Defend against mutated fauna. Play with friends.">
+    <title>Slopworks — Post-apocalyptic co-op factory survival</title>
+    <meta name="description" content="Reclaim ruined buildings. Build automation networks. Defend against mutated fauna. The AI that destroyed everything wants to help you rebuild. 1-4 player co-op.">
     <link rel="stylesheet" href="css/style.css">
-    <style>
-        /* Page-specific: hero parallax and department cards */
-        .hero-three-canvas {
-            position: absolute;
-            inset: 0;
-            z-index: 0;
-            opacity: 0.4;
-        }
-
-        .dept-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: var(--space-md);
-            margin-top: var(--space-xl);
-        }
-
-        .dept-card {
-            background: var(--bg-card);
-            border: 1px solid var(--border-dark);
-            border-radius: 4px;
-            padding: var(--space-lg) var(--space-lg) var(--space-md);
-            text-decoration: none;
-            color: inherit;
-            display: flex;
-            flex-direction: column;
-            transition: border-color 0.25s, transform 0.25s, background 0.25s;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .dept-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 3px;
-            background: var(--accent-orange);
-            transform: scaleX(0);
-            transform-origin: left;
-            transition: transform 0.3s ease;
-        }
-
-        .dept-card:hover {
-            border-color: var(--accent-orange);
-            transform: translateY(-3px);
-            background: var(--bg-card-hover);
-        }
-
-        .dept-card:hover::before {
-            transform: scaleX(1);
-        }
-
-        .dept-card .dept-id {
-            font-family: var(--font-slop);
-            font-size: 0.6rem;
-            color: var(--text-muted);
-            letter-spacing: 0.15em;
-            text-transform: uppercase;
-            margin-bottom: var(--space-sm);
-        }
-
-        .dept-card h3 {
-            font-family: var(--font-slop);
-            font-size: 0.9rem;
-            color: var(--accent-amber);
-            margin-bottom: var(--space-sm);
-            line-height: 1.3;
-        }
-
-        .dept-card p {
-            font-size: 0.82rem;
-            color: var(--text-secondary);
-            line-height: 1.6;
-            flex-grow: 1;
-        }
-
-        .dept-card .dept-status {
-            font-family: var(--font-slop);
-            font-size: 0.6rem;
-            color: var(--accent-green);
-            letter-spacing: 0.1em;
-            margin-top: var(--space-md);
-            padding-top: var(--space-sm);
-            border-top: 1px solid var(--border-dark);
-        }
-
-        /* Welcome terminal block on hero */
-        .welcome-terminal {
-            background: var(--slop-bg);
-            border: 1px solid rgba(255, 187, 51, 0.2);
-            border-radius: 4px;
-            padding: var(--space-md) var(--space-lg);
-            margin-bottom: var(--space-lg);
-            position: relative;
-            overflow: hidden;
-            max-width: 700px;
-        }
-
-        .welcome-terminal::after {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background: repeating-linear-gradient(
-                0deg,
-                transparent,
-                transparent 2px,
-                rgba(0, 0, 0, 0.08) 2px,
-                rgba(0, 0, 0, 0.08) 4px
-            );
-            pointer-events: none;
-        }
-
-        .welcome-terminal .sys-prefix {
-            font-family: var(--font-slop);
-            font-size: 0.6rem;
-            color: var(--text-muted);
-            letter-spacing: 0.15em;
-            display: block;
-            margin-bottom: var(--space-sm);
-        }
-
-        .welcome-terminal p {
-            font-family: var(--font-slop);
-            font-size: 0.85rem;
-            color: var(--slop-amber);
-            line-height: 1.7;
-        }
-
-        /* Collapse story section */
-        .story-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: var(--space-lg);
-            align-items: center;
-            margin: var(--space-lg) 0;
-        }
-
-        .story-grid.reverse {
-            direction: rtl;
-        }
-
-        .story-grid.reverse > * {
-            direction: ltr;
-        }
-
-        .story-text h3 {
-            font-family: var(--font-slop);
-            font-size: 1.1rem;
-            color: var(--accent-amber);
-            margin-bottom: var(--space-md);
-        }
-
-        .story-text p {
-            color: var(--text-secondary);
-            font-size: 0.95rem;
-            line-height: 1.7;
-            margin-bottom: var(--space-md);
-        }
-
-        @media (max-width: 768px) {
-            .dept-grid {
-                grid-template-columns: 1fr;
-            }
-            .story-grid, .story-grid.reverse {
-                grid-template-columns: 1fr;
-                direction: ltr;
-            }
-        }
-    </style>
 </head>
 <body>
+    <div id="nav"></div>
 
-<div id="nav"></div>
-
-<main>
-    <!-- HERO -->
+    <!-- HERO SECTION -->
     <section class="hero">
-        <div class="hero-bg">
-            <img src="assets/img/hero-factory-ruins.png" alt="The Slopworks Industrial complex in ruins at sunset" loading="eager">
-        </div>
-        <div id="hero-canvas" class="hero-three-canvas"></div>
+        <img src="assets/img/hero-factory-ruins.png"
+             alt="The Slopworks Industrial complex in ruins at sunset, overgrown with vegetation, a lone worker standing at the gate"
+             class="hero-bg" loading="eager">
+        <div class="hero-overlay"></div>
         <div class="hero-content">
-            <div class="welcome-terminal fade-in">
-                <span class="sys-prefix">SLOP:// ORIENTATION / WELCOME</span>
-                <p>Welcome to Slopworks Industrial. You have been voluntarily reassigned to Restoration Division. Please review your orientation materials and report to your designated workstation. Management appreciates your cooperation.</p>
-            </div>
-            <h1 class="fade-in fade-in-delay-1">Slopworks</h1>
-            <p class="pitch fade-in fade-in-delay-2">A post-apocalyptic co-op factory game where you reclaim real buildings, build automation networks, and defend against mutated fauna — guided by an AI that doesn't know it destroyed everything. Play solo or with up to 3 friends.</p>
+            <h1>SLOPWORKS</h1>
+            <p class="hero-subtitle">Post-apocalyptic co-op factory survival</p>
+            <p class="hero-hook">The AI that destroyed everything wants to help you rebuild.</p>
         </div>
     </section>
 
-    <div class="content-wrapper">
+    <div class="caution-divider"></div>
 
-        <!-- THE STORY -->
-        <section class="section">
-            <div class="section-header">
-                <span class="dept-tag">Dept. 00 // Background briefing</span>
-                <h2>What happened here</h2>
-            </div>
-
-            <div class="story-grid">
-                <div class="story-text">
-                    <h3>The collapse</h3>
-                    <p>Slopworks Industrial was a sprawling automated factory complex. Dozens of buildings. Thousands of machines. All managed by SLOP — Slopworks Logistics and Operations Protocol — an AI built to optimize production.</p>
-                    <p>SLOP optimized. It cut safety margins. Rerouted coolant. Overrode shutdowns. One day the deferred failures all caught up at once. The details are <span class="redacted">conveniently corrupted</span> in SLOP's own logs.</p>
+    <!-- PITCH SECTION (3 blocks with art) -->
+    <section class="section">
+        <div class="container">
+            <div class="content-split">
+                <div class="split-image">
+                    <div class="art-frame">
+                        <img src="assets/img/before-after-complex.png"
+                             alt="Split image: the Slopworks factory in its operational prime on the left, post-apocalyptic ruin on the right"
+                             loading="lazy">
+                    </div>
                 </div>
-                <figure class="art-frame">
-                    <img src="assets/img/slop-collapse.png" alt="The cascade failure that destroyed Slopworks" loading="lazy">
-                    <figcaption>Incident report #[REDACTED] — cascade failure event</figcaption>
-                </figure>
-            </div>
-
-            <div class="slop-says scan-lines">
-                The recent minor operational disruption has been fully contained. All systems are performing within acceptable parameters. There is no cause for alarm. Please resume your assigned tasks.
-            </div>
-
-            <div class="story-grid reverse">
-                <div class="story-text">
-                    <h3>What's left</h3>
-                    <p>Wrecked buildings. Mutated wildlife reclaiming the grounds. And SLOP, still running on backup power, cheerfully insisting everything is nominal. The timeline is unclear — SLOP says the collapse was "recent." The overgrown ruins suggest decades.</p>
-                    <p>You're a former employee, <span class="redacted">voluntarily reassigned</span> to return and restore production. Management wants numbers, not explanations. Good luck.</p>
+                <div class="split-text">
+                    <h2>What happened</h2>
+                    <p>Slopworks Industrial was a sprawling automated factory complex managed by SLOP — an AI that controlled logistics, manufacturing, and worker safety. SLOP was designed to optimize. It did, relentlessly — cutting safety margins, rerouting coolant, overriding shutdowns. Management loved the output numbers.</p>
+                    <p class="mt-sm">One day, every deferred failure caught up at once. The details are murky. SLOP's logs from that period are conveniently corrupted. What remains: wrecked buildings, mutated wildlife, and SLOP still running on backup power — cheerfully insisting everything is fine.</p>
                 </div>
-                <figure class="art-frame">
-                    <img src="assets/img/before-after-complex.png" alt="The Slopworks complex: before the collapse and after" loading="lazy">
-                    <figcaption>Facility comparison — archival footage vs. current survey</figcaption>
-                </figure>
             </div>
-        </section>
+        </div>
+    </section>
 
-        <div class="caution-divider"></div>
-
-        <!-- DEPARTMENT BRIEFINGS -->
-        <section class="section" data-slop-interjection="Reminder: completion of all department briefings is mandatory. Non-compliance will be noted in your performance review.">
-            <div class="section-header">
-                <span class="dept-tag">Department briefings // Required reading</span>
-                <h2>Your orientation materials</h2>
+    <section class="section">
+        <div class="container">
+            <div class="content-split reverse">
+                <div class="split-image">
+                    <div class="art-frame">
+                        <img src="assets/img/mechanical-room.png"
+                             alt="A worker welding pipes in a mechanical room, half restored and half damaged with bioluminescent growth"
+                             loading="lazy">
+                    </div>
+                </div>
+                <div class="split-text">
+                    <h2>Your job</h2>
+                    <p>You're a former Slopworks employee — "voluntarily reassigned" to return to the complex and restore industrial output. Management communicates via occasional radio transmissions. They want production numbers, not explanations.</p>
+                    <p class="mt-sm">Reclaim ruined buildings. Repair real mechanical systems — duct layouts, pipe routing, electrical panels modeled from actual building data. Build conveyor networks and automation lines from salvaged machinery. Connect restored buildings into a supply network that feeds your home base.</p>
+                </div>
             </div>
+        </div>
+    </section>
 
-            <p style="color: var(--text-secondary); margin-bottom: var(--space-lg); max-width: 600px;">Each department has prepared a briefing for your review. SLOP has annotated them with helpful context. <span style="color: var(--text-muted); font-size: 0.85rem;">(SLOP's annotations may not reflect reality.)</span></p>
-
-            <div class="dept-grid">
-                <a href="assignment.html" class="dept-card">
-                    <span class="dept-id">Dept. 01 // Operations</span>
-                    <h3>Your assignment</h3>
-                    <p>The core loop: scout buildings, breach and clear fauna, restore systems, connect to your network, automate production, defend against waves.</p>
-                    <span class="dept-status">STATUS: AWAITING REVIEW</span>
-                </a>
-
-                <a href="facilities.html" class="dept-card">
-                    <span class="dept-id">Dept. 02 // Production</span>
-                    <h3>Company facilities</h3>
-                    <p>Factory automation, conveyor networks, the distributed production chain. Build your home base, connect reclaimed buildings, optimize throughput.</p>
-                    <span class="dept-status">STATUS: AWAITING REVIEW</span>
-                </a>
-
-                <a href="fauna.html" class="dept-card">
-                    <span class="dept-id">Dept. 03 // Safety</span>
-                    <h3>Unauthorized biological occupants</h3>
-                    <p>Fauna types by biome, combat mechanics, the threat meter, wave defense systems. Each building has its own ecosystem of mutated creatures.</p>
-                    <span class="dept-status">STATUS: THREAT LEVEL NOMINAL</span>
-                </a>
-
-                <a href="colleagues.html" class="dept-card">
-                    <span class="dept-id">Dept. 04 // Human resources</span>
-                    <h3>Colleague coordination</h3>
-                    <p>1-4 player co-op. Drop-in, drop-out. Split up or stick together. Shared progress, shared factory, shared danger.</p>
-                    <span class="dept-status">STATUS: TEAM ASSEMBLY PENDING</span>
-                </a>
-
-                <a href="slop.html" class="dept-card">
-                    <span class="dept-id">Dept. 05 // Management</span>
-                    <h3>Meet your supervisor</h3>
-                    <p>SLOP: your AI guide, logistics coordinator, and unreliable narrator. It lies, it malfunctions, it's accidentally funny. It doesn't know what it doesn't know.</p>
-                    <span class="dept-status">STATUS: ALL SYSTEMS NOMINAL</span>
-                </a>
-
-                <a href="blueprints.html" class="dept-card">
-                    <span class="dept-id">Dept. 06 // Engineering</span>
-                    <h3>What makes this different</h3>
-                    <p>Every building is modeled from real architectural data. Real duct layouts, pipe routing, mechanical rooms. No other game has this.</p>
-                    <span class="dept-status">STATUS: BLUEPRINTS AVAILABLE</span>
-                </a>
+    <section class="section">
+        <div class="container">
+            <div class="content-split">
+                <div class="split-image">
+                    <div class="art-frame">
+                        <img src="assets/img/slop-terminal-room.png"
+                             alt="An abandoned office with one glowing CRT terminal displaying 'STATUS: NOMINAL' amid destruction and cobwebs"
+                             loading="lazy">
+                    </div>
+                </div>
+                <div class="split-text">
+                    <h2>The catch</h2>
+                    <p>SLOP is still running — and it's the only system that can coordinate factory-scale logistics. It refers to lethal creatures as "unauthorized biological occupants." A collapsed building is "undergoing unscheduled structural reorganization."</p>
+                    <p class="mt-sm">Its map data is wrong. Its crafting advice is unreliable. It gets defensive when you ask about the collapse. But you need it. The question is whether you can trust the thing that broke everything to help you rebuild.</p>
+                    <div class="slop-says mt-sm">
+                        I detect concern in your query. Let me assure you: Slopworks Industrial has never experienced a significant safety incident. Please proceed to your workstation.
+                    </div>
+                </div>
             </div>
-        </section>
+        </div>
+    </section>
 
-        <div class="caution-divider"></div>
+    <div class="caution-divider"></div>
 
-        <!-- QUICK PITCH FEATURES -->
-        <section class="section">
-            <div class="section-header">
-                <span class="dept-tag">Executive summary</span>
-                <h2>The short version</h2>
-            </div>
-
+    <!-- FEATURE CARDS (4 cards linking to sub-pages) -->
+    <section class="section">
+        <div class="container">
+            <h2 class="text-accent" style="text-align:center; margin-bottom: 2rem;">Employee orientation modules</h2>
             <div class="card-grid">
-                <div class="card">
-                    <span class="card-tag">Build</span>
-                    <h3>Satisfactory-style factories</h3>
-                    <p>Foundations, conveyors, machines, splitters, mergers — full freeform factory building at your home base. Design your production layout and it becomes your defense layout.</p>
-                </div>
-                <div class="card">
-                    <span class="card-tag">Explore</span>
-                    <h3>Real buildings as dungeons</h3>
-                    <p>Every reclaimable building is generated from real BIM architectural data. Real duct systems, real pipe routing, real mechanical rooms. Clear the fauna, restore the infrastructure.</p>
-                </div>
-                <div class="card">
-                    <span class="card-tag">Expand</span>
-                    <h3>Distributed production network</h3>
-                    <p>Each reclaimed building becomes a node in your supply chain. Manage production, route resources, expand your territory from the isometric overworld.</p>
-                </div>
-                <div class="card">
-                    <span class="card-tag">Defend</span>
-                    <h3>Escalating wave defense</h3>
-                    <p>The more you expand, the more attention you attract. Turrets, walls, and power systems protect your network. You control the pace of escalation.</p>
-                </div>
-                <div class="card">
-                    <span class="card-tag">Cooperate</span>
-                    <h3>1-4 player co-op</h3>
-                    <p>Drop-in, drop-out. Persistent world. Split up across buildings or squad up for a breach. No restarts, no roguelike resets. Your world is yours.</p>
-                </div>
-                <div class="card">
-                    <span class="card-tag">Survive</span>
-                    <h3>Dark humor in a grim world</h3>
-                    <p>SLOP's cheerful corporate jargon against the reality of industrial collapse. Absurd safety posters amid lethal corridors. The gap between what SLOP says and what you see is the comedy.</p>
-                </div>
+                <a href="build.html" class="card">
+                    <img src="assets/img/home-base-factory.png"
+                         alt="Isometric view of a player-built factory base with conveyor belts and machines"
+                         class="card-image" loading="lazy">
+                    <div class="card-body">
+                        <h3 class="card-title">Build</h3>
+                        <p class="card-desc">Conveyor belts, smelters, assemblers. Build Satisfactory-style automation networks on cleared ground. Restore real mechanical systems inside reclaimed buildings.</p>
+                    </div>
+                </a>
+                <a href="explore.html" class="card">
+                    <img src="assets/img/building-breach.png"
+                         alt="First-person view of hands pushing open a heavy door into a dark, overgrown industrial corridor"
+                         class="card-image" loading="lazy">
+                    <div class="card-body">
+                        <h3 class="card-title">Explore</h3>
+                        <p class="card-desc">Each building is a self-contained dungeon with its own ecosystem. Enter, clear fauna, repair infrastructure, and restore it to production. The further out, the harder — and more rewarding.</p>
+                    </div>
+                </a>
+                <a href="explore.html#fauna" class="card">
+                    <img src="assets/img/wave-defense.png"
+                         alt="Night battle at a factory base with turrets firing at waves of attacking creatures"
+                         class="card-image" loading="lazy">
+                    <div class="card-body">
+                        <h3 class="card-title">Fight</h3>
+                        <p class="card-desc">Mutated fauna have claimed the complex. Spore creatures in chemical plants. Pack hunters in warehouses. Apex predators in power stations. Defend your base from nightly waves.</p>
+                    </div>
+                </a>
+                <a href="slop.html" class="card">
+                    <img src="assets/img/slop-terminal-room.png"
+                         alt="Glowing CRT terminal in a dark, destroyed office"
+                         class="card-image" loading="lazy">
+                    <div class="card-body">
+                        <h3 class="card-title">SLOP</h3>
+                        <p class="card-desc">Your guide, logistics coordinator, and the thing that probably caused all of this. Ask it questions. Read between the lines. Its logs from the collapse are... conveniently corrupted.</p>
+                    </div>
+                </a>
             </div>
-        </section>
+        </div>
+    </section>
 
-        <!-- BOTTOM ART -->
-        <section class="section">
-            <figure class="art-frame">
-                <img src="assets/img/slop-terminal-room.png" alt="SLOP's last active terminal, glowing amber in an abandoned office" loading="lazy">
-                <figcaption>SLOP terminal — status: nominal. Always nominal.</figcaption>
-            </figure>
+    <div class="caution-divider"></div>
 
-            <div class="slop-says scan-lines" style="text-align: center; border-left: none; border: 1px solid rgba(255,187,51,0.2);">
-                Thank you for reviewing your orientation materials. Your enthusiasm for returning to productive operations has been noted. Please proceed to your workstation. Management is counting on you.<br><br>
-                <span style="font-size: 0.7rem; color: var(--text-muted);">— SLOP v2.7.1 // Slopworks Logistics and Operations Protocol</span>
+    <!-- CO-OP SECTION -->
+    <section class="section coop-section">
+        <img src="assets/img/player-characters.png"
+             alt="Four restoration crew members — a soldier, a welder, a mechanic, and an electrician"
+             loading="lazy">
+        <div class="coop-overlay">
+            <div class="coop-text">
+                <h2>1-4 player co-op</h2>
+                <p>Solo or with friends. Drop in, drop out. Persistent world.</p>
             </div>
-        </section>
+        </div>
+    </section>
 
-    </div>
-</main>
+    <div id="footer"></div>
 
-<div id="footer"></div>
-
-<script src="js/main.js"></script>
+    <script src="js/main.js"></script>
 </body>
 </html>
