@@ -59,8 +59,7 @@
         // Hamburger toggles mobile menu
         hamburger.addEventListener('click', function (e) {
             e.stopPropagation();
-            var isOpen = ul.classList.toggle('open');
-            document.body.style.overflow = isOpen ? 'hidden' : '';
+            ul.classList.toggle('open');
         });
     }
 
@@ -99,7 +98,6 @@
                 var navLinks = document.querySelector('.nav-links');
                 if (navLinks) {
                     navLinks.classList.remove('open');
-                    document.body.style.overflow = '';
                 }
             });
         });
@@ -112,7 +110,6 @@
             var nav = document.querySelector('.site-nav');
             if (nav && !nav.contains(e.target)) {
                 navLinks.classList.remove('open');
-                document.body.style.overflow = '';
             }
         });
     }
