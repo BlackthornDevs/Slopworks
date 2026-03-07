@@ -415,15 +415,17 @@ public class NetworkBuildController : NetworkBehaviour
 
         if (_zoopMode)
         {
-            // Zoop snaps to 4x4 grid so blocks tile cleanly
-            var snapped = SnapToFoundationGrid(cell);
-
             if (!_zoopStartSet)
             {
-                ShowFoundationGhostSingle(snapped);
+                // Before first click: 1x1 grid, centered on crosshair
+                int fs = FactoryGrid.FoundationSize;
+                var centered = new Vector2Int(cell.x - fs / 2, cell.y - fs / 2);
+                ShowFoundationGhostSingle(centered);
 
                 if (mouse.leftButton.wasPressedThisFrame)
                 {
+                    // Lock to 4x4 grid on first click so zoop tiles cleanly
+                    var snapped = SnapToFoundationGrid(cell);
                     _zoopStartSet = true;
                     _zoopStartCell = snapped;
                     _zoopStartLevel = _lastLevel;
@@ -432,6 +434,8 @@ public class NetworkBuildController : NetworkBehaviour
             }
             else
             {
+                // After first click: snap to 4x4 grid so blocks tile
+                var snapped = SnapToFoundationGrid(cell);
                 UpdateFoundationZoopPreview(snapped);
 
                 if (mouse.leftButton.wasPressedThisFrame)
