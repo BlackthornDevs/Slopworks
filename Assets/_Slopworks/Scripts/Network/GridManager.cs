@@ -49,6 +49,9 @@ public class GridManager : NetworkBehaviour
     public GameObject FoundationPrefab => _foundationPrefab;
     public GameObject WallPrefab => _wallPrefab;
     public GameObject RampPrefab => _rampPrefab;
+    public GameObject MachinePrefab => _machinePrefab;
+    public GameObject StoragePrefab => _storagePrefab;
+    public GameObject BeltPrefab => _beltPrefab;
 
     private struct WallRecord
     {
@@ -133,13 +136,7 @@ public class GridManager : NetworkBehaviour
         data.IsStructural = true;
         _grid.Place(origin, size, level, data);
 
-        // Position prefab at center of the 4x4 block
-        // Push up by half cube height so foundation sits ON the level surface
-        float halfBlock = fs * FactoryGrid.CellSize * 0.5f;
-        Vector3 worldPos = new Vector3(
-            origin.x * FactoryGrid.CellSize + halfBlock,
-            level * FactoryGrid.LevelHeight + 0.5f,
-            origin.y * FactoryGrid.CellSize + halfBlock);
+        Vector3 worldPos = GetFoundationWorldPos(origin, level);
         var go = Instantiate(_foundationPrefab, worldPos, Quaternion.identity);
         var info = go.AddComponent<PlacementInfo>();
         info.Type = PlacementInfo.PlacementType.Foundation;
@@ -247,10 +244,8 @@ public class GridManager : NetworkBehaviour
         var rampStart = foundationCell + direction;
         var rampData = new RampData(rampStart, level, direction, footprintLength);
 
-        float rampLength = footprintLength * FactoryGrid.CellSize;
-        float slopeLength = Mathf.Sqrt(rampLength * rampLength + FactoryGrid.WallHeight * FactoryGrid.WallHeight);
-        Quaternion rotation = GetRampRotation(direction, rampLength);
-        Vector3 worldPos = GetRampWorldPos(rampData, rotation, slopeLength, onFoundation);
+        GetRampPlacement(foundationCell, level, direction, onFoundation,
+            out var worldPos, out var rotation);
         var go = Instantiate(_rampPrefab, worldPos, rotation);
         var info = go.AddComponent<PlacementInfo>();
         info.Type = PlacementInfo.PlacementType.Ramp;
@@ -266,24 +261,28 @@ public class GridManager : NetworkBehaviour
     }
 
     [ServerRpc(RequireOwnership = false)]
-    public void CmdRemoveRamp(Vector2Int baseCell, int level, Vector2Int direction, NetworkConnection sender = null)
+    public void CmdRemoveRamp(Vector2Int foundationCell, int level, Vector2Int direction, NetworkConnection sender = null)
     {
         if (!IsServerInitialized) return;
+
+        // RampData.BaseCell is stored as foundationCell + direction (the ramp start cell),
+        // but PlacementInfo.Cell stores the foundationCell. Match using the same offset as HasRampAt.
+        var rampStart = foundationCell + direction;
 
         for (int i = _rampRecords.Count - 1; i >= 0; i--)
         {
             var record = _rampRecords[i];
-            if (record.Data.BaseCell == baseCell && record.Data.BaseLevel == level && record.Data.Direction == direction)
+            if (record.Data.BaseCell == rampStart && record.Data.BaseLevel == level && record.Data.Direction == direction)
             {
                 if (record.Instance != null)
                     ServerManager.Despawn(record.Instance);
                 _rampRecords.RemoveAt(i);
-                Debug.Log($"grid: ramp removed at ({baseCell.x},{baseCell.y}) level {level} dir ({direction.x},{direction.y}) by {sender?.ClientId}");
+                Debug.Log($"grid: ramp removed at ({foundationCell.x},{foundationCell.y}) level {level} dir ({direction.x},{direction.y}) by {sender?.ClientId}");
                 return;
             }
         }
 
-        Debug.Log($"grid: no ramp to remove at ({baseCell.x},{baseCell.y}) level {level} dir ({direction.x},{direction.y})");
+        Debug.Log($"grid: no ramp to remove at ({foundationCell.x},{foundationCell.y}) level {level} dir ({direction.x},{direction.y})");
     }
 
     [ServerRpc(RequireOwnership = false)]
@@ -319,7 +318,7 @@ public class GridManager : NetworkBehaviour
             return;
         }
 
-        Vector3 worldPos = _grid.CellToWorld(cell, level) + new Vector3(0f, 0.1f, 0f);
+        Vector3 worldPos = GetBuildingWorldPos(cell, level, _machinePrefab);
         var go = Instantiate(_machinePrefab, worldPos, Quaternion.Euler(0f, rotation, 0f));
         var mInfo = go.AddComponent<PlacementInfo>();
         mInfo.Type = PlacementInfo.PlacementType.Machine;
@@ -369,7 +368,7 @@ public class GridManager : NetworkBehaviour
             return;
         }
 
-        Vector3 worldPos = _grid.CellToWorld(cell, level) + new Vector3(0f, 0.1f, 0f);
+        Vector3 worldPos = GetBuildingWorldPos(cell, level, _storagePrefab);
         var go = Instantiate(_storagePrefab, worldPos, Quaternion.Euler(0f, rotation, 0f));
         var sInfo = go.AddComponent<PlacementInfo>();
         sInfo.Type = PlacementInfo.PlacementType.Storage;
@@ -401,12 +400,21 @@ public class GridManager : NetworkBehaviour
     {
         if (!IsServerInitialized) return;
 
-        Vector3 startPos = _grid.CellToWorld(fromCell, level) + new Vector3(0f, 0.15f, 0f);
-        Vector3 endPos = _grid.CellToWorld(toCell, level) + new Vector3(0f, 0.15f, 0f);
+        Vector3 startPos = GetBeltEndpointPos(fromCell, level);
+        Vector3 endPos = GetBeltEndpointPos(toCell, level);
 
         int length = Mathf.Max(1, Mathf.Abs(toCell.x - fromCell.x) + Mathf.Abs(toCell.y - fromCell.y));
 
         var go = Instantiate(_beltPrefab, (startPos + endPos) * 0.5f, Quaternion.identity);
+
+        // Scale belt visual to match actual length
+        var diff = endPos - startPos;
+        float beltLen = diff.magnitude + FactoryGrid.CellSize;
+        if (Mathf.Abs(diff.x) > Mathf.Abs(diff.z))
+            go.transform.localScale = new Vector3(beltLen, 0.08f, 0.6f);
+        else
+            go.transform.localScale = new Vector3(0.6f, 0.08f, beltLen);
+
         var bInfo = go.AddComponent<PlacementInfo>();
         bInfo.Type = PlacementInfo.PlacementType.Belt;
         bInfo.Cell = fromCell;
@@ -420,6 +428,10 @@ public class GridManager : NetworkBehaviour
         }
 
         ServerManager.Spawn(go);
+
+        // Add client-side belt item visualization
+        var visualizer = go.AddComponent<BeltItemVisualizer>();
+        visualizer.Init(netBelt);
 
         if (netBelt != null && _factorySimulation != null)
             _factorySimulation.RegisterBelt(netBelt);
@@ -537,31 +549,66 @@ public class GridManager : NetworkBehaviour
         }
     }
 
-    private Vector3 GetWallWorldPos(Vector2Int cell, int level, Vector2Int direction, bool onFoundation)
+    // =====================================================================
+    // Universal placement positions
+    // ALL ghost previews and server placement MUST use these methods.
+    // NEVER compute placement offsets inline anywhere else.
+    // Adding a new building type? Add one method here. Call it from both
+    // GridManager (server spawn) and NetworkBuildController (ghost preview).
+    //
+    // Y offsets are derived from prefab bounds so changing prefab scale
+    // doesn't break placement. The object's pivot sits at bounds center,
+    // so we offset by extents.y to place the bottom on the surface.
+    // =====================================================================
+
+    /// <summary>
+    /// Returns the Y extent (half-height) of a prefab's renderer bounds.
+    /// Used to place objects so their bottom sits on the surface.
+    /// </summary>
+    private static float GetPrefabHalfHeight(GameObject prefab)
+    {
+        if (prefab == null) return 0.5f;
+        var renderer = prefab.GetComponentInChildren<Renderer>();
+        if (renderer == null) return 0.5f;
+        return renderer.bounds.extents.y;
+    }
+
+    /// <summary>
+    /// World position for a foundation block at the given origin cell and level.
+    /// </summary>
+    public Vector3 GetFoundationWorldPos(Vector2Int origin, int level)
+    {
+        int fs = FactoryGrid.FoundationSize;
+        float halfBlock = fs * FactoryGrid.CellSize * 0.5f;
+        float halfHeight = GetPrefabHalfHeight(_foundationPrefab);
+        return new Vector3(
+            origin.x * FactoryGrid.CellSize + halfBlock,
+            level * FactoryGrid.LevelHeight + halfHeight,
+            origin.y * FactoryGrid.CellSize + halfBlock);
+    }
+
+    /// <summary>
+    /// World position and rotation for a wall.
+    /// </summary>
+    public Vector3 GetWallWorldPos(Vector2Int cell, int level, Vector2Int direction, bool onFoundation)
     {
         float cs = FactoryGrid.CellSize;
         float wallHeight = FactoryGrid.WallHeight;
-        float halfWidth = FactoryGrid.WallWidth * cs * 0.5f;
+        float foundationFullHeight = GetPrefabHalfHeight(_foundationPrefab) * 2f;
         float baseY = onFoundation
-            ? level * FactoryGrid.LevelHeight + 1f
+            ? level * FactoryGrid.LevelHeight + foundationFullHeight
             : level * FactoryGrid.LevelHeight;
 
         if (onFoundation)
         {
             int fs = FactoryGrid.FoundationSize;
-            float blockSize = fs * cs;
-            float halfBlock = blockSize * 0.5f;
+            float halfBlock = fs * cs * 0.5f;
             Vector3 blockCenter = new Vector3(
-                cell.x * cs + halfBlock,
-                baseY,
-                cell.y * cs + halfBlock);
+                cell.x * cs + halfBlock, baseY, cell.y * cs + halfBlock);
             return blockCenter + new Vector3(
-                direction.x * halfBlock,
-                wallHeight * 0.5f,
-                direction.y * halfBlock);
+                direction.x * halfBlock, wallHeight * 0.5f, direction.y * halfBlock);
         }
 
-        // On terrain: wall centered on the crosshair cell
         float cellCenter = 0.5f * cs;
         return new Vector3(
             cell.x * cs + cellCenter,
@@ -569,50 +616,75 @@ public class GridManager : NetworkBehaviour
             cell.y * cs + cellCenter);
     }
 
-    private Quaternion GetWallRotation(Vector2Int direction)
+    public Quaternion GetWallRotation(Vector2Int direction)
     {
         if (direction == Vector2Int.up || direction == Vector2Int.down)
             return Quaternion.identity;
         return Quaternion.Euler(0f, 90f, 0f);
     }
 
-    private Vector3 GetRampWorldPos(RampData ramp, Quaternion rotation, float slopeLength, bool onFoundation)
+    /// <summary>
+    /// World position and rotation for a ramp extending from a foundation edge.
+    /// foundationCell is the foundation the ramp attaches to, direction is outward.
+    /// </summary>
+    public void GetRampPlacement(Vector2Int foundationCell, int level, Vector2Int direction,
+        bool onFoundation, out Vector3 position, out Quaternion rotation)
     {
-        Vector2Int foundationCell = ramp.BaseCell - ramp.Direction;
         float cs = FactoryGrid.CellSize;
+        float rampLength = 3f * cs;
+        float rampRise = FactoryGrid.WallHeight;
+        float slopeLength = Mathf.Sqrt(rampLength * rampLength + rampRise * rampRise);
 
+        float pitch = Mathf.Atan2(rampRise, rampLength) * Mathf.Rad2Deg;
+        float yAngle = 0f;
+        if (direction == Vector2Int.right) yAngle = 90f;
+        else if (direction == Vector2Int.down) yAngle = 180f;
+        else if (direction == Vector2Int.left) yAngle = 270f;
+        rotation = Quaternion.Euler(-pitch, yAngle, 0f);
+
+        float foundationFullHeight = GetPrefabHalfHeight(_foundationPrefab) * 2f;
         float baseY = onFoundation
-            ? ramp.BaseLevel * FactoryGrid.LevelHeight + 1f
-            : ramp.BaseLevel * FactoryGrid.LevelHeight;
+            ? level * FactoryGrid.LevelHeight + foundationFullHeight
+            : level * FactoryGrid.LevelHeight;
 
         Vector3 baseEdge;
         if (onFoundation)
         {
             int fs = FactoryGrid.FoundationSize;
-            float blockSize = fs * cs;
-            float halfBlock = blockSize * 0.5f;
+            float halfBlock = fs * cs * 0.5f;
             Vector3 blockCenter = new Vector3(
                 foundationCell.x * cs + halfBlock, baseY, foundationCell.y * cs + halfBlock);
             baseEdge = blockCenter + new Vector3(
-                ramp.Direction.x * halfBlock, 0f, ramp.Direction.y * halfBlock);
+                direction.x * halfBlock, 0f, direction.y * halfBlock);
         }
         else
         {
             float cellCenter = 0.5f * cs;
-            baseEdge = new Vector3(foundationCell.x * cs + cellCenter, baseY, foundationCell.y * cs + cellCenter);
+            baseEdge = new Vector3(
+                foundationCell.x * cs + cellCenter, baseY, foundationCell.y * cs + cellCenter);
         }
 
         Vector3 localForward = rotation * Vector3.forward;
-        return baseEdge + localForward * (slopeLength * 0.5f);
+        position = baseEdge + localForward * (slopeLength * 0.5f);
     }
 
-    private Quaternion GetRampRotation(Vector2Int direction, float rampLength)
+    /// <summary>
+    /// World position for a 1x1 building (machine, storage) at the given cell and level.
+    /// Y offset derived from the prefab's renderer bounds.
+    /// </summary>
+    public Vector3 GetBuildingWorldPos(Vector2Int cell, int level, GameObject prefab)
     {
-        float pitch = Mathf.Atan2(FactoryGrid.WallHeight, rampLength) * Mathf.Rad2Deg;
-        float yAngle = 0f;
-        if (direction == Vector2Int.right) yAngle = 90f;
-        else if (direction == Vector2Int.down) yAngle = 180f;
-        else if (direction == Vector2Int.left) yAngle = 270f;
-        return Quaternion.Euler(-pitch, yAngle, 0f);
+        float halfHeight = GetPrefabHalfHeight(prefab);
+        return _grid.CellToWorld(cell, level) + new Vector3(0f, halfHeight, 0f);
+    }
+
+    /// <summary>
+    /// World position for a belt endpoint at the given cell and level.
+    /// Y offset derived from the belt prefab's renderer bounds.
+    /// </summary>
+    public Vector3 GetBeltEndpointPos(Vector2Int cell, int level)
+    {
+        float halfHeight = GetPrefabHalfHeight(_beltPrefab);
+        return _grid.CellToWorld(cell, level) + new Vector3(0f, halfHeight, 0f);
     }
 }
