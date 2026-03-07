@@ -10,8 +10,8 @@ using System.Collections.Generic;
 public static class HomeBaseSceneryDresser
 {
     private const int Seed = 42;
-    private const float TerrainWidth = 800f;
-    private const float TerrainHeight = 180f;
+    private const float TerrainWidth = 1200f;
+    private const float TerrainHeight = 220f;
     private const float FlatRadius = 50f;
 
     private static readonly string[] TextureSets = {
@@ -35,6 +35,41 @@ public static class HomeBaseSceneryDresser
     private static readonly float[] SmoothnessMax = { 0.55f, 0.35f, 0.35f, 0.4f, 0.65f };
 
     private static readonly List<Vector2> RiverbedPoints = new();
+
+    // waystation world-space positions (x, z)
+    private static readonly Vector2[] WaystationPositions = {
+        new(150f, -50f),    // bus stop: forest, near factory along road
+        new(-80f, 300f),    // train station: forest/floodplain boundary, near river crossing
+        new(-60f, 380f),    // subway entrance: floodplain, in ruined hamlet
+        new(-350f, -300f),  // helipad: rocky upland plateau, NW quadrant
+    };
+    private static readonly Vector2[] WaystationPadSizes = {
+        new(15f, 8f),   // bus stop
+        new(40f, 12f),  // train station
+        new(8f, 6f),    // subway entrance
+        new(20f, 20f),  // helipad
+    };
+
+    // settlement cluster centers (world-space x, z)
+    private static readonly Vector2[] FarmsteadPositions = {
+        new(200f, 50f),
+        new(-180f, 120f),
+        new(300f, -180f),
+        new(-250f, -100f),
+        new(120f, 200f),
+        new(-300f, 200f),
+        new(350f, 100f),
+    };
+    private static readonly Vector2[] SmallClusterPositions = {
+        new(250f, 250f),
+        new(-200f, -250f),
+    };
+    private static readonly Vector2 HamletCenter = new(-40f, 350f);
+
+    // merchant structure positions (world-space x, z)
+    private static readonly Vector2 GasStationPos = new(120f, -30f);
+    private static readonly Vector2 WoodshopPos = new(280f, 150f);
+    private static readonly Vector2 GaragePos = new(-100f, 280f);
 
     private struct PropDef
     {
@@ -154,9 +189,9 @@ public static class HomeBaseSceneryDresser
         RiverbedPoints.Clear();
 
         // resize terrain to match constants
-        td.heightmapResolution = 1025;
-        td.alphamapResolution = 512;
-        td.SetDetailResolution(512, 16);
+        td.heightmapResolution = 2049;
+        td.alphamapResolution = 1024;
+        td.SetDetailResolution(1024, 16);
         td.size = new Vector3(TerrainWidth, TerrainHeight, TerrainWidth);
         // recenter terrain so (0,0,0) is the middle
         terrain.transform.position = new Vector3(-TerrainWidth / 2f, 0f, -TerrainWidth / 2f);
@@ -1712,6 +1747,30 @@ public static class HomeBaseSceneryDresser
     }
 
     // === HELPERS ===
+
+    private static BiomeZone GetBiomeZone(TerrainData td, float nx, float nz)
+    {
+        float height = td.GetHeight(
+            Mathf.Clamp((int)(nx * (td.heightmapResolution - 1)), 0, td.heightmapResolution - 1),
+            Mathf.Clamp((int)(nz * (td.heightmapResolution - 1)), 0, td.heightmapResolution - 1));
+        float normalizedHeight = height / TerrainHeight;
+
+        float riverZ = RiverCenterZ(nx);
+        float riverDist = Mathf.Abs(nz - riverZ) * TerrainWidth;
+
+        if (normalizedHeight < 0.35f || riverDist < 120f)
+            return BiomeZone.Floodplain;
+        if (normalizedHeight > 0.70f)
+            return BiomeZone.RockyUpland;
+        return BiomeZone.Forest;
+    }
+
+    private static BiomeZone GetBiomeZoneFromWorldPos(TerrainData td, float wx, float wz)
+    {
+        float nx = (wx + TerrainWidth / 2f) / TerrainWidth;
+        float nz = (wz + TerrainWidth / 2f) / TerrainWidth;
+        return GetBiomeZone(td, nx, nz);
+    }
 
     private static float SampleWorldHeight(Terrain terrain, Vector3 terrainPos, float wx, float wz)
     {
