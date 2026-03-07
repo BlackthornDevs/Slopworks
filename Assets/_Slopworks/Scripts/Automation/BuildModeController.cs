@@ -97,7 +97,7 @@ public class BuildModeController
             _snappedCell,
             effectiveSize,
             _rotation,
-            _currentSurfaceY
+            Mathf.RoundToInt(_currentSurfaceY)
         );
 
         grid.Place(_snappedCell, effectiveSize, _currentSurfaceY, data);
