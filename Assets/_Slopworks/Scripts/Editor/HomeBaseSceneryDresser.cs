@@ -936,105 +936,101 @@ public static class HomeBaseSceneryDresser
                 float dz = nz - 0.5f;
                 float dist = Mathf.Sqrt(dx * dx + dz * dz);
                 float steepness = td.GetSteepness(nx, nz);
+                float wx = nx * TerrainWidth - TerrainWidth / 2f;
+                float wz = nz * TerrainWidth - TerrainWidth / 2f;
 
                 float concrete = 0f, dirt = 0f, grass = 0f, gravel = 0f, rust = 0f;
 
-                float flatEnd = 0.06f;   // ~48m radius = factory zone
-                float transEnd = 0.10f;  // ~80m = transition to wilderness
+                float flatEnd = FlatRadius / TerrainWidth / 2f;
+                float transEnd = (FlatRadius + 30f) / TerrainWidth / 2f;
 
                 if (dist < flatEnd)
                 {
                     concrete = 0.8f;
                     float rustNoise = Mathf.PerlinNoise(nx * 40f + 700f, nz * 40f + 700f);
-                    if (rustNoise > 0.55f)
-                    {
-                        rust = (rustNoise - 0.55f) * 3f;
-                        concrete -= rust * 0.5f;
-                    }
+                    if (rustNoise > 0.55f) { rust = (rustNoise - 0.55f) * 3f; concrete -= rust * 0.5f; }
                     float gravelNoise = Mathf.PerlinNoise(nx * 60f + 800f, nz * 60f + 800f);
-                    if (gravelNoise > 0.65f)
-                    {
-                        gravel = (gravelNoise - 0.65f) * 3f;
-                        concrete -= gravel * 0.3f;
-                    }
+                    if (gravelNoise > 0.65f) { gravel = (gravelNoise - 0.65f) * 3f; concrete -= gravel * 0.3f; }
                     dirt = Mathf.Max(0f, 1f - concrete - rust - gravel);
                 }
                 else if (dist < transEnd)
                 {
                     float t = (dist - flatEnd) / (transEnd - flatEnd);
                     concrete = (1f - t) * 0.5f;
-                    dirt = t * 0.4f;
-                    gravel = 0.3f;
-                    grass = t * 0.2f;
+                    dirt = t * 0.4f; gravel = 0.3f; grass = t * 0.2f;
                     float rustNoise = Mathf.PerlinNoise(nx * 25f + 900f, nz * 25f + 900f);
                     rust = rustNoise > 0.5f ? (rustNoise - 0.5f) * 1.5f : 0f;
                 }
                 else
                 {
-                    grass = 0.6f;
-                    dirt = 0.25f;
+                    var zone = GetBiomeZone(td, nx, nz);
 
-                    float noiseVal = Mathf.PerlinNoise(nx * 20f + 500f, nz * 20f + 500f);
-                    if (noiseVal > 0.55f)
+                    switch (zone)
                     {
-                        dirt += (noiseVal - 0.55f) * 2f;
-                        grass -= (noiseVal - 0.55f);
+                        case BiomeZone.Floodplain:
+                            grass = 0.65f; dirt = 0.25f; gravel = 0.1f;
+                            float riverZ = RiverCenterZ(nx);
+                            float riverDist = Mathf.Abs(nz - riverZ) * TerrainWidth;
+                            if (riverDist < 30f)
+                            {
+                                float wetBlend = 1f - riverDist / 30f;
+                                dirt += wetBlend * 0.3f; grass -= wetBlend * 0.2f;
+                                gravel += wetBlend * 0.15f;
+                            }
+                            break;
+
+                        case BiomeZone.Forest:
+                            grass = 0.55f; dirt = 0.35f; gravel = 0.1f;
+                            float forestNoise = Mathf.PerlinNoise(nx * 20f + 500f, nz * 20f + 500f);
+                            if (forestNoise > 0.55f) { dirt += (forestNoise - 0.55f) * 2f; grass -= (forestNoise - 0.55f); }
+                            break;
+
+                        case BiomeZone.RockyUpland:
+                            gravel = 0.5f; dirt = 0.3f; grass = 0.15f; concrete = 0.05f;
+                            if (steepness > 15f)
+                            {
+                                float rockBlend = Mathf.Clamp01((steepness - 15f) / 20f);
+                                gravel += rockBlend * 0.3f; grass *= (1f - rockBlend); dirt *= (1f - rockBlend * 0.5f);
+                            }
+                            break;
                     }
 
                     float pathNoise = Mathf.PerlinNoise(nx * 8f + 100f, nz * 12f + 100f);
                     if (pathNoise > 0.6f && pathNoise < 0.65f)
                     {
-                        gravel = 0.6f;
-                        grass *= 0.3f;
-                        dirt *= 0.3f;
-                    }
-
-                    if (steepness > 20f)
-                    {
-                        float rockBlend = Mathf.Clamp01((steepness - 20f) / 15f);
-                        gravel += rockBlend * 0.5f;
-                        grass *= (1f - rockBlend);
+                        gravel = 0.6f; grass *= 0.3f; dirt *= 0.3f;
                     }
                 }
 
-                // riparian zone — moisture gradient based on distance to river
-                float riverCenterZ = RiverCenterZ(nx);
-                float riverDist = Mathf.Abs(nz - riverCenterZ);
-                float channelHalf = 8f / TerrainWidth;
-                float floodplainEdge = 80f / TerrainWidth; // total influence radius in meters
-
-                if (riverDist < floodplainEdge)
+                // waystation pad splatmap overlay
+                for (int w = 0; w < WaystationPositions.Length; w++)
                 {
-                    float riverBlend = 1f - riverDist / floodplainEdge;
+                    var wpos = WaystationPositions[w];
+                    float wdx = Mathf.Abs(wx - wpos.x);
+                    float wdz = Mathf.Abs(wz - wpos.y);
+                    float padHalfX = WaystationPadSizes[w].x / 2f;
+                    float padHalfZ = WaystationPadSizes[w].y / 2f;
+                    if (wdx < padHalfX && wdz < padHalfZ)
+                    {
+                        concrete = 0.7f; gravel = 0.2f; rust = 0.1f;
+                        grass = 0f; dirt = 0f;
+                    }
+                }
 
-                    if (riverDist < channelHalf)
-                    {
-                        // inside channel: mostly gravel/sand riverbed
-                        gravel = 0.8f;
-                        dirt = 0.2f;
-                        grass = 0f;
-                        concrete = 0f;
-                        rust = 0f;
-                    }
-                    else if (riverDist < channelHalf + 12f / TerrainWidth)
-                    {
-                        // immediate banks: wet dirt and gravel
-                        float bankT = (riverDist - channelHalf) / (12f / TerrainWidth);
-                        gravel = 0.6f * (1f - bankT) + 0.3f * bankT;
-                        dirt = 0.3f * (1f - bankT) + 0.5f * bankT;
-                        grass = 0.1f * bankT;
-                        concrete *= (1f - riverBlend);
-                        rust *= (1f - riverBlend);
-                    }
-                    else
-                    {
-                        // floodplain: lush grass with dirt patches, decreasing moisture
-                        float fpBlend = riverBlend * 0.7f;
-                        grass += fpBlend * 0.4f;
-                        dirt += fpBlend * 0.2f;
-                        gravel += fpBlend * 0.1f;
-                        concrete *= (1f - fpBlend);
-                    }
+                // riparian zone override
+                float rz = RiverCenterZ(nx);
+                float rd = Mathf.Abs(nz - rz);
+                float channelHalf = 8f / TerrainWidth;
+                if (rd < channelHalf)
+                {
+                    gravel = 0.8f; dirt = 0.2f; grass = 0f; concrete = 0f; rust = 0f;
+                }
+                else if (rd < channelHalf + 12f / TerrainWidth)
+                {
+                    float bankT = (rd - channelHalf) / (12f / TerrainWidth);
+                    gravel = 0.6f * (1f - bankT) + 0.3f * bankT;
+                    dirt = 0.3f * (1f - bankT) + 0.5f * bankT;
+                    grass = 0.1f * bankT; concrete = 0f; rust = 0f;
                 }
 
                 float total = concrete + dirt + grass + gravel + rust;
@@ -1054,7 +1050,7 @@ public static class HomeBaseSceneryDresser
         }
 
         td.SetAlphamaps(0, 0, alphas);
-        Debug.Log("splatmap repainted with 5 PBR layers");
+        Debug.Log("splatmap repainted: biome-aware with waystation pads");
     }
 
     // === SKYBOX ===
