@@ -133,54 +133,12 @@ public static class FactoryPrefabSetup
             return;
         }
 
-        // Add NetworkFactorySimulation if missing
         if (gridManager.GetComponent<NetworkFactorySimulation>() == null)
         {
             gridManager.gameObject.AddComponent<NetworkFactorySimulation>();
             EditorUtility.SetDirty(gridManager.gameObject);
             Debug.Log("factory setup: added NetworkFactorySimulation to GridManager");
         }
-
-        // Wire prefab references via SerializedObject
-        var so = new SerializedObject(gridManager);
-
-        WirePrefabField(so, "_foundationPrefabFallback", "Assets/_Slopworks/Resources/Prefabs/Buildings/Foundations/Foundation.prefab");
-        WirePrefabField(so, "_wallPrefabFallback", "Assets/_Slopworks/Resources/Prefabs/Buildings/Walls/Wall.prefab");
-        WirePrefabField(so, "_rampPrefabFallback", "Assets/_Slopworks/Resources/Prefabs/Buildings/Ramps/Ramp.prefab");
-        WirePrefabField(so, "_machinePrefabFallback", "Assets/_Slopworks/Resources/Prefabs/Buildings/Machines/Machine.prefab");
-        WirePrefabField(so, "_storagePrefabFallback", "Assets/_Slopworks/Resources/Prefabs/Buildings/Storage/Storage.prefab");
-        WirePrefabField(so, "_beltPrefabFallback", "Assets/_Slopworks/Resources/Prefabs/Buildings/Belts/Belt.prefab");
-
-        so.ApplyModifiedProperties();
-        EditorUtility.SetDirty(gridManager);
-        Debug.Log("factory setup: GridManager prefab references wired");
-    }
-
-    private static void WirePrefabField(SerializedObject so, string fieldName, string prefabPath)
-    {
-        var prop = so.FindProperty(fieldName);
-        if (prop == null)
-        {
-            Debug.LogWarning($"factory setup: field {fieldName} not found on GridManager");
-            return;
-        }
-
-        var current = prop.objectReferenceValue as GameObject;
-        if (current != null)
-        {
-            Debug.Log($"factory setup: {fieldName} already assigned, skipping");
-            return;
-        }
-
-        var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
-        if (prefab == null)
-        {
-            Debug.LogWarning($"factory setup: prefab not found at {prefabPath}");
-            return;
-        }
-
-        prop.objectReferenceValue = prefab;
-        Debug.Log($"factory setup: {fieldName} = {prefabPath}");
     }
 
     private static void EnsureDirectory(string path)
