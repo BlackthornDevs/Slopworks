@@ -958,6 +958,61 @@ public static class HomeBaseSceneryDresser
             }
         }
 
+        // enforce monotonically decreasing riverbed from west to east
+        // first pass: collect centerline heights, then build a monotonic ceiling
+        float[] centerHeights = new float[res];
+        int[] centerZIndices = new int[res];
+        for (int x = 0; x < res; x++)
+        {
+            float nx = (float)x / (res - 1);
+            float riverNz = RiverCenterZ(nx);
+            int cz = Mathf.Clamp(Mathf.RoundToInt(riverNz * (res - 1)), 0, res - 1);
+            centerZIndices[x] = cz;
+            centerHeights[x] = heights[cz, x];
+        }
+
+        // build monotonic profile: east end is lowest, walk westward and clamp
+        // add a gentle gradient (8m total drop west to east)
+        float totalGradient = 8f / TerrainHeight;
+        float[] targetBed = new float[res];
+        targetBed[res - 1] = centerHeights[res - 1];
+        for (int x = res - 2; x >= 0; x--)
+        {
+            float minStep = totalGradient / (res - 1); // minimum drop per pixel
+            targetBed[x] = Mathf.Min(centerHeights[x], targetBed[x + 1] + minStep);
+        }
+
+        // second pass: where terrain is above the target, carve it down
+        // apply within a corridor wider than the channel to create a gorge through escarpments
+        float gorgeHalf = baseChannelHalf * 4f; // gorge cuts 4x wider than channel
+        for (int x = 0; x < res; x++)
+        {
+            float excess = centerHeights[x] - targetBed[x];
+            if (excess <= 0f) continue; // already at or below target
+
+            int cz = centerZIndices[x];
+            int halfPixels = Mathf.CeilToInt(gorgeHalf * (res - 1));
+            for (int dz = -halfPixels; dz <= halfPixels; dz++)
+            {
+                int zz = cz + dz;
+                if (zz < 0 || zz >= res) continue;
+                float d = Mathf.Abs((float)dz / (res - 1));
+
+                // full cut within channel, fading over gorge walls
+                float fade;
+                if (d < baseChannelHalf)
+                    fade = 1f;
+                else if (d < gorgeHalf)
+                    fade = 1f - (d - baseChannelHalf) / (gorgeHalf - baseChannelHalf);
+                else
+                    continue;
+
+                // smooth fade: use squared falloff for natural gorge walls
+                fade = fade * fade;
+                heights[zz, x] -= excess * fade;
+            }
+        }
+
         td.SetHeights(0, 0, heights);
         Debug.Log($"river valley carved: channel + terraces + floodplain ({RiverbedPoints.Count} path points)");
     }
@@ -1196,7 +1251,7 @@ public static class HomeBaseSceneryDresser
                 if (instance == null) continue;
 
                 instance.transform.position = new Vector3(wx, y, wz);
-                instance.transform.rotation = SlopeAlignedRotation(td, nx, nz, (float)rng.NextDouble() * 360f, rng, 4f);
+                instance.transform.rotation = UprightRotation((float)rng.NextDouble() * 360f, rng, 4f);
                 instance.transform.SetParent(treeParent);
                 instance.isStatic = false;
                 AddWindSway(instance, species.WindAmount, species.WindSpeed);
@@ -1224,7 +1279,7 @@ public static class HomeBaseSceneryDresser
                     if (uinst == null) continue;
 
                     uinst.transform.position = new Vector3(uwx, uy, uwz);
-                    uinst.transform.rotation = SlopeAlignedRotation(td, unx, unz, (float)rng.NextDouble() * 360f, rng, 0f);
+                    uinst.transform.rotation = UprightRotation((float)rng.NextDouble() * 360f, rng, 0f);
                     uinst.transform.SetParent(undergrowthParent);
                     uinst.isStatic = false;
                     AddWindSway(uinst, 2f + (float)rng.NextDouble() * 1f, 1f + (float)rng.NextDouble() * 0.3f);
@@ -1258,7 +1313,7 @@ public static class HomeBaseSceneryDresser
             if (instance == null) continue;
 
             instance.transform.position = new Vector3(wx, y, wz);
-            instance.transform.rotation = SlopeAlignedRotation(td, nx, nz, (float)rng.NextDouble() * 360f, rng, 3f);
+            instance.transform.rotation = UprightRotation((float)rng.NextDouble() * 360f, rng, 3f);
             instance.transform.SetParent(treeParent);
             instance.isStatic = false;
             AddWindSway(instance, species.WindAmount, species.WindSpeed);
@@ -1445,7 +1500,7 @@ public static class HomeBaseSceneryDresser
                 if (tInst == null) continue;
 
                 tInst.transform.position = new Vector3(twx, ty, twz);
-                tInst.transform.rotation = SlopeAlignedRotation(td, tnx, tnz, (float)rng.NextDouble() * 360f, rng, 3f);
+                tInst.transform.rotation = UprightRotation((float)rng.NextDouble() * 360f, rng, 3f);
                 tInst.transform.SetParent(treeParent);
                 tInst.isStatic = false;
                 AddWindSway(tInst, species.WindAmount, species.WindSpeed);
@@ -2451,6 +2506,17 @@ public static class HomeBaseSceneryDresser
             instance.AddComponent<MeshCollider>();
 
         return instance;
+    }
+
+    private static Quaternion UprightRotation(float yaw, System.Random rng, float randomTiltDeg)
+    {
+        float tx = 0f, tz = 0f;
+        if (randomTiltDeg > 0f)
+        {
+            tx = ((float)rng.NextDouble() - 0.5f) * 2f * randomTiltDeg;
+            tz = ((float)rng.NextDouble() - 0.5f) * 2f * randomTiltDeg;
+        }
+        return Quaternion.Euler(tx, yaw, tz);
     }
 
     private static Quaternion SlopeAlignedRotation(TerrainData td, float nx, float nz, float yaw, System.Random rng, float randomTiltDeg)
