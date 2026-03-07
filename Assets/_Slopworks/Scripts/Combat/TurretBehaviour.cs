@@ -15,6 +15,7 @@ public class TurretBehaviour : MonoBehaviour
     // Reusable buffers to avoid per-frame allocation
     private readonly Collider[] _overlapResults = new Collider[32];
     private readonly List<Vector3> _candidatePositions = new();
+    private readonly List<TurretCandidate> _candidatesWithData = new();
     private readonly List<HealthBehaviour> _candidateHealth = new();
 
     private float _barrelRotationSpeed = 360f;
@@ -41,7 +42,9 @@ public class TurretBehaviour : MonoBehaviour
 
         GatherCandidates();
 
-        var fireEvent = _controller.Tick(Time.fixedDeltaTime, _candidatePositions);
+        var fireEvent = _definition.targetingMode == TargetingMode.Closest
+            ? _controller.Tick(Time.fixedDeltaTime, _candidatePositions)
+            : _controller.Tick(Time.fixedDeltaTime, _candidatesWithData);
 
         if (fireEvent.HasValue)
             ApplyFireEvent(fireEvent.Value);
@@ -72,6 +75,7 @@ public class TurretBehaviour : MonoBehaviour
     private void GatherCandidates()
     {
         _candidatePositions.Clear();
+        _candidatesWithData.Clear();
         _candidateHealth.Clear();
 
         var origin = transform.position;
@@ -86,10 +90,15 @@ public class TurretBehaviour : MonoBehaviour
             var health = col.GetComponent<HealthBehaviour>();
             if (health == null || !health.Health.IsAlive) continue;
 
-            // TurretController expects positions relative to turret origin
             var relativePos = col.transform.position - origin;
             _candidatePositions.Add(relativePos);
             _candidateHealth.Add(health);
+            _candidatesWithData.Add(new TurretCandidate
+            {
+                position = relativePos,
+                health = health.Health.CurrentHealth,
+                threat = relativePos.sqrMagnitude > 0.001f ? 1f / relativePos.magnitude : 100f
+            });
         }
     }
 
