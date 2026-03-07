@@ -10,7 +10,7 @@
         { href: 'story.html', label: 'Story', id: 'story' },
         { href: 'build.html', label: 'Build', id: 'build' },
         { href: 'explore.html', label: 'Explore', id: 'explore' },
-        { href: 'slop.html', label: 'SLOP', id: 'slop' },
+        { href: 'slop.html', label: 'S.L.O.P.', id: 'slop' },
     ];
 
     function buildNav() {
@@ -83,7 +83,7 @@
 
         var status = document.createElement('p');
         status.className = 'build-status';
-        status.textContent = 'SLOP v2.7.1 // STATUS: NOMINAL // UPTIME: \u2588\u2588\u2588\u2588 DAYS';
+        status.textContent = 'S.L.O.P. v2.7.1 // STATUS: NOMINAL // UPTIME: \u2588\u2588\u2588\u2588 DAYS';
         wrapper.appendChild(status);
 
         footer.appendChild(wrapper);
