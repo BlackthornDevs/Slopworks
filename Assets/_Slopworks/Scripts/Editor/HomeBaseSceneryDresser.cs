@@ -88,6 +88,9 @@ public static class HomeBaseSceneryDresser
     private static readonly Vector2 WoodshopPos = new(280f, 150f);
     private static readonly Vector2 GaragePos = new(-100f, 280f);
 
+    // road building positions (world-space x, z)
+    private static readonly Vector2 FactoryYardPos = new(100f, 15f);
+
     private struct PropDef
     {
         public string Path;
@@ -1546,10 +1549,10 @@ public static class HomeBaseSceneryDresser
 
         int placed = 0;
 
-        for (int i = 0; i < 300; i++)
+        for (int i = 0; i < 100; i++)
         {
             float angle = (float)rng.NextDouble() * Mathf.PI * 2f;
-            float radius = FlatRadius + (float)rng.NextDouble() * 100f - 10f;
+            float radius = FlatRadius + (float)rng.NextDouble() * 80f;
             float wx = Mathf.Cos(angle) * radius;
             float wz = Mathf.Sin(angle) * radius;
 
@@ -1576,6 +1579,9 @@ public static class HomeBaseSceneryDresser
 
     private static void PlaceSettlements(Transform root, Terrain terrain, Vector3 terrainPos, System.Random rng, TerrainData td)
     {
+        // disabled — focusing on one settlement at a time
+        return;
+
         var parent = new GameObject("Settlements").transform;
         parent.SetParent(root);
         int totalPlaced = 0;
@@ -2140,6 +2146,9 @@ public static class HomeBaseSceneryDresser
 
     private static void PlaceMerchantStructures(Transform root, Terrain terrain, Vector3 terrainPos, System.Random rng, TerrainData td)
     {
+        // disabled — focusing on one settlement at a time
+        return;
+
         var parent = new GameObject("Merchants").transform;
         parent.SetParent(root);
         int totalPlaced = 0;
@@ -2415,6 +2424,9 @@ public static class HomeBaseSceneryDresser
 
     private static void PlaceWaystations(Transform root, Terrain terrain, Vector3 terrainPos, System.Random rng, TerrainData td)
     {
+        // disabled — focusing on one settlement at a time
+        return;
+
         var parent = new GameObject("Waystations").transform;
         parent.SetParent(root);
         int totalPlaced = 0;
@@ -2681,186 +2693,341 @@ public static class HomeBaseSceneryDresser
         parent.SetParent(root);
         int totalPlaced = 0;
 
-        const string SK = "Assets/_Slopworks/Art/Kenney/survival-kit/Models/";
         const string CK = "Assets/_Slopworks/Art/Kenney/conveyor-kit/Models/";
+        const string SK = "Assets/_Slopworks/Art/Kenney/survival-kit/Models/";
 
-        // --- cluster 1: factory yard (120m east of center, along road) ---
+        // === FACTORY YARD: industrial compound ~100m east of the factory hub ===
+        // Uses complete pre-built structure meshes (structure.fbx, structure-metal.fbx)
+        // at large scales so each piece reads as a real building.
+        // Layout: buildings face a central yard, with entrance from the west.
         {
-            Vector3 clusterPos = new Vector3(120f, 0f, 20f);
-            clusterPos.y = SampleWorldHeight(terrain, terrainPos, clusterPos.x, clusterPos.z);
-            float facing = -90f; // doorways face west toward center/road
+            float baseY = SampleWorldHeight(terrain, terrainPos, FactoryYardPos.x, FactoryYardPos.y);
+            var yard = new GameObject("Cluster_FactoryYard").transform;
+            yard.SetParent(parent);
 
-            var cluster = new GameObject("Cluster_FactoryYard").transform;
-            cluster.SetParent(parent);
+            const string TK = "Assets/_Slopworks/Art/Kenney/tower-defense-kit/Models/";
+            float cx = FactoryYardPos.x;
+            float cz = FactoryYardPos.y;
 
-            float wallScale = 4f;
-            float wallHeight = wallScale * 1.0f;
+            // ============================================================
+            // BUILDING A: MAIN WAREHOUSE — largest building, center-north
+            // Two complete structures side by side = wide warehouse
+            // structure.fbx is a pre-built room with walls + doorway
+            // ============================================================
+            // Left half (scale 8 = 8m building)
+            PlaceKitPiece(yard, SK + "structure.fbx", 8f,
+                new Vector3(cx - 4f, baseY, cz + 5f), 180f, rng, ref totalPlaced);
+            PlaceKitPiece(yard, SK + "structure-roof.fbx", 8f,
+                new Vector3(cx - 4f, baseY + 8f, cz + 5f), 180f, rng, ref totalPlaced);
+            PlaceKitPiece(yard, SK + "floor.fbx", 8f,
+                new Vector3(cx - 4f, baseY, cz + 5f), 180f, rng, ref totalPlaced);
 
-            // L-shape: 2 structure-wall + 1 structure-window
-            // wall A: runs along Z
-            var wallA = InstantiateProp(new PropDef(CK + "structure-wall.fbx", wallScale, wallScale), rng);
-            if (wallA != null)
+            // Right half (adjacent, same orientation)
+            PlaceKitPiece(yard, SK + "structure.fbx", 8f,
+                new Vector3(cx + 5f, baseY, cz + 5f), 180f, rng, ref totalPlaced);
+            PlaceKitPiece(yard, SK + "structure-roof.fbx", 8f,
+                new Vector3(cx + 5f, baseY + 8f, cz + 5f), 180f, rng, ref totalPlaced);
+            PlaceKitPiece(yard, SK + "floor-old.fbx", 8f,
+                new Vector3(cx + 5f, baseY, cz + 5f), 180f, rng, ref totalPlaced);
+
+            // Warehouse interior props
+            PlaceKitPiece(yard, SK + "workbench.fbx", 3f,
+                new Vector3(cx - 2f, baseY, cz + 8f), 0f, rng, ref totalPlaced);
+            PlaceKitPiece(yard, SK + "workbench-grind.fbx", 3f,
+                new Vector3(cx + 6f, baseY, cz + 8f), 180f, rng, ref totalPlaced);
+            PlaceKitPiece(yard, SK + "barrel.fbx", 2.5f,
+                new Vector3(cx + 3f, baseY, cz + 9f), 45f, rng, ref totalPlaced);
+
+            // ============================================================
+            // BUILDING B: METAL WORKSHOP — east side of yard
+            // Complete metal structure (structure-metal.fbx = pre-built metal shed)
+            // ============================================================
+            PlaceKitPiece(yard, SK + "structure-metal.fbx", 7f,
+                new Vector3(cx + 16f, baseY, cz + 2f), 270f, rng, ref totalPlaced);
+            PlaceKitPiece(yard, SK + "structure-metal-roof.fbx", 7f,
+                new Vector3(cx + 16f, baseY + 7f, cz + 2f), 270f, rng, ref totalPlaced);
+            PlaceKitPiece(yard, SK + "structure-metal-floor.fbx", 7f,
+                new Vector3(cx + 16f, baseY, cz + 2f), 270f, rng, ref totalPlaced);
+
+            // Workshop interior: anvil workbench
+            PlaceKitPiece(yard, SK + "workbench-anvil.fbx", 2.5f,
+                new Vector3(cx + 14f, baseY, cz + 3f), 90f, rng, ref totalPlaced);
+
+            // ============================================================
+            // BUILDING C: FOREMAN'S OFFICE — west side, near entrance
+            // Small survival-kit cabin, door faces the yard
+            // ============================================================
+            PlaceKitPiece(yard, SK + "structure.fbx", 6f,
+                new Vector3(cx - 18f, baseY, cz + 2f), 90f, rng, ref totalPlaced);
+            PlaceKitPiece(yard, SK + "structure-roof.fbx", 6f,
+                new Vector3(cx - 18f, baseY + 6f, cz + 2f), 90f, rng, ref totalPlaced);
+            PlaceKitPiece(yard, SK + "floor-old.fbx", 6f,
+                new Vector3(cx - 18f, baseY, cz + 2f), 90f, rng, ref totalPlaced);
+
+            // Porch floor in front of office
+            PlaceKitPiece(yard, SK + "floor.fbx", 4f,
+                new Vector3(cx - 14f, baseY, cz + 2f), 0f, rng, ref totalPlaced);
+
+            // Signpost at office
+            PlaceKitPiece(yard, SK + "signpost.fbx", 4f,
+                new Vector3(cx - 14f, baseY, cz + 4.5f), 90f, rng, ref totalPlaced);
+
+            // ============================================================
+            // BUILDING D: STORAGE SHED — north of warehouse, open front
+            // Metal structure without a full roof (canvas patch instead)
+            // ============================================================
+            PlaceKitPiece(yard, SK + "structure-metal.fbx", 6f,
+                new Vector3(cx - 3f, baseY, cz + 16f), 180f, rng, ref totalPlaced);
+            PlaceKitPiece(yard, SK + "structure-canvas.fbx", 6f,
+                new Vector3(cx - 3f, baseY + 5.5f, cz + 16f), 180f, rng, ref totalPlaced);
+
+            // Second storage shed next to it
+            PlaceKitPiece(yard, SK + "structure-metal.fbx", 5f,
+                new Vector3(cx + 6f, baseY, cz + 17f), 200f, rng, ref totalPlaced);
+            PlaceKitPiece(yard, SK + "structure-metal-roof.fbx", 5f,
+                new Vector3(cx + 6f, baseY + 5f, cz + 17f), 200f, rng, ref totalPlaced);
+
+            // Crates inside storage sheds
+            PlaceKitPiece(yard, SK + "box-large.fbx", 3f,
+                new Vector3(cx - 2f, baseY, cz + 17f), 10f, rng, ref totalPlaced);
+            PlaceKitPiece(yard, SK + "box-large.fbx", 3f,
+                new Vector3(cx + 0.5f, baseY, cz + 17.5f), -15f, rng, ref totalPlaced);
+            PlaceKitPiece(yard, SK + "box.fbx", 2.5f,
+                new Vector3(cx - 1f, baseY + 2.2f, cz + 17f), 30f, rng, ref totalPlaced);
+
+            // ============================================================
+            // BUILDING E: RUINED CABIN — south of yard, partially collapsed
+            // Shows decay: no roof, floor-hole, tilted walls
+            // ============================================================
+            PlaceKitPiece(yard, SK + "structure.fbx", 6f,
+                new Vector3(cx + 3f, baseY, cz - 16f), 160f, rng, ref totalPlaced);
+            // No roof — collapsed. Canvas tarp draped over it instead
+            PlaceKitPiece(yard, SK + "structure-canvas.fbx", 6f,
+                new Vector3(cx + 3f, baseY + 5f, cz - 16f), 165f, rng, ref totalPlaced);
+            PlaceKitPiece(yard, SK + "floor-hole.fbx", 6f,
+                new Vector3(cx + 3f, baseY, cz - 16f), 160f, rng, ref totalPlaced);
+
+            // Adjacent ruined metal shed (walls only, no roof)
+            PlaceKitPiece(yard, SK + "structure-metal.fbx", 5f,
+                new Vector3(cx - 5f, baseY, cz - 18f), 175f, rng, ref totalPlaced);
+            // Debris from collapsed roof
+            PlaceKitPiece(yard, SK + "metal-panel.fbx", 4f,
+                new Vector3(cx - 4f, baseY, cz - 16f), 45f, rng, ref totalPlaced);
+            PlaceKitPiece(yard, SK + "metal-panel-screws.fbx", 3.5f,
+                new Vector3(cx - 6f, baseY, cz - 15f), 120f, rng, ref totalPlaced);
+
+            // ============================================================
+            // LOADING BAY (between warehouse and south buildings)
+            // Conveyors + robot arm + stacked boxes
+            // ============================================================
+            float loadZ = cz - 5f;
+
+            // 4 conveyor segments running east-west
+            for (int i = 0; i < 4; i++)
+                PlaceKitPiece(yard, CK + "conveyor-long.fbx", 3.5f,
+                    new Vector3(cx - 4f + i * 3.5f, baseY, loadZ), 90f, rng, ref totalPlaced);
+
+            // Robot arm overseeing the line
+            PlaceKitPiece(yard, CK + "robot-arm-a.fbx", 3f,
+                new Vector3(cx + 10f, baseY, loadZ + 1.5f), 180f, rng, ref totalPlaced);
+
+            // Boxes on conveyors
+            PlaceKitPiece(yard, CK + "box-large.fbx", 1.8f,
+                new Vector3(cx - 2f, baseY + 1.2f, loadZ), 8f, rng, ref totalPlaced);
+            PlaceKitPiece(yard, CK + "box-wide.fbx", 1.8f,
+                new Vector3(cx + 2f, baseY + 1.2f, loadZ), -10f, rng, ref totalPlaced);
+            PlaceKitPiece(yard, CK + "box-small.fbx", 1.5f,
+                new Vector3(cx + 5f, baseY + 1.2f, loadZ), 20f, rng, ref totalPlaced);
+
+            // ============================================================
+            // GUARD TOWER (SE corner)
+            // 4-piece stacked tower, visible landmark
+            // ============================================================
+            float gtX = cx + 20f;
+            float gtZ = cz - 14f;
+            float gtY = SampleWorldHeight(terrain, terrainPos, gtX, gtZ);
+            float gtS = 4.5f;
+
+            string[] towerParts = {
+                TK + "tower-square-bottom-a.fbx",
+                TK + "tower-square-middle-a.fbx",
+                TK + "tower-square-top-a.fbx",
+                TK + "tower-square-roof-a.fbx",
+            };
+            for (int i = 0; i < towerParts.Length; i++)
+                PlaceKitPiece(yard, towerParts[i], gtS,
+                    new Vector3(gtX, gtY + gtS * i, gtZ), 15f, rng, ref totalPlaced);
+
+            // Scaffolding at base
+            PlaceKitPiece(yard, TK + "wood-structure.fbx", gtS,
+                new Vector3(gtX + 4f, gtY, gtZ + 2f), 45f, rng, ref totalPlaced);
+            PlaceKitPiece(yard, TK + "wood-structure.fbx", gtS * 0.8f,
+                new Vector3(gtX - 3f, gtY, gtZ - 1f), -30f, rng, ref totalPlaced);
+
+            // ============================================================
+            // BREAK CAMP (west side, near entrance gate)
+            // Survivors living in the compound
+            // ============================================================
+            float bcX = cx - 20f;
+            float bcZ = cz - 8f;
+
+            PlaceKitPiece(yard, SK + "tent-canvas.fbx", 4f,
+                new Vector3(bcX, baseY, bcZ), 110f, rng, ref totalPlaced);
+            PlaceKitPiece(yard, SK + "tent.fbx", 3.5f,
+                new Vector3(bcX + 5f, baseY, bcZ - 2f), 70f, rng, ref totalPlaced);
+            PlaceKitPiece(yard, SK + "bedroll.fbx", 2.5f,
+                new Vector3(bcX + 1f, baseY, bcZ + 4f), 100f, rng, ref totalPlaced);
+            PlaceKitPiece(yard, SK + "bedroll-frame.fbx", 2.5f,
+                new Vector3(bcX + 4f, baseY, bcZ + 4.5f), 85f, rng, ref totalPlaced);
+            PlaceKitPiece(yard, SK + "campfire-pit.fbx", 3f,
+                new Vector3(bcX + 2.5f, baseY, bcZ + 1.5f), 0f, rng, ref totalPlaced);
+            PlaceKitPiece(yard, SK + "campfire-stand.fbx", 3f,
+                new Vector3(bcX + 3f, baseY, bcZ + 2f), 30f, rng, ref totalPlaced);
+            PlaceKitPiece(yard, SK + "chest.fbx", 2.5f,
+                new Vector3(bcX - 1f, baseY, bcZ + 3f), 120f, rng, ref totalPlaced);
+
+            // ============================================================
+            // FUEL DUMP (east side, fenced off)
+            // ============================================================
+            float fdX = cx + 18f;
+            float fdZ = cz + 10f;
+
+            // 6 barrels in a tight cluster
+            PlaceKitPiece(yard, SK + "barrel.fbx", 3f,
+                new Vector3(fdX, baseY, fdZ), 0f, rng, ref totalPlaced);
+            PlaceKitPiece(yard, SK + "barrel.fbx", 3f,
+                new Vector3(fdX + 2f, baseY, fdZ + 0.5f), 30f, rng, ref totalPlaced);
+            PlaceKitPiece(yard, SK + "barrel.fbx", 3f,
+                new Vector3(fdX + 1f, baseY, fdZ + 2f), 60f, rng, ref totalPlaced);
+            PlaceKitPiece(yard, SK + "barrel-open.fbx", 3f,
+                new Vector3(fdX + 3f, baseY, fdZ + 1.5f), 15f, rng, ref totalPlaced);
+            PlaceKitPiece(yard, SK + "barrel.fbx", 2.5f,
+                new Vector3(fdX + 0.5f, baseY + 2f, fdZ + 0.5f), 45f, rng, ref totalPlaced);
+            PlaceKitPiece(yard, SK + "barrel.fbx", 2.5f,
+                new Vector3(fdX + 2f, baseY + 2f, fdZ + 1f), 75f, rng, ref totalPlaced);
+
+            // Fence around fuel dump
+            PlaceKitPiece(yard, SK + "fence-fortified.fbx", 4f,
+                new Vector3(fdX - 1f, baseY, fdZ - 2f), 0f, rng, ref totalPlaced);
+            PlaceKitPiece(yard, SK + "fence-fortified.fbx", 4f,
+                new Vector3(fdX + 4f, baseY, fdZ - 2f), 0f, rng, ref totalPlaced);
+            PlaceKitPiece(yard, SK + "fence.fbx", 4f,
+                new Vector3(fdX + 5.5f, baseY, fdZ + 1f), 90f, rng, ref totalPlaced);
+
+            // ============================================================
+            // CONTAINER YARD (NE, stacked crates)
+            // ============================================================
+            float cyX = cx + 14f;
+            float cyZ = cz + 18f;
+
+            // 3x2 grid of large crates, some stacked 2 high
+            for (int row = 0; row < 3; row++)
             {
-                wallA.transform.position = clusterPos;
-                wallA.transform.rotation = Quaternion.Euler(0f, facing, 0f);
-                wallA.transform.SetParent(cluster);
-                wallA.isStatic = true;
-                totalPlaced++;
-            }
-            // wall B: continues along Z
-            var wallB = InstantiateProp(new PropDef(CK + "structure-wall.fbx", wallScale, wallScale), rng);
-            if (wallB != null)
-            {
-                wallB.transform.position = clusterPos + Quaternion.Euler(0f, facing, 0f) * new Vector3(0f, 0f, wallScale * 1.0f);
-                wallB.transform.rotation = Quaternion.Euler(0f, facing, 0f);
-                wallB.transform.SetParent(cluster);
-                wallB.isStatic = true;
-                totalPlaced++;
-            }
-            // wall C (window): turns the corner for the L
-            var wallC = InstantiateProp(new PropDef(CK + "structure-window.fbx", wallScale, wallScale), rng);
-            if (wallC != null)
-            {
-                wallC.transform.position = clusterPos + Quaternion.Euler(0f, facing, 0f) * new Vector3(0f, 0f, wallScale * 2.0f);
-                wallC.transform.rotation = Quaternion.Euler(0f, facing + 90f, 0f);
-                wallC.transform.SetParent(cluster);
-                wallC.isStatic = true;
-                totalPlaced++;
+                for (int col = 0; col < 2; col++)
+                {
+                    PlaceKitPiece(yard, CK + "box-large.fbx", 3.5f,
+                        new Vector3(cyX + col * 4f, baseY, cyZ + row * 3.5f),
+                        row * 5f, rng, ref totalPlaced);
+                }
+                if (row < 2) // stack second layer on first two rows
+                    PlaceKitPiece(yard, CK + "box-wide.fbx", 3.2f,
+                        new Vector3(cyX + 2f, baseY + 2.5f, cyZ + row * 3.5f),
+                        row * 12f + 3f, rng, ref totalPlaced);
             }
 
-            // cover-stripe roof on top
-            var factoryRoof = InstantiateProp(new PropDef(CK + "cover-stripe.fbx", wallScale * 1.5f, wallScale * 1.5f), rng);
-            if (factoryRoof != null)
+            // ============================================================
+            // GROUND PROPS (scattered around the yard for life)
+            // ============================================================
+
+            // Barrels behind warehouse
+            PlaceKitPiece(yard, SK + "barrel.fbx", 2.5f,
+                new Vector3(cx - 6f, baseY, cz + 12f), 25f, rng, ref totalPlaced);
+            PlaceKitPiece(yard, SK + "barrel-open.fbx", 2.5f,
+                new Vector3(cx + 10f, baseY, cz + 12f), -15f, rng, ref totalPlaced);
+
+            // Boxes near loading bay
+            PlaceKitPiece(yard, SK + "box-large.fbx", 2.5f,
+                new Vector3(cx - 8f, baseY, cz - 3f), 8f, rng, ref totalPlaced);
+            PlaceKitPiece(yard, SK + "box.fbx", 2f,
+                new Vector3(cx - 7.5f, baseY + 1.8f, cz - 3f), -20f, rng, ref totalPlaced);
+
+            // Lumber between buildings
+            PlaceKitPiece(yard, SK + "resource-planks.fbx", 3f,
+                new Vector3(cx + 8f, baseY, cz - 9f), 0f, rng, ref totalPlaced);
+            PlaceKitPiece(yard, SK + "resource-wood.fbx", 3f,
+                new Vector3(cx + 9f, baseY, cz - 8f), 15f, rng, ref totalPlaced);
+            PlaceKitPiece(yard, SK + "tree-log.fbx", 4f,
+                new Vector3(cx - 12f, baseY, cz - 4f), 70f, rng, ref totalPlaced);
+
+            // Tools leaning against metal workshop
+            PlaceKitPiece(yard, SK + "tool-shovel.fbx", 2.5f,
+                new Vector3(cx + 13f, baseY, cz + 5f), 170f, rng, ref totalPlaced);
+            PlaceKitPiece(yard, SK + "tool-pickaxe.fbx", 2.5f,
+                new Vector3(cx + 13.5f, baseY, cz + 4f), 165f, rng, ref totalPlaced);
+
+            // Stone rubble
+            PlaceKitPiece(yard, SK + "resource-stone.fbx", 2.5f,
+                new Vector3(cx - 10f, baseY, cz + 14f), 0f, rng, ref totalPlaced);
+            PlaceKitPiece(yard, SK + "resource-stone-large.fbx", 3f,
+                new Vector3(cx + 12f, baseY, cz - 12f), 30f, rng, ref totalPlaced);
+
+            // ============================================================
+            // FENCE PERIMETER
+            // Not a perfect ring — gaps and broken sections
+            // ============================================================
+            float fS = 4f;
+
+            // South perimeter
+            for (int i = 0; i < 7; i++)
             {
-                factoryRoof.transform.position = clusterPos + new Vector3(0f, wallHeight, 0f)
-                    + Quaternion.Euler(0f, facing, 0f) * new Vector3(0f, 0f, wallScale * 0.5f);
-                factoryRoof.transform.rotation = Quaternion.Euler(0f, facing, 0f);
-                factoryRoof.transform.SetParent(cluster);
-                factoryRoof.isStatic = true;
-                totalPlaced++;
+                float fx = cx - 24f + i * 7f;
+                float fz2 = cz - 22f;
+                float fy = SampleWorldHeight(terrain, terrainPos, fx, fz2);
+                string ft = (i == 0 || i == 4) ? SK + "fence-fortified.fbx" : SK + "fence.fbx";
+                PlaceKitPiece(yard, ft, fS, new Vector3(fx, fy, fz2), 0f, rng, ref totalPlaced);
             }
 
-            // floor-large pad underneath
-            var factoryFloor = InstantiateProp(new PropDef(CK + "floor-large.fbx", wallScale, wallScale), rng);
-            if (factoryFloor != null)
+            // North perimeter
+            for (int i = 0; i < 6; i++)
             {
-                factoryFloor.transform.position = clusterPos + Quaternion.Euler(0f, facing, 0f) * new Vector3(0f, 0f, wallScale * 0.5f);
-                factoryFloor.transform.rotation = Quaternion.Euler(0f, facing, 0f);
-                factoryFloor.transform.SetParent(cluster);
-                factoryFloor.isStatic = true;
-                totalPlaced++;
+                float fx = cx - 20f + i * 8f;
+                float fz2 = cz + 24f;
+                float fy = SampleWorldHeight(terrain, terrainPos, fx, fz2);
+                PlaceKitPiece(yard, SK + "fence.fbx", fS,
+                    new Vector3(fx, fy, fz2), 0f, rng, ref totalPlaced);
             }
 
-            // yellow-tall accent wall
-            var accentWall = InstantiateProp(new PropDef(CK + "structure-yellow-tall.fbx", wallScale, wallScale), rng);
-            if (accentWall != null)
+            // East perimeter
+            for (int i = 0; i < 4; i++)
             {
-                accentWall.transform.position = clusterPos + Quaternion.Euler(0f, facing, 0f) * new Vector3(wallScale * 1.0f, 0f, 0f);
-                accentWall.transform.rotation = Quaternion.Euler(0f, facing + 90f, 0f);
-                accentWall.transform.SetParent(cluster);
-                accentWall.isStatic = true;
-                totalPlaced++;
+                float fx2 = cx + 24f;
+                float fz2 = cz - 16f + i * 11f;
+                float fy = SampleWorldHeight(terrain, terrainPos, fx2, fz2);
+                string ft = i == 2 ? SK + "fence-fortified.fbx" : SK + "fence.fbx";
+                PlaceKitPiece(yard, ft, fS, new Vector3(fx2, fy, fz2), 90f, rng, ref totalPlaced);
             }
 
-            // debris: 2-3 barrels, 1 box-large
-            totalPlaced += ScatterDebris(cluster, terrain, terrainPos, rng,
-                clusterPos.x, clusterPos.z, 3f, 12f, 3 + rng.Next(2),
-                new[] {
-                    new PropDef(SK + "barrel.fbx", 2.5f, 3.5f),
-                    new PropDef(SK + "barrel-open.fbx", 2.5f, 3.5f),
-                    new PropDef(SK + "box-large.fbx", 2.5f, 3.5f),
-                });
+            // West perimeter with gate
+            for (int i = 0; i < 3; i++)
+            {
+                float fx2 = cx - 25f;
+                float fz2 = cz - 15f + i * 12f;
+                float fy = SampleWorldHeight(terrain, terrainPos, fx2, fz2);
+                if (i == 1) // gate
+                    PlaceKitPiece(yard, SK + "fence-doorway.fbx", fS,
+                        new Vector3(fx2, fy, fz2), 90f, rng, ref totalPlaced);
+                else
+                    PlaceKitPiece(yard, SK + "fence.fbx", fS,
+                        new Vector3(fx2, fy, fz2), 90f, rng, ref totalPlaced);
+            }
+
+            // Entrance signpost
+            float gateY = SampleWorldHeight(terrain, terrainPos, cx - 28f, cz);
+            PlaceKitPiece(yard, SK + "signpost.fbx", 5f,
+                new Vector3(cx - 28f, gateY, cz + 2f), 270f, rng, ref totalPlaced);
+
+            Debug.Log($"FACTORY YARD placed at ({cx}, {baseY:F1}, {cz}): {totalPlaced} pieces — walk east from center");
         }
-
-        // --- cluster 2: warehouse (150m NE of center) ---
-        {
-            Vector3 clusterPos = new Vector3(130f, 0f, 80f);
-            clusterPos.y = SampleWorldHeight(terrain, terrainPos, clusterPos.x, clusterPos.z);
-            float facing = -135f; // entrance faces SW toward center
-
-            var cluster = new GameObject("Cluster_Warehouse").transform;
-            cluster.SetParent(parent);
-
-            float wallScale = 5f;
-            float wallHeight = wallScale * 1.0f;
-
-            // U-shape: 3 structure-wall segments
-            // back wall
-            var backWall = InstantiateProp(new PropDef(CK + "structure-wall.fbx", wallScale, wallScale), rng);
-            if (backWall != null)
-            {
-                backWall.transform.position = clusterPos;
-                backWall.transform.rotation = Quaternion.Euler(0f, facing, 0f);
-                backWall.transform.SetParent(cluster);
-                backWall.isStatic = true;
-                totalPlaced++;
-            }
-            // left wing
-            var leftWing = InstantiateProp(new PropDef(CK + "structure-wall.fbx", wallScale, wallScale), rng);
-            if (leftWing != null)
-            {
-                leftWing.transform.position = clusterPos + Quaternion.Euler(0f, facing, 0f) * new Vector3(-wallScale * 0.5f, 0f, -wallScale * 0.5f);
-                leftWing.transform.rotation = Quaternion.Euler(0f, facing + 90f, 0f);
-                leftWing.transform.SetParent(cluster);
-                leftWing.isStatic = true;
-                totalPlaced++;
-            }
-            // right wing
-            var rightWing = InstantiateProp(new PropDef(CK + "structure-wall.fbx", wallScale, wallScale), rng);
-            if (rightWing != null)
-            {
-                rightWing.transform.position = clusterPos + Quaternion.Euler(0f, facing, 0f) * new Vector3(wallScale * 0.5f, 0f, -wallScale * 0.5f);
-                rightWing.transform.rotation = Quaternion.Euler(0f, facing - 90f, 0f);
-                rightWing.transform.SetParent(cluster);
-                rightWing.isStatic = true;
-                totalPlaced++;
-            }
-
-            // wide doorway as entrance (front of U)
-            var entrance = InstantiateProp(new PropDef(CK + "structure-doorway-wide.fbx", wallScale, wallScale), rng);
-            if (entrance != null)
-            {
-                entrance.transform.position = clusterPos + Quaternion.Euler(0f, facing, 0f) * new Vector3(0f, 0f, -wallScale * 1.0f);
-                entrance.transform.rotation = Quaternion.Euler(0f, facing, 0f);
-                entrance.transform.SetParent(cluster);
-                entrance.isStatic = true;
-                totalPlaced++;
-            }
-
-            // cover-hopper roof
-            var warehouseRoof = InstantiateProp(new PropDef(CK + "cover-hopper.fbx", wallScale * 1.2f, wallScale * 1.2f), rng);
-            if (warehouseRoof != null)
-            {
-                warehouseRoof.transform.position = clusterPos + new Vector3(0f, wallHeight, 0f);
-                warehouseRoof.transform.rotation = Quaternion.Euler(0f, facing, 0f);
-                warehouseRoof.transform.SetParent(cluster);
-                warehouseRoof.isStatic = true;
-                totalPlaced++;
-            }
-
-            // floor-large pad
-            var warehouseFloor = InstantiateProp(new PropDef(CK + "floor-large.fbx", wallScale, wallScale), rng);
-            if (warehouseFloor != null)
-            {
-                warehouseFloor.transform.position = clusterPos + Quaternion.Euler(0f, facing, 0f) * new Vector3(0f, 0f, -wallScale * 0.25f);
-                warehouseFloor.transform.rotation = Quaternion.Euler(0f, facing, 0f);
-                warehouseFloor.transform.SetParent(cluster);
-                warehouseFloor.isStatic = true;
-                totalPlaced++;
-            }
-
-            // debris: boxes, barrel-open
-            totalPlaced += ScatterDebris(cluster, terrain, terrainPos, rng,
-                clusterPos.x, clusterPos.z, 3f, 15f, 4 + rng.Next(3),
-                new[] {
-                    new PropDef(SK + "box.fbx", 2.5f, 3.5f),
-                    new PropDef(SK + "box-large.fbx", 2.5f, 3.5f),
-                    new PropDef(SK + "box-large-open.fbx", 2.5f, 3.5f),
-                    new PropDef(SK + "barrel-open.fbx", 2.5f, 3.5f),
-                });
-        }
-
-        Debug.Log($"road buildings placed: {totalPlaced} pieces");
     }
 
     // === RIVERBED DECORATION ===
@@ -3025,6 +3192,11 @@ public static class HomeBaseSceneryDresser
 
     private static void PaintTerrainGrass(TerrainData td, System.Random rng)
     {
+        // disabled — terrain detail grass uses Unity's built-in wind animation
+        // which causes the green slabs to sway. Re-enable after tuning detail sizes.
+        td.detailPrototypes = new DetailPrototype[0];
+        return;
+
         var grassMesh = AssetDatabase.LoadAssetAtPath<GameObject>(
             "Assets/_Slopworks/Art/Kenney/survival-kit/Models/grass.fbx");
         var grassLargeMesh = AssetDatabase.LoadAssetAtPath<GameObject>(
@@ -3244,6 +3416,23 @@ public static class HomeBaseSceneryDresser
         return instance;
     }
 
+    /// <summary>
+    /// Place a single Kenney kit piece at an exact world position and Y rotation.
+    /// Uses fixed scale (min=max) so all building pieces are uniform.
+    /// </summary>
+    private static GameObject PlaceKitPiece(Transform parent, string path, float scale,
+        Vector3 worldPos, float yaw, System.Random rng, ref int count)
+    {
+        var inst = InstantiateProp(new PropDef(path, scale, scale), rng);
+        if (inst == null) return null;
+        inst.transform.position = worldPos;
+        inst.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+        inst.transform.SetParent(parent);
+        inst.isStatic = true;
+        count++;
+        return inst;
+    }
+
     private static Quaternion UprightRotation(float yaw, System.Random rng, float randomTiltDeg)
     {
         float tx = 0f, tz = 0f;
@@ -3313,6 +3502,11 @@ public static class HomeBaseSceneryDresser
             float ddz = wz - pos.y;
             if (ddx * ddx + ddz * ddz < thresholdSq * 2f) return true;
         }
+
+        // factory yard — 45m clear radius for the expanded compound
+        float fydx = wx - FactoryYardPos.x;
+        float fydz = wz - FactoryYardPos.y;
+        if (fydx * fydx + fydz * fydz < 45f * 45f) return true;
 
         return false;
     }
