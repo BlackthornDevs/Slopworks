@@ -268,6 +268,7 @@ public static class HomeBaseSceneryDresser
         PlaceSettlements(root.transform, terrain, terrainPos, rng, td);
         PlaceMerchantStructures(root.transform, terrain, terrainPos, rng, td);
         PlaceWaystations(root.transform, terrain, terrainPos, rng, td);
+        PlaceRoadBuildings(root.transform, terrain, terrainPos, rng, td);
         ScatterIndustrial(root.transform, terrain, terrainPos, rng, td);
         DecorateRiverbed(root.transform, terrain, terrainPos, rng, td);
         CreateRiverWater(root.transform, terrain, terrainPos, td);
@@ -1545,7 +1546,7 @@ public static class HomeBaseSceneryDresser
 
         int placed = 0;
 
-        for (int i = 0; i < 600; i++)
+        for (int i = 0; i < 300; i++)
         {
             float angle = (float)rng.NextDouble() * Mathf.PI * 2f;
             float radius = FlatRadius + (float)rng.NextDouble() * 100f - 10f;
@@ -1579,257 +1580,562 @@ public static class HomeBaseSceneryDresser
         parent.SetParent(root);
         int totalPlaced = 0;
 
-        // farmsteads
-        foreach (var center in FarmsteadPositions)
-        {
-            var farm = new GameObject($"Farmstead_{totalPlaced}").transform;
-            farm.SetParent(parent);
-            float cy = SampleWorldHeight(terrain, terrainPos, center.x, center.y);
+        // path constants for readability
+        const string SK = "Assets/_Slopworks/Art/Kenney/survival-kit/Models/";
+        const string CK = "Assets/_Slopworks/Art/Kenney/conveyor-kit/Models/";
+        const string TK = "Assets/_Slopworks/Art/Kenney/tower-defense-kit/Models/";
 
-            var mainProp = RuinProps[rng.Next(3)];
-            var main = InstantiateProp(mainProp, rng);
-            if (main != null)
+        // --- cluster 6: farmstead A (forest, south, off a trail) ---
+        {
+            Vector3 clusterPos = new Vector3(-100f, 0f, -250f);
+            clusterPos.y = SampleWorldHeight(terrain, terrainPos, clusterPos.x, clusterPos.z);
+            float facing = 30f; // face roughly NE toward implied trail
+
+            var cluster = new GameObject("Cluster_FarmsteadA").transform;
+            cluster.SetParent(parent);
+
+            float scale = 3.5f;
+            bool roofMissing = rng.NextDouble() < 0.3;
+
+            // main cabin: structure + roof (or canvas patch if roof missing)
+            var cabin = InstantiateProp(new PropDef(SK + "structure.fbx", scale, scale), rng);
+            if (cabin != null)
             {
-                float facing = 170f + (float)(rng.NextDouble() - 0.5) * 30f;
-                main.transform.position = new Vector3(center.x, cy, center.y);
-                main.transform.rotation = Quaternion.Euler(0f, facing, 0f);
-                main.transform.SetParent(farm);
-                main.isStatic = true;
+                float jitter = (float)(rng.NextDouble() - 0.5) * 4f;
+                cabin.transform.position = clusterPos;
+                cabin.transform.rotation = Quaternion.Euler(0f, facing + jitter, 0f);
+                cabin.transform.SetParent(cluster);
+                cabin.isStatic = true;
                 totalPlaced++;
             }
 
-            if (rng.NextDouble() > 0.3)
+            if (roofMissing)
             {
-                float angle = (float)rng.NextDouble() * Mathf.PI * 2f;
-                float dist = 8f + (float)rng.NextDouble() * 7f;
-                float ox = center.x + Mathf.Cos(angle) * dist;
-                float oz = center.y + Mathf.Sin(angle) * dist;
-                float oy = SampleWorldHeight(terrain, terrainPos, ox, oz);
-
-                var outProp = RuinProps[6 + rng.Next(3)];
-                var outBldg = InstantiateProp(outProp, rng);
-                if (outBldg != null)
+                // canvas patch instead of roof
+                var canvas = InstantiateProp(new PropDef(SK + "structure-canvas.fbx", scale, scale), rng);
+                if (canvas != null)
                 {
-                    float tilt = (float)(rng.NextDouble() - 0.5) * 6f;
-                    outBldg.transform.position = new Vector3(ox, oy, oz);
-                    outBldg.transform.rotation = Quaternion.Euler(tilt, (float)rng.NextDouble() * 360f, tilt * 0.5f);
-                    outBldg.transform.SetParent(farm);
-                    outBldg.isStatic = true;
+                    canvas.transform.position = clusterPos + new Vector3(0f, scale * 1.0f, 0f);
+                    canvas.transform.rotation = Quaternion.Euler(0f, facing + (float)(rng.NextDouble() - 0.5) * 10f, 0f);
+                    canvas.transform.SetParent(cluster);
+                    canvas.isStatic = true;
+                    totalPlaced++;
+                }
+            }
+            else
+            {
+                var roof = InstantiateProp(new PropDef(SK + "structure-roof.fbx", scale, scale), rng);
+                if (roof != null)
+                {
+                    roof.transform.position = clusterPos + new Vector3(0f, scale * 1.0f, 0f);
+                    roof.transform.rotation = Quaternion.Euler(0f, facing, 0f);
+                    roof.transform.SetParent(cluster);
+                    roof.isStatic = true;
                     totalPlaced++;
                 }
             }
 
-            for (int f = 0; f < 4 + rng.Next(4); f++)
+            // floor underneath cabin
+            var floorA = InstantiateProp(new PropDef(SK + "floor-old.fbx", scale, scale), rng);
+            if (floorA != null)
             {
-                float fAngle = (float)rng.NextDouble() * Mathf.PI * 2f;
-                float fDist = 12f + (float)rng.NextDouble() * 8f;
-                float fx = center.x + Mathf.Cos(fAngle) * fDist;
-                float fz = center.y + Mathf.Sin(fAngle) * fDist;
+                floorA.transform.position = clusterPos;
+                floorA.transform.rotation = Quaternion.Euler(0f, facing, 0f);
+                floorA.transform.SetParent(cluster);
+                floorA.isStatic = true;
+                totalPlaced++;
+            }
+
+            // outbuilding: metal shed offset 12m
+            float outScale = 2.5f;
+            float outAngle = facing + 40f;
+            Vector3 outPos = clusterPos + new Vector3(12f, 0f, 3f);
+            outPos.y = SampleWorldHeight(terrain, terrainPos, outPos.x, outPos.z);
+
+            var metalShed = InstantiateProp(new PropDef(SK + "structure-metal.fbx", outScale, outScale), rng);
+            if (metalShed != null)
+            {
+                metalShed.transform.position = outPos;
+                metalShed.transform.rotation = Quaternion.Euler(0f, outAngle, 0f);
+                metalShed.transform.SetParent(cluster);
+                metalShed.isStatic = true;
+                totalPlaced++;
+            }
+            var metalRoof = InstantiateProp(new PropDef(SK + "structure-metal-roof.fbx", outScale, outScale), rng);
+            if (metalRoof != null)
+            {
+                metalRoof.transform.position = outPos + new Vector3(0f, outScale * 1.0f, 0f);
+                metalRoof.transform.rotation = Quaternion.Euler(0f, outAngle, 0f);
+                metalRoof.transform.SetParent(cluster);
+                metalRoof.isStatic = true;
+                totalPlaced++;
+            }
+
+            // fence: 3 fence segments + 1 doorway
+            string[] fencePaths = { SK + "fence.fbx", SK + "fence.fbx", SK + "fence.fbx", SK + "fence-doorway.fbx" };
+            for (int f = 0; f < 4; f++)
+            {
+                float fAngle = ((float)f / 4f) * Mathf.PI * 2f;
+                float fDist = 10f;
+                float fx = clusterPos.x + Mathf.Cos(fAngle) * fDist;
+                float fz = clusterPos.z + Mathf.Sin(fAngle) * fDist;
                 float fy = SampleWorldHeight(terrain, terrainPos, fx, fz);
 
-                var fenceProp = IndustrialProps[6 + rng.Next(3)];
-                var fence = InstantiateProp(fenceProp, rng);
+                var fence = InstantiateProp(new PropDef(fencePaths[f], 3f, 3f), rng);
                 if (fence == null) continue;
-
-                float faceFire = Mathf.Atan2(center.y - fz, center.x - fx) * Mathf.Rad2Deg;
-                float tilt = (float)(rng.NextDouble() - 0.5) * 20f;
                 fence.transform.position = new Vector3(fx, fy, fz);
-                fence.transform.rotation = Quaternion.Euler(tilt, faceFire + (float)(rng.NextDouble() - 0.5) * 40f, 0f);
-                fence.transform.SetParent(farm);
+                fence.transform.rotation = Quaternion.Euler(0f, fAngle * Mathf.Rad2Deg + 90f, 0f);
+                fence.transform.SetParent(cluster);
                 fence.isStatic = true;
                 totalPlaced++;
             }
 
-            for (int d = 0; d < 4 + rng.Next(6); d++)
-            {
-                float dAngle = (float)rng.NextDouble() * Mathf.PI * 2f;
-                float dDist = (float)rng.NextDouble() * 15f;
-                float dx = center.x + Mathf.Cos(dAngle) * dDist;
-                float dz = center.y + Mathf.Sin(dAngle) * dDist;
-                float dy = SampleWorldHeight(terrain, terrainPos, dx, dz);
-
-                var debrisProp = IndustrialProps[rng.Next(IndustrialProps.Length)];
-                var debris = InstantiateProp(debrisProp, rng);
-                if (debris == null) continue;
-
-                float tilt = (float)(rng.NextDouble() - 0.5) * 30f;
-                debris.transform.position = new Vector3(dx, dy, dz);
-                debris.transform.rotation = Quaternion.Euler(tilt, (float)rng.NextDouble() * 360f, tilt * 0.3f);
-                debris.transform.SetParent(farm);
-                debris.isStatic = true;
-                totalPlaced++;
-            }
-
-            for (int u = 0; u < 5 + rng.Next(5); u++)
-            {
-                float uAngle = (float)rng.NextDouble() * Mathf.PI * 2f;
-                float uDist = 2f + (float)rng.NextDouble() * 5f;
-                float ux = center.x + Mathf.Cos(uAngle) * uDist;
-                float uz = center.y + Mathf.Sin(uAngle) * uDist;
-                float uy = SampleWorldHeight(terrain, terrainPos, ux, uz);
-
-                var uProp = UndergrowthProps[rng.Next(4)];
-                var uInst = InstantiateProp(uProp, rng);
-                if (uInst == null) continue;
-
-                uInst.transform.position = new Vector3(ux, uy, uz);
-                uInst.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
-                uInst.transform.SetParent(farm);
-                uInst.isStatic = false;
-                AddWindSway(uInst, 2f, 1f);
-                totalPlaced++;
-            }
+            // debris: barrel, box, campfire-pit
+            totalPlaced += ScatterDebris(cluster, terrain, terrainPos, rng,
+                clusterPos.x, clusterPos.z, 8f, 15f, 3 + rng.Next(5),
+                new[] {
+                    new PropDef(SK + "barrel.fbx", 2.5f, 3.5f),
+                    new PropDef(SK + "box.fbx", 2.5f, 3.5f),
+                    new PropDef(SK + "campfire-pit.fbx", 3f, 3.5f),
+                    new PropDef(SK + "box-open.fbx", 2.5f, 3.5f),
+                    new PropDef(SK + "metal-panel.fbx", 3f, 3.5f),
+                });
         }
 
-        // small clusters
-        foreach (var center in SmallClusterPositions)
+        // --- cluster 7: farmstead B (floodplain, near river — more ruined) ---
         {
-            var cluster = new GameObject($"Cluster_{totalPlaced}").transform;
+            Vector3 clusterPos = new Vector3(80f, 0f, -350f);
+            clusterPos.y = SampleWorldHeight(terrain, terrainPos, clusterPos.x, clusterPos.z);
+            float facing = -10f;
+
+            var cluster = new GameObject("Cluster_FarmsteadB").transform;
             cluster.SetParent(parent);
 
-            int buildingCount = 3 + rng.Next(3);
-            float yardRadius = 10f + (float)rng.NextDouble() * 5f;
+            float scale = 3.5f;
 
-            for (int b = 0; b < buildingCount; b++)
+            // main cabin: no roof (collapsed), floor-hole + floor-old
+            var cabinB = InstantiateProp(new PropDef(SK + "structure.fbx", scale, scale), rng);
+            if (cabinB != null)
             {
-                float angle = ((float)b / buildingCount) * Mathf.PI * 2f + (float)(rng.NextDouble() - 0.5) * 0.5f;
-                float dist = yardRadius * (0.8f + (float)rng.NextDouble() * 0.4f);
-                float bx = center.x + Mathf.Cos(angle) * dist;
-                float bz = center.y + Mathf.Sin(angle) * dist;
-                float by = SampleWorldHeight(terrain, terrainPos, bx, bz);
-
-                var prop = RuinProps[rng.Next(RuinProps.Length)];
-                var bldg = InstantiateProp(prop, rng);
-                if (bldg == null) continue;
-
-                float facing = Mathf.Atan2(center.y - bz, center.x - bx) * Mathf.Rad2Deg;
-                float tilt = (float)(rng.NextDouble() - 0.5) * 6f;
-                bldg.transform.position = new Vector3(bx, by, bz);
-                bldg.transform.rotation = Quaternion.Euler(tilt, facing + (float)(rng.NextDouble() - 0.5) * 20f, tilt * 0.5f);
-                bldg.transform.SetParent(cluster);
-                bldg.isStatic = true;
+                float jitter = (float)(rng.NextDouble() - 0.5) * 4f;
+                cabinB.transform.position = clusterPos;
+                cabinB.transform.rotation = Quaternion.Euler(0f, facing + jitter, 0f);
+                cabinB.transform.SetParent(cluster);
+                cabinB.isStatic = true;
                 totalPlaced++;
             }
 
-            for (int d = 0; d < 6 + rng.Next(6); d++)
+            // canvas tarp where roof was
+            var tarp = InstantiateProp(new PropDef(SK + "structure-canvas.fbx", scale, scale), rng);
+            if (tarp != null)
             {
-                float dAngle = (float)rng.NextDouble() * Mathf.PI * 2f;
-                float dDist = (float)rng.NextDouble() * (yardRadius + 10f);
-                float dx = center.x + Mathf.Cos(dAngle) * dDist;
-                float dz = center.y + Mathf.Sin(dAngle) * dDist;
-                float dy = SampleWorldHeight(terrain, terrainPos, dx, dz);
-
-                bool isUndergrowth = rng.NextDouble() > 0.5;
-                PropDef prop;
-                if (isUndergrowth) prop = UndergrowthProps[rng.Next(4)];
-                else prop = IndustrialProps[rng.Next(IndustrialProps.Length)];
-
-                var inst = InstantiateProp(prop, rng);
-                if (inst == null) continue;
-
-                inst.transform.position = new Vector3(dx, dy, dz);
-                inst.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
-                inst.transform.SetParent(cluster);
-                inst.isStatic = !isUndergrowth;
-                if (isUndergrowth) AddWindSway(inst, 2f, 1f);
+                tarp.transform.position = clusterPos + new Vector3(0f, scale * 0.9f, 0f);
+                tarp.transform.rotation = Quaternion.Euler(3f, facing + 8f, -2f);
+                tarp.transform.SetParent(cluster);
+                tarp.isStatic = true;
                 totalPlaced++;
             }
+
+            // damaged floors
+            var floorHole = InstantiateProp(new PropDef(SK + "floor-hole.fbx", scale, scale), rng);
+            if (floorHole != null)
+            {
+                floorHole.transform.position = clusterPos + new Vector3(-1f, 0f, 0f);
+                floorHole.transform.rotation = Quaternion.Euler(0f, facing, 0f);
+                floorHole.transform.SetParent(cluster);
+                floorHole.isStatic = true;
+                totalPlaced++;
+            }
+            var floorOld = InstantiateProp(new PropDef(SK + "floor-old.fbx", scale, scale), rng);
+            if (floorOld != null)
+            {
+                floorOld.transform.position = clusterPos + new Vector3(1f, 0f, 1f);
+                floorOld.transform.rotation = Quaternion.Euler(0f, facing, 0f);
+                floorOld.transform.SetParent(cluster);
+                floorOld.isStatic = true;
+                totalPlaced++;
+            }
+
+            // outbuilding: just metal wall segments (shed walls, no roof)
+            Vector3 outPosB = clusterPos + new Vector3(10f, 0f, -5f);
+            outPosB.y = SampleWorldHeight(terrain, terrainPos, outPosB.x, outPosB.z);
+            for (int w = 0; w < 3; w++)
+            {
+                var wall = InstantiateProp(new PropDef(SK + "structure-metal-wall.fbx", 2.5f, 3f), rng);
+                if (wall == null) continue;
+                float wOffset = (w - 1) * 2.5f;
+                float jitter = (float)(rng.NextDouble() - 0.5) * 4f;
+                wall.transform.position = outPosB + new Vector3(wOffset, 0f, 0f);
+                wall.transform.rotation = Quaternion.Euler(0f, facing + 90f + jitter, 0f);
+                wall.transform.SetParent(cluster);
+                wall.isStatic = true;
+                totalPlaced++;
+            }
+
+            // no fencing (overgrown feel), more debris than farmstead A
+            totalPlaced += ScatterDebris(cluster, terrain, terrainPos, rng,
+                clusterPos.x, clusterPos.z, 8f, 15f, 4 + rng.Next(4),
+                new[] {
+                    new PropDef(SK + "barrel.fbx", 2.5f, 3.5f),
+                    new PropDef(SK + "barrel-open.fbx", 2.5f, 3.5f),
+                    new PropDef(SK + "box.fbx", 2.5f, 3.5f),
+                    new PropDef(SK + "box-large-open.fbx", 2.5f, 3.5f),
+                    new PropDef(SK + "metal-panel.fbx", 3f, 3.5f),
+                    new PropDef(SK + "metal-panel-screws.fbx", 3f, 3.5f),
+                    new PropDef(SK + "resource-stone.fbx", 2f, 3f),
+                });
         }
 
-        // ruined hamlet
+        // --- cluster 8: river hamlet (linear along river, near subway entrance) ---
         {
-            var hamlet = new GameObject("RuinedHamlet").transform;
-            hamlet.SetParent(parent);
+            Vector3 hamletCenter = new Vector3(200f, 0f, -380f);
+            float roadFacing = 0f; // buildings spread along X axis
 
-            float roadDir = 0.3f;
-            int hamletBuildingCount = 12 + rng.Next(4);
+            var cluster = new GameObject("Cluster_Hamlet").transform;
+            cluster.SetParent(parent);
 
-            for (int b = 0; b < hamletBuildingCount; b++)
+            // building 1: intact general store (structure + structure-roof)
             {
-                float along = ((float)b / hamletBuildingCount - 0.5f) * 100f;
-                float perpOffset = ((float)(rng.NextDouble() - 0.5)) * 20f;
-                if (Mathf.Abs(perpOffset) < 5f) perpOffset = Mathf.Sign(perpOffset) * (5f + (float)rng.NextDouble() * 5f);
+                Vector3 pos = hamletCenter + new Vector3(-37f, 0f, 0f);
+                pos.y = SampleWorldHeight(terrain, terrainPos, pos.x, pos.z);
+                float bFacing = roadFacing + 180f + (float)(rng.NextDouble() - 0.5) * 10f;
+                float bScale = 3.5f;
 
-                float bx = HamletCenter.x + Mathf.Cos(roadDir) * along + Mathf.Sin(roadDir) * perpOffset;
-                float bz = HamletCenter.y + Mathf.Sin(roadDir) * along - Mathf.Cos(roadDir) * perpOffset;
-                float by = SampleWorldHeight(terrain, terrainPos, bx, bz);
-
-                var prop = RuinProps[rng.Next(RuinProps.Length)];
-                var bldg = InstantiateProp(prop, rng);
-                if (bldg == null) continue;
-
-                float facing = roadDir * Mathf.Rad2Deg + (perpOffset > 0 ? -90f : 90f);
-                float tilt = (float)(rng.NextDouble() - 0.5) * 6f;
-
-                if (rng.NextDouble() < 0.4f)
-                    tilt = 15f + (float)rng.NextDouble() * 15f;
-
-                bldg.transform.position = new Vector3(bx, by, bz);
-                bldg.transform.rotation = Quaternion.Euler(tilt, facing + (float)(rng.NextDouble() - 0.5) * 10f, tilt * 0.3f);
-                bldg.transform.SetParent(hamlet);
-                bldg.isStatic = true;
-                totalPlaced++;
-
-                for (int d = 0; d < 2 + rng.Next(3); d++)
+                var walls = InstantiateProp(new PropDef(SK + "structure.fbx", bScale, bScale), rng);
+                if (walls != null)
                 {
-                    float da = (float)rng.NextDouble() * Mathf.PI * 2f;
-                    float dd = 2f + (float)rng.NextDouble() * 8f;
-                    float dx = bx + Mathf.Cos(da) * dd;
-                    float dz = bz + Mathf.Sin(da) * dd;
-                    float dy = SampleWorldHeight(terrain, terrainPos, dx, dz);
-
-                    var dProp = IndustrialProps[rng.Next(IndustrialProps.Length)];
-                    var dInst = InstantiateProp(dProp, rng);
-                    if (dInst == null) continue;
-
-                    float dt = (float)(rng.NextDouble() - 0.5) * 25f;
-                    dInst.transform.position = new Vector3(dx, dy, dz);
-                    dInst.transform.rotation = Quaternion.Euler(dt, (float)rng.NextDouble() * 360f, 0f);
-                    dInst.transform.SetParent(hamlet);
-                    dInst.isStatic = true;
+                    walls.transform.position = pos;
+                    walls.transform.rotation = Quaternion.Euler(0f, bFacing, 0f);
+                    walls.transform.SetParent(cluster);
+                    walls.isStatic = true;
+                    totalPlaced++;
+                }
+                var bRoof = InstantiateProp(new PropDef(SK + "structure-roof.fbx", bScale, bScale), rng);
+                if (bRoof != null)
+                {
+                    bRoof.transform.position = pos + new Vector3(0f, bScale * 1.0f, 0f);
+                    bRoof.transform.rotation = Quaternion.Euler(0f, bFacing, 0f);
+                    bRoof.transform.SetParent(cluster);
+                    bRoof.isStatic = true;
                     totalPlaced++;
                 }
             }
 
-            for (int u = 0; u < 20 + rng.Next(10); u++)
+            // building 2: conveyor wall + window (mixed ruin), no roof
             {
-                float ux = HamletCenter.x + (float)(rng.NextDouble() - 0.5) * 120f;
-                float uz = HamletCenter.y + (float)(rng.NextDouble() - 0.5) * 40f;
-                float uy = SampleWorldHeight(terrain, terrainPos, ux, uz);
+                Vector3 pos = hamletCenter + new Vector3(-22f, 0f, 4f);
+                pos.y = SampleWorldHeight(terrain, terrainPos, pos.x, pos.z);
+                float bFacing = roadFacing + 170f + (float)(rng.NextDouble() - 0.5) * 10f;
+                float bScale = 4f;
 
-                var uProp = UndergrowthProps[rng.Next(4)];
-                var uInst = InstantiateProp(uProp, rng);
-                if (uInst == null) continue;
+                var wall2 = InstantiateProp(new PropDef(CK + "structure-wall.fbx", bScale, bScale), rng);
+                if (wall2 != null)
+                {
+                    wall2.transform.position = pos;
+                    wall2.transform.rotation = Quaternion.Euler(0f, bFacing, 0f);
+                    wall2.transform.SetParent(cluster);
+                    wall2.isStatic = true;
+                    totalPlaced++;
+                }
+                var win2 = InstantiateProp(new PropDef(CK + "structure-window.fbx", bScale, bScale), rng);
+                if (win2 != null)
+                {
+                    win2.transform.position = pos + Quaternion.Euler(0f, bFacing, 0f) * new Vector3(bScale * 1.0f, 0f, 0f);
+                    win2.transform.rotation = Quaternion.Euler(0f, bFacing, 0f);
+                    win2.transform.SetParent(cluster);
+                    win2.isStatic = true;
+                    totalPlaced++;
+                }
+            }
 
-                uInst.transform.position = new Vector3(ux, uy, uz);
-                uInst.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
-                uInst.transform.SetParent(hamlet);
-                uInst.isStatic = false;
-                AddWindSway(uInst, 2f, 1f);
+            // building 3: collapsed cabin (structure + floor-hole)
+            {
+                Vector3 pos = hamletCenter + new Vector3(-7f, 0f, -3f);
+                pos.y = SampleWorldHeight(terrain, terrainPos, pos.x, pos.z);
+                float bFacing = roadFacing + 185f + (float)(rng.NextDouble() - 0.5) * 10f;
+                float bScale = 3.5f;
+
+                var cabin3 = InstantiateProp(new PropDef(SK + "structure.fbx", bScale, bScale), rng);
+                if (cabin3 != null)
+                {
+                    float tilt = 4f + (float)rng.NextDouble() * 6f;
+                    cabin3.transform.position = pos;
+                    cabin3.transform.rotation = Quaternion.Euler(tilt, bFacing, tilt * 0.3f);
+                    cabin3.transform.SetParent(cluster);
+                    cabin3.isStatic = true;
+                    totalPlaced++;
+                }
+                var floor3 = InstantiateProp(new PropDef(SK + "floor-hole.fbx", bScale, bScale), rng);
+                if (floor3 != null)
+                {
+                    floor3.transform.position = pos;
+                    floor3.transform.rotation = Quaternion.Euler(0f, bFacing, 0f);
+                    floor3.transform.SetParent(cluster);
+                    floor3.isStatic = true;
+                    totalPlaced++;
+                }
+            }
+
+            // building 4: market stall (conveyor doorway + wall, cover roof)
+            {
+                Vector3 pos = hamletCenter + new Vector3(8f, 0f, 2f);
+                pos.y = SampleWorldHeight(terrain, terrainPos, pos.x, pos.z);
+                float bFacing = roadFacing + 175f + (float)(rng.NextDouble() - 0.5) * 10f;
+                float bScale = 3.5f;
+
+                var door4 = InstantiateProp(new PropDef(CK + "structure-doorway.fbx", bScale, bScale), rng);
+                if (door4 != null)
+                {
+                    door4.transform.position = pos;
+                    door4.transform.rotation = Quaternion.Euler(0f, bFacing, 0f);
+                    door4.transform.SetParent(cluster);
+                    door4.isStatic = true;
+                    totalPlaced++;
+                }
+                var wall4 = InstantiateProp(new PropDef(CK + "structure-wall.fbx", bScale, bScale), rng);
+                if (wall4 != null)
+                {
+                    wall4.transform.position = pos + Quaternion.Euler(0f, bFacing, 0f) * new Vector3(bScale * 1.0f, 0f, 0f);
+                    wall4.transform.rotation = Quaternion.Euler(0f, bFacing + 90f, 0f);
+                    wall4.transform.SetParent(cluster);
+                    wall4.isStatic = true;
+                    totalPlaced++;
+                }
+                var cover4 = InstantiateProp(new PropDef(CK + "cover.fbx", bScale, bScale), rng);
+                if (cover4 != null)
+                {
+                    cover4.transform.position = pos + new Vector3(0f, bScale * 1.0f, 0f);
+                    cover4.transform.rotation = Quaternion.Euler(0f, bFacing, 0f);
+                    cover4.transform.SetParent(cluster);
+                    cover4.isStatic = true;
+                    totalPlaced++;
+                }
+            }
+
+            // building 5: workshop (structure-metal + structure-metal-doorway)
+            {
+                Vector3 pos = hamletCenter + new Vector3(23f, 0f, -2f);
+                pos.y = SampleWorldHeight(terrain, terrainPos, pos.x, pos.z);
+                float bFacing = roadFacing + 190f + (float)(rng.NextDouble() - 0.5) * 10f;
+                float bScale = 3f;
+
+                var metalFrame = InstantiateProp(new PropDef(SK + "structure-metal.fbx", bScale, bScale), rng);
+                if (metalFrame != null)
+                {
+                    metalFrame.transform.position = pos;
+                    metalFrame.transform.rotation = Quaternion.Euler(0f, bFacing, 0f);
+                    metalFrame.transform.SetParent(cluster);
+                    metalFrame.isStatic = true;
+                    totalPlaced++;
+                }
+                var metalDoor = InstantiateProp(new PropDef(SK + "structure-metal-doorway.fbx", bScale, bScale), rng);
+                if (metalDoor != null)
+                {
+                    metalDoor.transform.position = pos + Quaternion.Euler(0f, bFacing, 0f) * new Vector3(bScale * 1.0f, 0f, 0f);
+                    metalDoor.transform.rotation = Quaternion.Euler(0f, bFacing, 0f);
+                    metalDoor.transform.SetParent(cluster);
+                    metalDoor.isStatic = true;
+                    totalPlaced++;
+                }
+            }
+
+            // building 6 (optional): tent-canvas camp near end
+            if (rng.NextDouble() < 0.7)
+            {
+                Vector3 pos = hamletCenter + new Vector3(35f, 0f, 1f);
+                pos.y = SampleWorldHeight(terrain, terrainPos, pos.x, pos.z);
+
+                var tent6 = InstantiateProp(new PropDef(SK + "tent-canvas.fbx", 3f, 3.5f), rng);
+                if (tent6 != null)
+                {
+                    tent6.transform.position = pos;
+                    tent6.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
+                    tent6.transform.SetParent(cluster);
+                    tent6.isStatic = true;
+                    totalPlaced++;
+                }
+                var campfire6 = InstantiateProp(new PropDef(SK + "campfire-pit.fbx", 3f, 3.5f), rng);
+                if (campfire6 != null)
+                {
+                    campfire6.transform.position = pos + new Vector3(3f, 0f, 2f);
+                    campfire6.transform.position = new Vector3(campfire6.transform.position.x,
+                        SampleWorldHeight(terrain, terrainPos, campfire6.transform.position.x, campfire6.transform.position.z),
+                        campfire6.transform.position.z);
+                    campfire6.transform.SetParent(cluster);
+                    campfire6.isStatic = true;
+                    totalPlaced++;
+                }
+            }
+
+            // debris scattered between buildings
+            totalPlaced += ScatterDebris(cluster, terrain, terrainPos, rng,
+                hamletCenter.x, hamletCenter.z, 5f, 40f, 6 + rng.Next(6),
+                new[] {
+                    new PropDef(SK + "barrel.fbx", 2.5f, 3.5f),
+                    new PropDef(SK + "barrel-open.fbx", 2.5f, 3.5f),
+                    new PropDef(SK + "box.fbx", 2.5f, 3.5f),
+                    new PropDef(SK + "box-open.fbx", 2.5f, 3.5f),
+                    new PropDef(SK + "metal-panel.fbx", 3f, 3.5f),
+                    new PropDef(SK + "resource-stone.fbx", 2f, 3f),
+                    new PropDef(SK + "chest.fbx", 2.5f, 3f),
+                });
+        }
+
+        // --- cluster 9: watchtower — escarpment overlook (rocky upland) ---
+        {
+            Vector3 clusterPos = new Vector3(-350f, 0f, 300f);
+            clusterPos.y = SampleWorldHeight(terrain, terrainPos, clusterPos.x, clusterPos.z);
+
+            var cluster = new GameObject("Cluster_WatchtowerEscarpment").transform;
+            cluster.SetParent(parent);
+
+            float towerScale = 3.5f;
+            float pieceHeight = towerScale * 1.0f;
+
+            // stacked tower: base, bottom, middle, top, roof
+            string[] towerPieces = {
+                TK + "tower-round-base.fbx",
+                TK + "tower-round-bottom-a.fbx",
+                TK + "tower-round-middle-a.fbx",
+                TK + "tower-round-top-a.fbx",
+                TK + "tower-round-roof-a.fbx",
+            };
+            for (int i = 0; i < towerPieces.Length; i++)
+            {
+                var piece = InstantiateProp(new PropDef(towerPieces[i], towerScale, towerScale), rng);
+                if (piece == null) continue;
+                piece.transform.position = clusterPos + new Vector3(0f, pieceHeight * i, 0f);
+                piece.transform.rotation = Quaternion.Euler(0f, 0f, 0f);
+                piece.transform.SetParent(cluster);
+                piece.isStatic = true;
                 totalPlaced++;
             }
 
-            for (int t = 0; t < 1 + rng.Next(2); t++)
+            // 4 fence-fortified segments in a ring (radius ~8m)
+            for (int f = 0; f < 4; f++)
             {
-                float tx = HamletCenter.x + (float)(rng.NextDouble() - 0.5) * 60f;
-                float tz = HamletCenter.y + (float)(rng.NextDouble() - 0.5) * 20f;
-                float ty = SampleWorldHeight(terrain, terrainPos, tx, tz);
+                float fAngle = ((float)f / 4f) * Mathf.PI * 2f + 0.4f;
+                float fDist = 8f;
+                float fx = clusterPos.x + Mathf.Cos(fAngle) * fDist;
+                float fz = clusterPos.z + Mathf.Sin(fAngle) * fDist;
+                float fy = SampleWorldHeight(terrain, terrainPos, fx, fz);
 
-                var floodCanopy = GetCanopyForZone(BiomeZone.Floodplain);
-                var species = floodCanopy[rng.Next(floodCanopy.Length)];
-                var tree = InstantiateProp(species.Prop, rng);
-                if (tree == null) continue;
+                var fence = InstantiateProp(new PropDef(SK + "fence-fortified.fbx", 3.5f, 3.5f), rng);
+                if (fence == null) continue;
+                fence.transform.position = new Vector3(fx, fy, fz);
+                fence.transform.rotation = Quaternion.Euler(0f, fAngle * Mathf.Rad2Deg + 90f, 0f);
+                fence.transform.SetParent(cluster);
+                fence.isStatic = true;
+                totalPlaced++;
+            }
 
-                tree.transform.position = new Vector3(tx, ty, tz);
-                tree.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
-                tree.transform.SetParent(hamlet);
-                tree.isStatic = false;
-                AddWindSway(tree, species.WindAmount, species.WindSpeed);
+            // scaffolding at base
+            var scaffold = InstantiateProp(new PropDef(TK + "wood-structure.fbx", towerScale, towerScale), rng);
+            if (scaffold != null)
+            {
+                scaffold.transform.position = clusterPos + new Vector3(3f, 0f, 2f);
+                scaffold.transform.position = new Vector3(scaffold.transform.position.x,
+                    SampleWorldHeight(terrain, terrainPos, scaffold.transform.position.x, scaffold.transform.position.z),
+                    scaffold.transform.position.z);
+                scaffold.transform.rotation = Quaternion.Euler(0f, 45f, 0f);
+                scaffold.transform.SetParent(cluster);
+                scaffold.isStatic = true;
+                totalPlaced++;
+            }
+        }
+
+        // --- cluster 10: watchtower — river crossing (forest/floodplain boundary) ---
+        {
+            Vector3 clusterPos = new Vector3(250f, 0f, -280f);
+            clusterPos.y = SampleWorldHeight(terrain, terrainPos, clusterPos.x, clusterPos.z);
+
+            var cluster = new GameObject("Cluster_WatchtowerRiver").transform;
+            cluster.SetParent(parent);
+
+            float towerScale = 3f;
+            float pieceHeight = towerScale * 1.0f;
+
+            // shorter square tower: 4 pieces
+            string[] towerPieces = {
+                TK + "tower-square-bottom-a.fbx",
+                TK + "tower-square-middle-a.fbx",
+                TK + "tower-square-top-a.fbx",
+                TK + "tower-square-roof-a.fbx",
+            };
+            for (int i = 0; i < towerPieces.Length; i++)
+            {
+                var piece = InstantiateProp(new PropDef(towerPieces[i], towerScale, towerScale), rng);
+                if (piece == null) continue;
+                piece.transform.position = clusterPos + new Vector3(0f, pieceHeight * i, 0f);
+                piece.transform.rotation = Quaternion.Euler(0f, 15f, 0f);
+                piece.transform.SetParent(cluster);
+                piece.isStatic = true;
+                totalPlaced++;
+            }
+
+            // wood-structure at base
+            var scaffoldR = InstantiateProp(new PropDef(TK + "wood-structure.fbx", towerScale, towerScale), rng);
+            if (scaffoldR != null)
+            {
+                scaffoldR.transform.position = clusterPos + new Vector3(-2f, 0f, 2f);
+                scaffoldR.transform.position = new Vector3(scaffoldR.transform.position.x,
+                    SampleWorldHeight(terrain, terrainPos, scaffoldR.transform.position.x, scaffoldR.transform.position.z),
+                    scaffoldR.transform.position.z);
+                scaffoldR.transform.rotation = Quaternion.Euler(0f, -30f, 0f);
+                scaffoldR.transform.SetParent(cluster);
+                scaffoldR.isStatic = true;
+                totalPlaced++;
+            }
+
+            // 2 fence segments
+            for (int f = 0; f < 2; f++)
+            {
+                float fAngle = f * Mathf.PI + 0.5f;
+                float fDist = 5f;
+                float fx = clusterPos.x + Mathf.Cos(fAngle) * fDist;
+                float fz = clusterPos.z + Mathf.Sin(fAngle) * fDist;
+                float fy = SampleWorldHeight(terrain, terrainPos, fx, fz);
+
+                var fence = InstantiateProp(new PropDef(SK + "fence.fbx", 3f, 3f), rng);
+                if (fence == null) continue;
+                fence.transform.position = new Vector3(fx, fy, fz);
+                fence.transform.rotation = Quaternion.Euler(0f, fAngle * Mathf.Rad2Deg + 90f, 0f);
+                fence.transform.SetParent(cluster);
+                fence.isStatic = true;
                 totalPlaced++;
             }
         }
 
         Debug.Log($"settlements placed: {totalPlaced} total pieces");
+    }
+
+    /// <summary>
+    /// Scatter random debris props around a center point. Returns count placed.
+    /// </summary>
+    private static int ScatterDebris(Transform parent, Terrain terrain, Vector3 terrainPos,
+        System.Random rng, float cx, float cz, float minRadius, float maxRadius, int count, PropDef[] pool)
+    {
+        int placed = 0;
+        for (int d = 0; d < count; d++)
+        {
+            float angle = (float)rng.NextDouble() * Mathf.PI * 2f;
+            float dist = minRadius + (float)rng.NextDouble() * (maxRadius - minRadius);
+            float dx = cx + Mathf.Cos(angle) * dist;
+            float dz = cz + Mathf.Sin(angle) * dist;
+            float dy = SampleWorldHeight(terrain, terrainPos, dx, dz);
+
+            var prop = pool[rng.Next(pool.Length)];
+            var inst = InstantiateProp(prop, rng);
+            if (inst == null) continue;
+
+            float tilt = (float)(rng.NextDouble() - 0.5) * 20f;
+            inst.transform.position = new Vector3(dx, dy, dz);
+            inst.transform.rotation = Quaternion.Euler(tilt, (float)rng.NextDouble() * 360f, tilt * 0.3f);
+            inst.transform.SetParent(parent);
+            inst.isStatic = true;
+            placed++;
+        }
+        return placed;
     }
 
     private static void PlaceMerchantStructures(Transform root, Terrain terrain, Vector3 terrainPos, System.Random rng, TerrainData td)
@@ -1838,160 +2144,268 @@ public static class HomeBaseSceneryDresser
         parent.SetParent(root);
         int totalPlaced = 0;
 
-        // gas station
-        {
-            var station = new GameObject("GasStation").transform;
-            station.SetParent(parent);
-            float gy = SampleWorldHeight(terrain, terrainPos, GasStationPos.x, GasStationPos.y);
+        const string SK = "Assets/_Slopworks/Art/Kenney/survival-kit/Models/";
+        const string CK = "Assets/_Slopworks/Art/Kenney/conveyor-kit/Models/";
 
-            var canopy = InstantiateProp(RuinProps[3], rng);
+        // --- cluster 3: mechanic's garage (near train station at waystation index 1) ---
+        {
+            Vector3 clusterPos = new Vector3(WaystationPositions[1].x + 20f, 0f, WaystationPositions[1].y);
+            clusterPos.y = SampleWorldHeight(terrain, terrainPos, clusterPos.x, clusterPos.z);
+            float facing = -90f; // door faces west toward the station
+
+            var cluster = new GameObject("Cluster_Garage").transform;
+            cluster.SetParent(parent);
+
+            float wallScale = 4f;
+
+            // 2 yellow-tall walls forming two sides of the garage
+            var wallL = InstantiateProp(new PropDef(CK + "structure-yellow-tall.fbx", wallScale, wallScale), rng);
+            if (wallL != null)
+            {
+                wallL.transform.position = clusterPos;
+                wallL.transform.rotation = Quaternion.Euler(0f, facing + (float)(rng.NextDouble() - 0.5) * 4f, 0f);
+                wallL.transform.SetParent(cluster);
+                wallL.isStatic = true;
+                totalPlaced++;
+            }
+            var wallR = InstantiateProp(new PropDef(CK + "structure-yellow-tall.fbx", wallScale, wallScale), rng);
+            if (wallR != null)
+            {
+                wallR.transform.position = clusterPos + Quaternion.Euler(0f, facing, 0f) * new Vector3(wallScale * 1.0f, 0f, 0f);
+                wallR.transform.rotation = Quaternion.Euler(0f, facing + 90f + (float)(rng.NextDouble() - 0.5) * 4f, 0f);
+                wallR.transform.SetParent(cluster);
+                wallR.isStatic = true;
+                totalPlaced++;
+            }
+
+            // wide open door as entrance
+            var door = InstantiateProp(new PropDef(CK + "door-wide-open.fbx", wallScale, wallScale), rng);
+            if (door != null)
+            {
+                door.transform.position = clusterPos + Quaternion.Euler(0f, facing, 0f) * new Vector3(0f, 0f, -wallScale * 1.0f);
+                door.transform.rotation = Quaternion.Euler(0f, facing, 0f);
+                door.transform.SetParent(cluster);
+                door.isStatic = true;
+                totalPlaced++;
+            }
+
+            // metal floor pad
+            var floorPad = InstantiateProp(new PropDef(SK + "structure-metal-floor.fbx", wallScale, wallScale), rng);
+            if (floorPad != null)
+            {
+                floorPad.transform.position = clusterPos;
+                floorPad.transform.rotation = Quaternion.Euler(0f, facing, 0f);
+                floorPad.transform.SetParent(cluster);
+                floorPad.isStatic = true;
+                totalPlaced++;
+            }
+
+            // cover-stripe roof
+            var roofG = InstantiateProp(new PropDef(CK + "cover-stripe.fbx", wallScale, wallScale), rng);
+            if (roofG != null)
+            {
+                roofG.transform.position = clusterPos + new Vector3(0f, wallScale * 1.0f, 0f);
+                roofG.transform.rotation = Quaternion.Euler(0f, facing, 0f);
+                roofG.transform.SetParent(cluster);
+                roofG.isStatic = true;
+                totalPlaced++;
+            }
+
+            // debris: barrel, metal-panel
+            totalPlaced += ScatterDebris(cluster, terrain, terrainPos, rng,
+                clusterPos.x, clusterPos.z, 3f, 10f, 3 + rng.Next(3),
+                new[] {
+                    new PropDef(SK + "barrel.fbx", 2.5f, 3.5f),
+                    new PropDef(SK + "metal-panel.fbx", 3f, 3.5f),
+                    new PropDef(SK + "metal-panel-screws.fbx", 3f, 3.5f),
+                    new PropDef(SK + "box.fbx", 2.5f, 3.5f),
+                });
+        }
+
+        // --- cluster 4: gas station (on road between factory and hamlet) ---
+        {
+            Vector3 clusterPos = new Vector3(160f, 0f, -120f);
+            clusterPos.y = SampleWorldHeight(terrain, terrainPos, clusterPos.x, clusterPos.z);
+            float facing = 0f; // canopy faces road (along X)
+
+            var cluster = new GameObject("Cluster_GasStation").transform;
+            cluster.SetParent(parent);
+
+            float pillarScale = 4f;
+
+            // 4 tall pillars in a rectangle (canopy supports)
+            Vector3[] pillarOffsets = {
+                new(-3f, 0f, -3f),
+                new(3f, 0f, -3f),
+                new(-3f, 0f, 3f),
+                new(3f, 0f, 3f),
+            };
+            foreach (var offset in pillarOffsets)
+            {
+                var pillar = InstantiateProp(new PropDef(CK + "structure-tall.fbx", pillarScale, pillarScale), rng);
+                if (pillar == null) continue;
+                Vector3 pPos = clusterPos + offset * pillarScale * 0.5f;
+                pPos.y = SampleWorldHeight(terrain, terrainPos, pPos.x, pPos.z);
+                pillar.transform.position = pPos;
+                pillar.transform.rotation = Quaternion.Euler(0f, facing, 0f);
+                pillar.transform.SetParent(cluster);
+                pillar.isStatic = true;
+                totalPlaced++;
+            }
+
+            // cover-stripe canopy on top
+            var canopy = InstantiateProp(new PropDef(CK + "cover-stripe.fbx", pillarScale * 1.5f, pillarScale * 1.5f), rng);
             if (canopy != null)
             {
-                canopy.transform.position = new Vector3(GasStationPos.x, gy, GasStationPos.y);
-                canopy.transform.rotation = Quaternion.Euler(0f, 45f, 0f);
-                canopy.transform.SetParent(station);
+                canopy.transform.position = clusterPos + new Vector3(0f, pillarScale * 1.0f, 0f);
+                canopy.transform.rotation = Quaternion.Euler(0f, facing, 0f);
+                canopy.transform.SetParent(cluster);
                 canopy.isStatic = true;
                 totalPlaced++;
             }
 
-            var shop = InstantiateProp(RuinProps[6], rng);
-            if (shop != null)
+            // floor pad underneath canopy
+            var canopyFloor = InstantiateProp(new PropDef(CK + "floor-large.fbx", pillarScale, pillarScale), rng);
+            if (canopyFloor != null)
             {
-                shop.transform.position = new Vector3(GasStationPos.x + 6f, gy, GasStationPos.y + 3f);
-                shop.transform.rotation = Quaternion.Euler(0f, 45f, 0f);
-                shop.transform.SetParent(station);
-                shop.isStatic = true;
+                canopyFloor.transform.position = clusterPos;
+                canopyFloor.transform.rotation = Quaternion.Euler(0f, facing, 0f);
+                canopyFloor.transform.SetParent(cluster);
+                canopyFloor.isStatic = true;
                 totalPlaced++;
             }
 
-            for (int d = 0; d < 6 + rng.Next(4); d++)
-            {
-                float ox = (float)(rng.NextDouble() - 0.5) * 20f;
-                float oz = (float)(rng.NextDouble() - 0.5) * 12f;
-                float dy = SampleWorldHeight(terrain, terrainPos, GasStationPos.x + ox, GasStationPos.y + oz);
-                var dProp = IndustrialProps[rng.Next(IndustrialProps.Length)];
-                var dInst = InstantiateProp(dProp, rng);
-                if (dInst == null) continue;
-                float tilt = (float)(rng.NextDouble() - 0.5) * 15f;
-                dInst.transform.position = new Vector3(GasStationPos.x + ox, dy, GasStationPos.y + oz);
-                dInst.transform.rotation = Quaternion.Euler(tilt, (float)rng.NextDouble() * 360f, 0f);
-                dInst.transform.SetParent(station);
-                dInst.isStatic = true;
-                totalPlaced++;
-            }
-        }
+            // small metal shed behind the canopy
+            Vector3 shedPos = clusterPos + new Vector3(-8f, 0f, 0f);
+            shedPos.y = SampleWorldHeight(terrain, terrainPos, shedPos.x, shedPos.z);
+            float shedFacing = facing + 90f;
 
-        // woodshop
-        {
-            var shop = new GameObject("Woodshop").transform;
-            shop.SetParent(parent);
-            float wy = SampleWorldHeight(terrain, terrainPos, WoodshopPos.x, WoodshopPos.y);
-
-            var shed = InstantiateProp(RuinProps[0], rng);
+            var shed = InstantiateProp(new PropDef(SK + "structure-metal.fbx", 3f, 3f), rng);
             if (shed != null)
             {
-                shed.transform.position = new Vector3(WoodshopPos.x, wy, WoodshopPos.y);
-                shed.transform.rotation = Quaternion.Euler(0f, 0f, 0f);
-                shed.transform.SetParent(shop);
+                shed.transform.position = shedPos;
+                shed.transform.rotation = Quaternion.Euler(0f, shedFacing, 0f);
+                shed.transform.SetParent(cluster);
                 shed.isStatic = true;
                 totalPlaced++;
             }
-
-            for (int l = 0; l < 3 + rng.Next(3); l++)
+            var shedRoof = InstantiateProp(new PropDef(SK + "structure-metal-roof.fbx", 3f, 3f), rng);
+            if (shedRoof != null)
             {
-                float ox = 3f + (float)rng.NextDouble() * 8f;
-                float oz = (float)(rng.NextDouble() - 0.5) * 10f;
-                float ly = SampleWorldHeight(terrain, terrainPos, WoodshopPos.x + ox, WoodshopPos.y + oz);
-                var logProp = UndergrowthProps[6]; // resource-wood
-                var log = InstantiateProp(logProp, rng);
-                if (log == null) continue;
-                log.transform.position = new Vector3(WoodshopPos.x + ox, ly, WoodshopPos.y + oz);
-                log.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
-                log.transform.SetParent(shop);
-                log.isStatic = true;
+                shedRoof.transform.position = shedPos + new Vector3(0f, 3f, 0f);
+                shedRoof.transform.rotation = Quaternion.Euler(0f, shedFacing, 0f);
+                shedRoof.transform.SetParent(cluster);
+                shedRoof.isStatic = true;
                 totalPlaced++;
             }
 
-            for (int f = 0; f < 6; f++)
+            // signpost
+            var sign = InstantiateProp(new PropDef(SK + "signpost.fbx", 3f, 3.5f), rng);
+            if (sign != null)
             {
-                float fAngle = ((float)f / 6f) * Mathf.PI * 2f;
-                float fDist = 10f;
-                float fx = WoodshopPos.x + Mathf.Cos(fAngle) * fDist;
-                float fz = WoodshopPos.y + Mathf.Sin(fAngle) * fDist;
+                Vector3 signPos = clusterPos + new Vector3(5f, 0f, -5f);
+                signPos.y = SampleWorldHeight(terrain, terrainPos, signPos.x, signPos.z);
+                sign.transform.position = signPos;
+                sign.transform.rotation = Quaternion.Euler(0f, facing + 15f, 3f);
+                sign.transform.SetParent(cluster);
+                sign.isStatic = true;
+                totalPlaced++;
+            }
+
+            // debris
+            totalPlaced += ScatterDebris(cluster, terrain, terrainPos, rng,
+                clusterPos.x, clusterPos.z, 5f, 12f, 3 + rng.Next(4),
+                new[] {
+                    new PropDef(SK + "barrel.fbx", 2.5f, 3.5f),
+                    new PropDef(SK + "barrel-open.fbx", 2.5f, 3.5f),
+                    new PropDef(SK + "box.fbx", 2.5f, 3.5f),
+                    new PropDef(SK + "metal-panel-narrow.fbx", 3f, 3.5f),
+                });
+        }
+
+        // --- cluster 5: woodshop (forest edge, off road) ---
+        {
+            Vector3 clusterPos = new Vector3(-180f, 0f, -80f);
+            clusterPos.y = SampleWorldHeight(terrain, terrainPos, clusterPos.x, clusterPos.z);
+            float facing = 60f; // face roughly toward road
+
+            var cluster = new GameObject("Cluster_Woodshop").transform;
+            cluster.SetParent(parent);
+
+            float shedScale = 3.5f;
+
+            // open metal shed: structure-metal + structure-metal-roof
+            var metalShed = InstantiateProp(new PropDef(SK + "structure-metal.fbx", shedScale, shedScale), rng);
+            if (metalShed != null)
+            {
+                metalShed.transform.position = clusterPos;
+                metalShed.transform.rotation = Quaternion.Euler(0f, facing, 0f);
+                metalShed.transform.SetParent(cluster);
+                metalShed.isStatic = true;
+                totalPlaced++;
+            }
+            var metalRoof = InstantiateProp(new PropDef(SK + "structure-metal-roof.fbx", shedScale, shedScale), rng);
+            if (metalRoof != null)
+            {
+                metalRoof.transform.position = clusterPos + new Vector3(0f, shedScale * 1.0f, 0f);
+                metalRoof.transform.rotation = Quaternion.Euler(0f, facing, 0f);
+                metalRoof.transform.SetParent(cluster);
+                metalRoof.isStatic = true;
+                totalPlaced++;
+            }
+
+            // workbench-anvil inside the shed
+            var anvil = InstantiateProp(new PropDef(SK + "workbench-anvil.fbx", 3f, 3.5f), rng);
+            if (anvil != null)
+            {
+                Vector3 anvilPos = clusterPos + Quaternion.Euler(0f, facing, 0f) * new Vector3(0f, 0f, 1.5f);
+                anvilPos.y = SampleWorldHeight(terrain, terrainPos, anvilPos.x, anvilPos.z);
+                anvil.transform.position = anvilPos;
+                anvil.transform.rotation = Quaternion.Euler(0f, facing + 180f, 0f);
+                anvil.transform.SetParent(cluster);
+                anvil.isStatic = true;
+                totalPlaced++;
+            }
+
+            // fence perimeter (3 segments)
+            for (int f = 0; f < 3; f++)
+            {
+                float fAngle = ((float)f / 3f) * Mathf.PI * 2f + Mathf.PI * 0.5f;
+                float fDist = 8f;
+                float fx = clusterPos.x + Mathf.Cos(fAngle) * fDist;
+                float fz = clusterPos.z + Mathf.Sin(fAngle) * fDist;
                 float fy = SampleWorldHeight(terrain, terrainPos, fx, fz);
-                var fProp = IndustrialProps[6];
-                var fence = InstantiateProp(fProp, rng);
+
+                var fence = InstantiateProp(new PropDef(SK + "fence.fbx", 3f, 3.5f), rng);
                 if (fence == null) continue;
                 fence.transform.position = new Vector3(fx, fy, fz);
                 fence.transform.rotation = Quaternion.Euler(0f, fAngle * Mathf.Rad2Deg + 90f, 0f);
-                fence.transform.SetParent(shop);
+                fence.transform.SetParent(cluster);
                 fence.isStatic = true;
                 totalPlaced++;
             }
-        }
 
-        // mechanic's garage
-        {
-            var garage = new GameObject("Garage").transform;
-            garage.SetParent(parent);
-            float my = SampleWorldHeight(terrain, terrainPos, GaragePos.x, GaragePos.y);
-
-            var mainBldg = InstantiateProp(RuinProps[8], rng);
-            if (mainBldg != null)
+            // scattered wood resources
+            PropDef[] woodDebris = {
+                new(SK + "resource-wood.fbx", 2f, 3f, false),
+                new(SK + "resource-planks.fbx", 2f, 3f, false),
+                new(SK + "tree-log.fbx", 2f, 4f),
+            };
+            for (int w = 0; w < 4 + rng.Next(3); w++)
             {
-                mainBldg.transform.position = new Vector3(GaragePos.x, my, GaragePos.y);
-                mainBldg.transform.rotation = Quaternion.Euler(0f, -20f, 0f);
-                mainBldg.transform.SetParent(garage);
-                mainBldg.isStatic = true;
-                totalPlaced++;
-            }
+                float angle = (float)rng.NextDouble() * Mathf.PI * 2f;
+                float dist = 3f + (float)rng.NextDouble() * 10f;
+                float wx = clusterPos.x + Mathf.Cos(angle) * dist;
+                float wz = clusterPos.z + Mathf.Sin(angle) * dist;
+                float wy = SampleWorldHeight(terrain, terrainPos, wx, wz);
 
-            var annex = InstantiateProp(RuinProps[7], rng);
-            if (annex != null)
-            {
-                annex.transform.position = new Vector3(GaragePos.x + 5f, my, GaragePos.y - 3f);
-                annex.transform.rotation = Quaternion.Euler(0f, -20f, 0f);
-                annex.transform.SetParent(garage);
-                annex.isStatic = true;
-                totalPlaced++;
-            }
-
-            for (int d = 0; d < 8 + rng.Next(5); d++)
-            {
-                float ox = (float)(rng.NextDouble() - 0.5) * 18f;
-                float oz = (float)(rng.NextDouble() - 0.5) * 14f;
-                float dy = SampleWorldHeight(terrain, terrainPos, GaragePos.x + ox, GaragePos.y + oz);
-                var dProp = IndustrialProps[rng.Next(IndustrialProps.Length)];
-                var dInst = InstantiateProp(dProp, rng);
-                if (dInst == null) continue;
-                float tilt = (float)(rng.NextDouble() - 0.5) * 20f;
-                dInst.transform.position = new Vector3(GaragePos.x + ox, dy, GaragePos.y + oz);
-                dInst.transform.rotation = Quaternion.Euler(tilt, (float)rng.NextDouble() * 360f, 0f);
-                dInst.transform.SetParent(garage);
-                dInst.isStatic = true;
-                totalPlaced++;
-            }
-        }
-
-        // market stalls at hamlet center
-        {
-            var market = new GameObject("MarketStalls").transform;
-            market.SetParent(parent);
-
-            for (int s = 0; s < 4; s++)
-            {
-                float sx = HamletCenter.x + ((float)s - 1.5f) * 8f;
-                float sz = HamletCenter.y + 5f;
-                float sy = SampleWorldHeight(terrain, terrainPos, sx, sz);
-
-                var stallProp = RuinProps[4 + rng.Next(2)];
-                var stall = InstantiateProp(stallProp, rng);
-                if (stall == null) continue;
-
-                stall.transform.position = new Vector3(sx, sy + 2f, sz);
-                stall.transform.rotation = Quaternion.Euler(0f, 0f, 0f);
-                stall.transform.SetParent(market);
-                stall.isStatic = true;
+                var prop = woodDebris[rng.Next(woodDebris.Length)];
+                var inst = InstantiateProp(prop, rng);
+                if (inst == null) continue;
+                inst.transform.position = new Vector3(wx, wy, wz);
+                inst.transform.rotation = Quaternion.Euler(0f, (float)rng.NextDouble() * 360f, 0f);
+                inst.transform.SetParent(cluster);
+                inst.isStatic = true;
                 totalPlaced++;
             }
         }
@@ -2006,6 +2420,9 @@ public static class HomeBaseSceneryDresser
         int totalPlaced = 0;
         string[] names = { "BusStop", "TrainStation", "SubwayEntrance", "Helipad" };
 
+        const string SK = "Assets/_Slopworks/Art/Kenney/survival-kit/Models/";
+        const string CK = "Assets/_Slopworks/Art/Kenney/conveyor-kit/Models/";
+
         for (int w = 0; w < WaystationPositions.Length; w++)
         {
             var pos = WaystationPositions[w];
@@ -2016,172 +2433,434 @@ public static class HomeBaseSceneryDresser
 
             switch (w)
             {
-                case 0: // bus stop
+                case 0: // bus stop — small shelter with bench area
                 {
-                    var shelter = InstantiateProp(RuinProps[6], rng);
-                    if (shelter != null)
+                    float facing = 90f; // faces east toward road
+                    float shelterScale = 3.5f;
+
+                    // metal shelter frame
+                    var frame = InstantiateProp(new PropDef(SK + "structure-metal.fbx", shelterScale, shelterScale), rng);
+                    if (frame != null)
                     {
-                        shelter.transform.position = new Vector3(pos.x, wy, pos.y);
-                        shelter.transform.rotation = Quaternion.Euler(0f, 90f, 0f);
-                        shelter.transform.SetParent(ws);
-                        shelter.isStatic = true;
+                        frame.transform.position = new Vector3(pos.x, wy, pos.y);
+                        frame.transform.rotation = Quaternion.Euler(0f, facing, 0f);
+                        frame.transform.SetParent(ws);
+                        frame.isStatic = true;
                         totalPlaced++;
                     }
+                    var shelterRoof = InstantiateProp(new PropDef(SK + "structure-metal-roof.fbx", shelterScale, shelterScale), rng);
+                    if (shelterRoof != null)
+                    {
+                        shelterRoof.transform.position = new Vector3(pos.x, wy + shelterScale * 1.0f, pos.y);
+                        shelterRoof.transform.rotation = Quaternion.Euler(0f, facing, 0f);
+                        shelterRoof.transform.SetParent(ws);
+                        shelterRoof.isStatic = true;
+                        totalPlaced++;
+                    }
+                    // metal floor
+                    var busFloor = InstantiateProp(new PropDef(SK + "structure-metal-floor.fbx", shelterScale, shelterScale), rng);
+                    if (busFloor != null)
+                    {
+                        busFloor.transform.position = new Vector3(pos.x, wy, pos.y);
+                        busFloor.transform.rotation = Quaternion.Euler(0f, facing, 0f);
+                        busFloor.transform.SetParent(ws);
+                        busFloor.isStatic = true;
+                        totalPlaced++;
+                    }
+                    // signpost
+                    var busSign = InstantiateProp(new PropDef(SK + "signpost-single.fbx", 3f, 3.5f), rng);
+                    if (busSign != null)
+                    {
+                        busSign.transform.position = new Vector3(pos.x - 5f, wy, pos.y);
+                        busSign.transform.rotation = Quaternion.Euler(0f, 0f, 5f);
+                        busSign.transform.SetParent(ws);
+                        busSign.isStatic = true;
+                        totalPlaced++;
+                    }
+                    break;
+                }
+
+                case 1: // train station — long platform with partial roof
+                {
+                    float facing = 0f; // platform runs east-west
+                    float platScale = 4f;
+
+                    // platform floor (long, 3 floor pieces)
                     for (int f = 0; f < 3; f++)
                     {
-                        var fence = InstantiateProp(IndustrialProps[6 + rng.Next(3)], rng);
-                        if (fence == null) continue;
-                        fence.transform.position = new Vector3(pos.x + (f - 1) * 3f, wy, pos.y + 3f);
-                        fence.transform.rotation = Quaternion.Euler(0f, 90f, 0f);
-                        fence.transform.SetParent(ws);
-                        fence.isStatic = true;
+                        string floorPath = f == 1 ? SK + "floor-old.fbx" : SK + "floor.fbx";
+                        var plat = InstantiateProp(new PropDef(floorPath, platScale, platScale), rng);
+                        if (plat == null) continue;
+                        float offsetX = (f - 1) * platScale * 1.0f;
+                        plat.transform.position = new Vector3(pos.x + offsetX, wy + 0.5f, pos.y);
+                        plat.transform.rotation = Quaternion.Euler(0f, facing, 0f);
+                        plat.transform.SetParent(ws);
+                        plat.isStatic = true;
                         totalPlaced++;
                     }
-                    var sign = InstantiateProp(IndustrialProps[12], rng);
-                    if (sign != null)
+
+                    // partial roof shelter in center (conveyor walls + cover)
+                    var stationWall1 = InstantiateProp(new PropDef(CK + "structure-wall.fbx", platScale, platScale), rng);
+                    if (stationWall1 != null)
                     {
-                        sign.transform.position = new Vector3(pos.x - 5f, wy, pos.y);
-                        sign.transform.rotation = Quaternion.Euler(0f, 0f, 5f);
-                        sign.transform.SetParent(ws);
-                        sign.isStatic = true;
+                        stationWall1.transform.position = new Vector3(pos.x, wy + 0.5f, pos.y - platScale * 0.5f);
+                        stationWall1.transform.rotation = Quaternion.Euler(0f, facing, 0f);
+                        stationWall1.transform.SetParent(ws);
+                        stationWall1.isStatic = true;
+                        totalPlaced++;
+                    }
+                    var stationWall2 = InstantiateProp(new PropDef(CK + "structure-window.fbx", platScale, platScale), rng);
+                    if (stationWall2 != null)
+                    {
+                        stationWall2.transform.position = new Vector3(pos.x + platScale * 1.0f, wy + 0.5f, pos.y - platScale * 0.5f);
+                        stationWall2.transform.rotation = Quaternion.Euler(0f, facing, 0f);
+                        stationWall2.transform.SetParent(ws);
+                        stationWall2.isStatic = true;
+                        totalPlaced++;
+                    }
+                    // cover roof over shelter section
+                    var stationRoof = InstantiateProp(new PropDef(CK + "cover-stripe.fbx", platScale, platScale), rng);
+                    if (stationRoof != null)
+                    {
+                        stationRoof.transform.position = new Vector3(pos.x + platScale * 0.5f, wy + 0.5f + platScale * 1.0f, pos.y - platScale * 0.25f);
+                        stationRoof.transform.rotation = Quaternion.Euler(0f, facing, 0f);
+                        stationRoof.transform.SetParent(ws);
+                        stationRoof.isStatic = true;
+                        totalPlaced++;
+                    }
+
+                    // signpost at end of platform
+                    var trainSign = InstantiateProp(new PropDef(SK + "signpost.fbx", 3f, 3.5f), rng);
+                    if (trainSign != null)
+                    {
+                        trainSign.transform.position = new Vector3(pos.x - platScale * 1.5f, wy, pos.y);
+                        trainSign.transform.rotation = Quaternion.Euler(0f, 0f, 0f);
+                        trainSign.transform.SetParent(ws);
+                        trainSign.isStatic = true;
                         totalPlaced++;
                     }
                     break;
                 }
 
-                case 1: // train station
+                case 2: // subway entrance — sunken doorway with walls
                 {
-                    var platform = InstantiateProp(RuinProps[3], rng);
-                    if (platform != null)
+                    float facing = 180f;
+                    float entryScale = 3.5f;
+
+                    // doorway (sunk slightly below terrain)
+                    var subDoor = InstantiateProp(new PropDef(CK + "structure-doorway.fbx", entryScale, entryScale), rng);
+                    if (subDoor != null)
                     {
-                        platform.transform.position = new Vector3(pos.x, wy + 1f, pos.y);
-                        platform.transform.rotation = Quaternion.Euler(0f, 0f, 0f);
-                        platform.transform.localScale = new Vector3(1f, 0.3f, 3f);
-                        platform.transform.SetParent(ws);
-                        platform.isStatic = true;
+                        subDoor.transform.position = new Vector3(pos.x, wy - 1f, pos.y);
+                        subDoor.transform.rotation = Quaternion.Euler(0f, facing, 0f);
+                        subDoor.transform.SetParent(ws);
+                        subDoor.isStatic = true;
                         totalPlaced++;
                     }
-                    for (int col = 0; col < 3; col++)
+                    // side walls
+                    for (int s = 0; s < 2; s++)
                     {
-                        var c = InstantiateProp(RuinProps[0], rng);
-                        if (c == null) continue;
-                        c.transform.position = new Vector3(pos.x + (col - 1) * 8f, wy + 1f, pos.y - 2f);
-                        c.transform.rotation = Quaternion.Euler(0f, 0f, 0f);
-                        c.transform.SetParent(ws);
-                        c.isStatic = true;
+                        float sideOffset = (s == 0 ? -1f : 1f) * entryScale * 0.6f;
+                        var sideWall = InstantiateProp(new PropDef(CK + "structure-wall.fbx", entryScale, entryScale), rng);
+                        if (sideWall == null) continue;
+                        sideWall.transform.position = new Vector3(pos.x + sideOffset, wy - 0.5f, pos.y);
+                        sideWall.transform.rotation = Quaternion.Euler(0f, facing + 90f, 0f);
+                        sideWall.transform.SetParent(ws);
+                        sideWall.isStatic = true;
                         totalPlaced++;
                     }
-                    var sign = InstantiateProp(IndustrialProps[13], rng);
-                    if (sign != null)
+                    // cover over entrance
+                    var subCover = InstantiateProp(new PropDef(CK + "cover.fbx", entryScale, entryScale), rng);
+                    if (subCover != null)
                     {
-                        sign.transform.position = new Vector3(pos.x - 15f, wy, pos.y);
-                        sign.transform.SetParent(ws);
-                        sign.isStatic = true;
+                        subCover.transform.position = new Vector3(pos.x, wy - 0.5f + entryScale * 1.0f, pos.y);
+                        subCover.transform.rotation = Quaternion.Euler(0f, facing, 0f);
+                        subCover.transform.SetParent(ws);
+                        subCover.isStatic = true;
+                        totalPlaced++;
+                    }
+                    // metal floor at base of stairs
+                    var subFloor = InstantiateProp(new PropDef(SK + "structure-metal-floor.fbx", entryScale, entryScale), rng);
+                    if (subFloor != null)
+                    {
+                        subFloor.transform.position = new Vector3(pos.x, wy - 1f, pos.y + entryScale * 0.5f);
+                        subFloor.transform.rotation = Quaternion.Euler(0f, facing, 0f);
+                        subFloor.transform.SetParent(ws);
+                        subFloor.isStatic = true;
                         totalPlaced++;
                     }
                     break;
                 }
 
-                case 2: // subway entrance
+                case 3: // helipad — open pad with perimeter fencing and shack
                 {
-                    var door = InstantiateProp(RuinProps[2], rng);
-                    if (door != null)
-                    {
-                        door.transform.position = new Vector3(pos.x, wy - 1f, pos.y);
-                        door.transform.rotation = Quaternion.Euler(0f, 0f, 0f);
-                        door.transform.SetParent(ws);
-                        door.isStatic = true;
-                        totalPlaced++;
-                    }
-                    for (int s = 0; s < 4; s++)
-                    {
-                        var wall = InstantiateProp(RuinProps[rng.Next(2)], rng);
-                        if (wall == null) continue;
-                        float wAngle = s * 90f;
-                        float wDist = 3f;
-                        wall.transform.position = new Vector3(
-                            pos.x + Mathf.Cos(wAngle * Mathf.Deg2Rad) * wDist,
-                            wy - 0.5f,
-                            pos.y + Mathf.Sin(wAngle * Mathf.Deg2Rad) * wDist);
-                        wall.transform.rotation = Quaternion.Euler(0f, wAngle, 0f);
-                        wall.transform.SetParent(ws);
-                        wall.isStatic = true;
-                        totalPlaced++;
-                    }
-                    for (int step = 0; step < 4; step++)
-                    {
-                        var stair = InstantiateProp(RuinProps[4], rng);
-                        if (stair == null) continue;
-                        stair.transform.position = new Vector3(pos.x, wy - 0.5f * step, pos.y + 1f + step * 0.8f);
-                        stair.transform.rotation = Quaternion.Euler(0f, 0f, 0f);
-                        stair.transform.localScale = new Vector3(1f, 0.2f, 0.8f);
-                        stair.transform.SetParent(ws);
-                        stair.isStatic = true;
-                        totalPlaced++;
-                    }
-                    break;
-                }
+                    float facing = 0f;
 
-                case 3: // helipad
-                {
-                    var shack = InstantiateProp(RuinProps[8], rng);
-                    if (shack != null)
+                    // metal floor pad (large)
+                    var heliFloor = InstantiateProp(new PropDef(CK + "floor-large.fbx", 5f, 5f), rng);
+                    if (heliFloor != null)
                     {
-                        shack.transform.position = new Vector3(pos.x + 8f, wy, pos.y + 8f);
-                        shack.transform.rotation = Quaternion.Euler(0f, -45f, 0f);
-                        shack.transform.SetParent(ws);
-                        shack.isStatic = true;
+                        heliFloor.transform.position = new Vector3(pos.x, wy, pos.y);
+                        heliFloor.transform.rotation = Quaternion.Euler(0f, facing, 0f);
+                        heliFloor.transform.SetParent(ws);
+                        heliFloor.isStatic = true;
                         totalPlaced++;
                     }
+
+                    // shack to one side
+                    var heliShack = InstantiateProp(new PropDef(SK + "structure-metal.fbx", 3f, 3f), rng);
+                    if (heliShack != null)
+                    {
+                        heliShack.transform.position = new Vector3(pos.x + 8f, wy, pos.y + 8f);
+                        heliShack.transform.rotation = Quaternion.Euler(0f, -45f, 0f);
+                        heliShack.transform.SetParent(ws);
+                        heliShack.isStatic = true;
+                        totalPlaced++;
+                    }
+                    var heliShackRoof = InstantiateProp(new PropDef(SK + "structure-metal-roof.fbx", 3f, 3f), rng);
+                    if (heliShackRoof != null)
+                    {
+                        heliShackRoof.transform.position = new Vector3(pos.x + 8f, wy + 3f, pos.y + 8f);
+                        heliShackRoof.transform.rotation = Quaternion.Euler(0f, -45f, 0f);
+                        heliShackRoof.transform.SetParent(ws);
+                        heliShackRoof.isStatic = true;
+                        totalPlaced++;
+                    }
+
+                    // fence-fortified perimeter
                     for (int f = 0; f < 8; f++)
                     {
-                        var fence = InstantiateProp(IndustrialProps[6 + rng.Next(3)], rng);
-                        if (fence == null) continue;
                         float fAngle = ((float)f / 8f) * Mathf.PI * 2f;
                         float fDist = 10f;
-                        fence.transform.position = new Vector3(
-                            pos.x + Mathf.Cos(fAngle) * fDist,
-                            wy,
-                            pos.y + Mathf.Sin(fAngle) * fDist);
+                        float fx = pos.x + Mathf.Cos(fAngle) * fDist;
+                        float fz = pos.y + Mathf.Sin(fAngle) * fDist;
+                        float fy = SampleWorldHeight(terrain, terrainPos, fx, fz);
+
+                        var fence = InstantiateProp(new PropDef(SK + "fence-fortified.fbx", 3f, 3.5f), rng);
+                        if (fence == null) continue;
+                        fence.transform.position = new Vector3(fx, fy, fz);
                         fence.transform.rotation = Quaternion.Euler(0f, fAngle * Mathf.Rad2Deg + 90f, 0f);
                         fence.transform.SetParent(ws);
                         fence.isStatic = true;
                         totalPlaced++;
                     }
-                    var sign = InstantiateProp(IndustrialProps[12], rng);
-                    if (sign != null)
+
+                    // signpost
+                    var heliSign = InstantiateProp(new PropDef(SK + "signpost.fbx", 3f, 3.5f), rng);
+                    if (heliSign != null)
                     {
-                        sign.transform.position = new Vector3(pos.x - 10f, wy, pos.y);
-                        sign.transform.SetParent(ws);
-                        sign.isStatic = true;
+                        heliSign.transform.position = new Vector3(pos.x - 10f, wy, pos.y);
+                        heliSign.transform.rotation = Quaternion.Euler(0f, 0f, 0f);
+                        heliSign.transform.SetParent(ws);
+                        heliSign.isStatic = true;
                         totalPlaced++;
                     }
                     break;
                 }
             }
 
-            for (int d = 0; d < 4 + rng.Next(4); d++)
-            {
-                float dAngle = (float)rng.NextDouble() * Mathf.PI * 2f;
-                float dDist = WaystationPadSizes[w].x / 2f + (float)rng.NextDouble() * 10f;
-                float dx = pos.x + Mathf.Cos(dAngle) * dDist;
-                float dz = pos.y + Mathf.Sin(dAngle) * dDist;
-                float dy = SampleWorldHeight(terrain, terrainPos, dx, dz);
-
-                var dProp = IndustrialProps[rng.Next(IndustrialProps.Length)];
-                var dInst = InstantiateProp(dProp, rng);
-                if (dInst == null) continue;
-
-                float tilt = (float)(rng.NextDouble() - 0.5) * 20f;
-                dInst.transform.position = new Vector3(dx, dy, dz);
-                dInst.transform.rotation = Quaternion.Euler(tilt, (float)rng.NextDouble() * 360f, 0f);
-                dInst.transform.SetParent(ws);
-                dInst.isStatic = true;
-                totalPlaced++;
-            }
+            // shared debris scatter around each waystation
+            totalPlaced += ScatterDebris(ws, terrain, terrainPos, rng,
+                pos.x, pos.y, WaystationPadSizes[w].x / 2f, WaystationPadSizes[w].x / 2f + 10f,
+                4 + rng.Next(4),
+                new[] {
+                    new PropDef(SK + "barrel.fbx", 2.5f, 3.5f),
+                    new PropDef(SK + "barrel-open.fbx", 2.5f, 3.5f),
+                    new PropDef(SK + "box.fbx", 2.5f, 3.5f),
+                    new PropDef(SK + "box-open.fbx", 2.5f, 3.5f),
+                    new PropDef(SK + "metal-panel.fbx", 3f, 3.5f),
+                });
         }
 
         Debug.Log($"waystations placed: {totalPlaced} pieces across {WaystationPositions.Length} locations");
+    }
+
+    private static void PlaceRoadBuildings(Transform root, Terrain terrain, Vector3 terrainPos, System.Random rng, TerrainData td)
+    {
+        var parent = new GameObject("RoadBuildings").transform;
+        parent.SetParent(root);
+        int totalPlaced = 0;
+
+        const string SK = "Assets/_Slopworks/Art/Kenney/survival-kit/Models/";
+        const string CK = "Assets/_Slopworks/Art/Kenney/conveyor-kit/Models/";
+
+        // --- cluster 1: factory yard (120m east of center, along road) ---
+        {
+            Vector3 clusterPos = new Vector3(120f, 0f, 20f);
+            clusterPos.y = SampleWorldHeight(terrain, terrainPos, clusterPos.x, clusterPos.z);
+            float facing = -90f; // doorways face west toward center/road
+
+            var cluster = new GameObject("Cluster_FactoryYard").transform;
+            cluster.SetParent(parent);
+
+            float wallScale = 4f;
+            float wallHeight = wallScale * 1.0f;
+
+            // L-shape: 2 structure-wall + 1 structure-window
+            // wall A: runs along Z
+            var wallA = InstantiateProp(new PropDef(CK + "structure-wall.fbx", wallScale, wallScale), rng);
+            if (wallA != null)
+            {
+                wallA.transform.position = clusterPos;
+                wallA.transform.rotation = Quaternion.Euler(0f, facing, 0f);
+                wallA.transform.SetParent(cluster);
+                wallA.isStatic = true;
+                totalPlaced++;
+            }
+            // wall B: continues along Z
+            var wallB = InstantiateProp(new PropDef(CK + "structure-wall.fbx", wallScale, wallScale), rng);
+            if (wallB != null)
+            {
+                wallB.transform.position = clusterPos + Quaternion.Euler(0f, facing, 0f) * new Vector3(0f, 0f, wallScale * 1.0f);
+                wallB.transform.rotation = Quaternion.Euler(0f, facing, 0f);
+                wallB.transform.SetParent(cluster);
+                wallB.isStatic = true;
+                totalPlaced++;
+            }
+            // wall C (window): turns the corner for the L
+            var wallC = InstantiateProp(new PropDef(CK + "structure-window.fbx", wallScale, wallScale), rng);
+            if (wallC != null)
+            {
+                wallC.transform.position = clusterPos + Quaternion.Euler(0f, facing, 0f) * new Vector3(0f, 0f, wallScale * 2.0f);
+                wallC.transform.rotation = Quaternion.Euler(0f, facing + 90f, 0f);
+                wallC.transform.SetParent(cluster);
+                wallC.isStatic = true;
+                totalPlaced++;
+            }
+
+            // cover-stripe roof on top
+            var factoryRoof = InstantiateProp(new PropDef(CK + "cover-stripe.fbx", wallScale * 1.5f, wallScale * 1.5f), rng);
+            if (factoryRoof != null)
+            {
+                factoryRoof.transform.position = clusterPos + new Vector3(0f, wallHeight, 0f)
+                    + Quaternion.Euler(0f, facing, 0f) * new Vector3(0f, 0f, wallScale * 0.5f);
+                factoryRoof.transform.rotation = Quaternion.Euler(0f, facing, 0f);
+                factoryRoof.transform.SetParent(cluster);
+                factoryRoof.isStatic = true;
+                totalPlaced++;
+            }
+
+            // floor-large pad underneath
+            var factoryFloor = InstantiateProp(new PropDef(CK + "floor-large.fbx", wallScale, wallScale), rng);
+            if (factoryFloor != null)
+            {
+                factoryFloor.transform.position = clusterPos + Quaternion.Euler(0f, facing, 0f) * new Vector3(0f, 0f, wallScale * 0.5f);
+                factoryFloor.transform.rotation = Quaternion.Euler(0f, facing, 0f);
+                factoryFloor.transform.SetParent(cluster);
+                factoryFloor.isStatic = true;
+                totalPlaced++;
+            }
+
+            // yellow-tall accent wall
+            var accentWall = InstantiateProp(new PropDef(CK + "structure-yellow-tall.fbx", wallScale, wallScale), rng);
+            if (accentWall != null)
+            {
+                accentWall.transform.position = clusterPos + Quaternion.Euler(0f, facing, 0f) * new Vector3(wallScale * 1.0f, 0f, 0f);
+                accentWall.transform.rotation = Quaternion.Euler(0f, facing + 90f, 0f);
+                accentWall.transform.SetParent(cluster);
+                accentWall.isStatic = true;
+                totalPlaced++;
+            }
+
+            // debris: 2-3 barrels, 1 box-large
+            totalPlaced += ScatterDebris(cluster, terrain, terrainPos, rng,
+                clusterPos.x, clusterPos.z, 3f, 12f, 3 + rng.Next(2),
+                new[] {
+                    new PropDef(SK + "barrel.fbx", 2.5f, 3.5f),
+                    new PropDef(SK + "barrel-open.fbx", 2.5f, 3.5f),
+                    new PropDef(SK + "box-large.fbx", 2.5f, 3.5f),
+                });
+        }
+
+        // --- cluster 2: warehouse (150m NE of center) ---
+        {
+            Vector3 clusterPos = new Vector3(130f, 0f, 80f);
+            clusterPos.y = SampleWorldHeight(terrain, terrainPos, clusterPos.x, clusterPos.z);
+            float facing = -135f; // entrance faces SW toward center
+
+            var cluster = new GameObject("Cluster_Warehouse").transform;
+            cluster.SetParent(parent);
+
+            float wallScale = 5f;
+            float wallHeight = wallScale * 1.0f;
+
+            // U-shape: 3 structure-wall segments
+            // back wall
+            var backWall = InstantiateProp(new PropDef(CK + "structure-wall.fbx", wallScale, wallScale), rng);
+            if (backWall != null)
+            {
+                backWall.transform.position = clusterPos;
+                backWall.transform.rotation = Quaternion.Euler(0f, facing, 0f);
+                backWall.transform.SetParent(cluster);
+                backWall.isStatic = true;
+                totalPlaced++;
+            }
+            // left wing
+            var leftWing = InstantiateProp(new PropDef(CK + "structure-wall.fbx", wallScale, wallScale), rng);
+            if (leftWing != null)
+            {
+                leftWing.transform.position = clusterPos + Quaternion.Euler(0f, facing, 0f) * new Vector3(-wallScale * 0.5f, 0f, -wallScale * 0.5f);
+                leftWing.transform.rotation = Quaternion.Euler(0f, facing + 90f, 0f);
+                leftWing.transform.SetParent(cluster);
+                leftWing.isStatic = true;
+                totalPlaced++;
+            }
+            // right wing
+            var rightWing = InstantiateProp(new PropDef(CK + "structure-wall.fbx", wallScale, wallScale), rng);
+            if (rightWing != null)
+            {
+                rightWing.transform.position = clusterPos + Quaternion.Euler(0f, facing, 0f) * new Vector3(wallScale * 0.5f, 0f, -wallScale * 0.5f);
+                rightWing.transform.rotation = Quaternion.Euler(0f, facing - 90f, 0f);
+                rightWing.transform.SetParent(cluster);
+                rightWing.isStatic = true;
+                totalPlaced++;
+            }
+
+            // wide doorway as entrance (front of U)
+            var entrance = InstantiateProp(new PropDef(CK + "structure-doorway-wide.fbx", wallScale, wallScale), rng);
+            if (entrance != null)
+            {
+                entrance.transform.position = clusterPos + Quaternion.Euler(0f, facing, 0f) * new Vector3(0f, 0f, -wallScale * 1.0f);
+                entrance.transform.rotation = Quaternion.Euler(0f, facing, 0f);
+                entrance.transform.SetParent(cluster);
+                entrance.isStatic = true;
+                totalPlaced++;
+            }
+
+            // cover-hopper roof
+            var warehouseRoof = InstantiateProp(new PropDef(CK + "cover-hopper.fbx", wallScale * 1.2f, wallScale * 1.2f), rng);
+            if (warehouseRoof != null)
+            {
+                warehouseRoof.transform.position = clusterPos + new Vector3(0f, wallHeight, 0f);
+                warehouseRoof.transform.rotation = Quaternion.Euler(0f, facing, 0f);
+                warehouseRoof.transform.SetParent(cluster);
+                warehouseRoof.isStatic = true;
+                totalPlaced++;
+            }
+
+            // floor-large pad
+            var warehouseFloor = InstantiateProp(new PropDef(CK + "floor-large.fbx", wallScale, wallScale), rng);
+            if (warehouseFloor != null)
+            {
+                warehouseFloor.transform.position = clusterPos + Quaternion.Euler(0f, facing, 0f) * new Vector3(0f, 0f, -wallScale * 0.25f);
+                warehouseFloor.transform.rotation = Quaternion.Euler(0f, facing, 0f);
+                warehouseFloor.transform.SetParent(cluster);
+                warehouseFloor.isStatic = true;
+                totalPlaced++;
+            }
+
+            // debris: boxes, barrel-open
+            totalPlaced += ScatterDebris(cluster, terrain, terrainPos, rng,
+                clusterPos.x, clusterPos.z, 3f, 15f, 4 + rng.Next(3),
+                new[] {
+                    new PropDef(SK + "box.fbx", 2.5f, 3.5f),
+                    new PropDef(SK + "box-large.fbx", 2.5f, 3.5f),
+                    new PropDef(SK + "box-large-open.fbx", 2.5f, 3.5f),
+                    new PropDef(SK + "barrel-open.fbx", 2.5f, 3.5f),
+                });
+        }
+
+        Debug.Log($"road buildings placed: {totalPlaced} pieces");
     }
 
     // === RIVERBED DECORATION ===
@@ -2640,11 +3319,8 @@ public static class HomeBaseSceneryDresser
 
     private static void AddWindSway(GameObject go, float amount, float speed)
     {
-        var sway = go.AddComponent<WindSway>();
-        var so = new UnityEditor.SerializedObject(sway);
-        so.FindProperty("_swayAmount").floatValue = amount;
-        so.FindProperty("_swaySpeed").floatValue = speed;
-        so.ApplyModifiedPropertiesWithoutUndo();
+        // disabled for now — re-enable after performance optimization pass
+        return;
     }
 
     private static void SetupAmbientParticles()
