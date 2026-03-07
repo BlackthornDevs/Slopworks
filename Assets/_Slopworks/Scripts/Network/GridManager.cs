@@ -46,6 +46,9 @@ public class GridManager : NetworkBehaviour
     public FactoryGrid Grid => _grid;
     public StructuralPlacementService StructuralService => _structuralService;
     public SnapPointRegistry SnapRegistry => _snapRegistry;
+    public GameObject FoundationPrefab => _foundationPrefab;
+    public GameObject WallPrefab => _wallPrefab;
+    public GameObject RampPrefab => _rampPrefab;
 
     private struct WallRecord
     {
@@ -182,11 +185,6 @@ public class GridManager : NetworkBehaviour
     {
         if (!IsServerInitialized) return;
 
-        // Only snap to wall grid on foundations (prevents overlaps on foundation edges)
-        // On terrain, the cell is used directly for smooth placement
-        if (onFoundation)
-            cell = SnapToWallGrid(cell, direction);
-
         // Check for duplicate wall
         if (HasWallAt(cell, level, direction))
         {
@@ -216,17 +214,6 @@ public class GridManager : NetworkBehaviour
     public void CmdRemoveWall(Vector2Int cell, int level, Vector2Int direction, NetworkConnection sender = null)
     {
         if (!IsServerInitialized) return;
-
-        // Try exact match first, then try snapped (for foundation walls)
-        bool found = false;
-        for (int i = _wallRecords.Count - 1; i >= 0; i--)
-        {
-            var r = _wallRecords[i];
-            if (r.Data.Cell == cell && r.Data.Level == level && r.Data.EdgeDirection == direction)
-            { found = true; break; }
-        }
-        if (!found)
-            cell = SnapToWallGrid(cell, direction);
 
         for (int i = _wallRecords.Count - 1; i >= 0; i--)
         {
@@ -265,9 +252,6 @@ public class GridManager : NetworkBehaviour
         Quaternion rotation = GetRampRotation(direction, rampLength);
         Vector3 worldPos = GetRampWorldPos(rampData, rotation, slopeLength, onFoundation);
         var go = Instantiate(_rampPrefab, worldPos, rotation);
-        // Keep prefab X (width=4), override Z to actual slope length
-        go.transform.localScale = new Vector3(
-            FactoryGrid.WallWidth * FactoryGrid.CellSize, 0.1f, slopeLength);
         var info = go.AddComponent<PlacementInfo>();
         info.Type = PlacementInfo.PlacementType.Ramp;
         info.Cell = foundationCell;
@@ -479,18 +463,6 @@ public class GridManager : NetworkBehaviour
                 return true;
         }
         return false;
-    }
-
-    /// <summary>
-    /// Snaps a cell to the wall grid so walls align to WallWidth boundaries.
-    /// North/south walls snap X, east/west walls snap Y.
-    /// </summary>
-    public static Vector2Int SnapToWallGrid(Vector2Int cell, Vector2Int edgeDir)
-    {
-        int ww = FactoryGrid.WallWidth;
-        if (edgeDir == Vector2Int.up || edgeDir == Vector2Int.down)
-            return new Vector2Int(Mathf.FloorToInt((float)cell.x / ww) * ww, cell.y);
-        return new Vector2Int(cell.x, Mathf.FloorToInt((float)cell.y / ww) * ww);
     }
 
     public bool HasRampAt(Vector2Int foundationCell, int level, Vector2Int direction)
