@@ -352,14 +352,9 @@ public static class HomeBaseSceneryDresser
         int res = td.heightmapResolution;
         float[,] heights = td.GetHeights(0, 0, res, res);
 
-        // multi-octave Perlin noise — gives fractal micro-terrain like real landscapes
-        // octave 1: broad rolling hills (wavelength ~400m)
-        // octave 2: medium undulation (wavelength ~130m)
-        // octave 3: small bumps (wavelength ~50m)
-        // octave 4: micro detail (wavelength ~20m)
-        float[] frequencies = { 0.0025f, 0.0075f, 0.02f, 0.05f };
-        float[] amplitudes = { 18f, 7f, 3f, 1.2f };  // meters — bigger for 180m height range
-        float[] offsets = { 0f, 137f, 293f, 431f };   // decorrelate octaves
+        float[] frequencies = { 0.002f, 0.006f, 0.016f, 0.04f };
+        float[] amplitudes = { 22f, 9f, 4f, 1.5f };
+        float[] offsets = { 0f, 137f, 293f, 431f };
 
         for (int z = 0; z < res; z++)
         {
@@ -368,15 +363,17 @@ public static class HomeBaseSceneryDresser
                 float nx = (float)x / (res - 1);
                 float nz = (float)z / (res - 1);
 
-                // world-space coordinates for noise sampling
                 float wx = nx * TerrainWidth;
                 float wz = nz * TerrainWidth;
 
-                // distance from center — reduce noise near the flat factory area
                 float dx = nx - 0.5f;
                 float dz = nz - 0.5f;
                 float dist = Mathf.Sqrt(dx * dx + dz * dz);
-                float outerMask = Mathf.Clamp01((dist - 0.06f) / 0.06f); // ramps 0→1 from factory edge outward
+                float outerMask = Mathf.Clamp01((dist - 0.04f) / 0.04f);
+
+                // regional tilt: push NW corner up for rocky upland zone
+                float tiltNW = (1f - nx) * (1f - nz);
+                float regionalTilt = tiltNW * 25f + Mathf.PerlinNoise(wx * 0.001f + 577f, wz * 0.001f + 577f) * 20f;
 
                 float totalNoise = 0f;
                 for (int o = 0; o < frequencies.Length; o++)
@@ -384,30 +381,35 @@ public static class HomeBaseSceneryDresser
                     float n = Mathf.PerlinNoise(
                         wx * frequencies[o] + offsets[o],
                         wz * frequencies[o] + offsets[o] + 50f);
-                    // center around 0 instead of 0.5
                     totalNoise += (n - 0.5f) * amplitudes[o];
                 }
 
-                // broad valley depression in southern third where the river will go
+                // per-zone amplitude modifier based on preliminary elevation
+                float prelimHeight = (regionalTilt + totalNoise * outerMask) / TerrainHeight;
+                float zoneMod = 1f;
+                if (prelimHeight < 0.35f)
+                    zoneMod = 0.5f;
+                else if (prelimHeight > 0.70f)
+                    zoneMod = 1.5f;
+
                 float riverValleyCenter = 0.72f;
                 float valleyDist = Mathf.Abs(nz - riverValleyCenter);
-                float valleyWidth = 0.08f; // ~64m each side = 128m total valley at 800m scale
-                float valleyDepth = 14f;   // meters — deeper for 180m height range
+                float valleyWidth = 0.07f;
+                float valleyDepth = 16f;
                 float valleyFactor = 0f;
                 if (valleyDist < valleyWidth)
                 {
                     float t = valleyDist / valleyWidth;
-                    // concave parabolic profile — natural valley shape from erosion
                     valleyFactor = valleyDepth * (1f - t * t);
                 }
 
-                float heightDelta = (totalNoise * outerMask - valleyFactor) / TerrainHeight;
+                float heightDelta = (regionalTilt + totalNoise * outerMask * zoneMod - valleyFactor) / TerrainHeight;
                 heights[z, x] += heightDelta;
             }
         }
 
         td.SetHeights(0, 0, heights);
-        Debug.Log("terrain noise added: 4 octaves + valley depression");
+        Debug.Log("terrain noise added: 4 octaves + regional tilt + valley depression");
     }
 
     // === TERRAIN FEATURES ===
@@ -541,6 +543,224 @@ public static class HomeBaseSceneryDresser
 
         td.SetHeights(0, 0, heights);
         Debug.Log("terrain features added: craters, erosion gullies, ridges");
+    }
+
+    private static void CarveEscarpment(TerrainData td)
+    {
+        int res = td.heightmapResolution;
+        float[,] heights = td.GetHeights(0, 0, res, res);
+
+        float escarpmentHeight = 30f / TerrainHeight;
+        float steepWidth = 20f / TerrainWidth;
+        float gentleWidth = 80f / TerrainWidth;
+
+        for (int z = 0; z < res; z++)
+        {
+            for (int x = 0; x < res; x++)
+            {
+                float nx = (float)x / (res - 1);
+                float nz = (float)z / (res - 1);
+
+                float lineStartX = 0.15f;
+                float lineStartZ = 0.15f;
+                float lineDirX = 0.30f;
+                float lineDirZ = 0.25f;
+                float lineLen = Mathf.Sqrt(lineDirX * lineDirX + lineDirZ * lineDirZ);
+                float ldx = lineDirX / lineLen;
+                float ldz = lineDirZ / lineLen;
+
+                float px = nx - lineStartX;
+                float pz = nz - lineStartZ;
+                float along = px * ldx + pz * ldz;
+                float across = px * (-ldz) + pz * ldx;
+
+                float alongNorm = along / lineLen;
+                if (alongNorm < -0.1f || alongNorm > 1.1f) continue;
+
+                float endTaper = 1f;
+                if (alongNorm < 0f) endTaper = 1f + alongNorm * 10f;
+                else if (alongNorm > 1f) endTaper = 1f - (alongNorm - 1f) * 10f;
+                endTaper = Mathf.Clamp01(endTaper);
+
+                float warp = (Mathf.PerlinNoise(nx * 12f + 200f, nz * 12f + 200f) - 0.5f) * 0.03f;
+                across += warp;
+
+                float heightMod = 0f;
+                if (across > 0f && across < steepWidth)
+                {
+                    float t = across / steepWidth;
+                    heightMod = -escarpmentHeight * (1f - (1f - t) * (1f - t) * (1f - t));
+                }
+                else if (across >= steepWidth)
+                {
+                    heightMod = -escarpmentHeight;
+                }
+                else if (across < 0f && across > -gentleWidth)
+                {
+                    float t = -across / gentleWidth;
+                    heightMod = escarpmentHeight * (1f - t) * 0.3f;
+                }
+
+                heights[z, x] += heightMod * endTaper;
+            }
+        }
+
+        td.SetHeights(0, 0, heights);
+        Debug.Log("escarpment carved: ~400m cliff face at forest/upland boundary");
+    }
+
+    private static void CarveOutcrops(TerrainData td)
+    {
+        int res = td.heightmapResolution;
+        float[,] heights = td.GetHeights(0, 0, res, res);
+
+        var rng = new System.Random(Seed + 100);
+        int outcropCount = 5 + rng.Next(2);
+
+        for (int o = 0; o < outcropCount; o++)
+        {
+            float cx = 0.08f + (float)rng.NextDouble() * 0.27f;
+            float cz = 0.08f + (float)rng.NextDouble() * 0.27f;
+            float radiusNorm = (7f + (float)rng.NextDouble() * 8f) / TerrainWidth;
+            float peakHeight = (8f + (float)rng.NextDouble() * 12f) / TerrainHeight;
+
+            for (int z = 0; z < res; z++)
+            {
+                for (int x = 0; x < res; x++)
+                {
+                    float nx = (float)x / (res - 1);
+                    float nz = (float)z / (res - 1);
+                    float ddx = nx - cx;
+                    float ddz = nz - cz;
+                    float dist = Mathf.Sqrt(ddx * ddx + ddz * ddz);
+
+                    if (dist > radiusNorm * 1.5f) continue;
+
+                    if (dist < radiusNorm)
+                    {
+                        float t = dist / radiusNorm;
+                        float profile;
+                        if (t < 0.6f)
+                            profile = 1f;
+                        else
+                        {
+                            float edgeT = (t - 0.6f) / 0.4f;
+                            profile = 1f - edgeT * edgeT * edgeT;
+                        }
+                        float roughness = Mathf.PerlinNoise(nx * 40f + o * 50f, nz * 40f + o * 50f) * 0.15f;
+                        heights[z, x] += peakHeight * profile + roughness * peakHeight * 0.3f;
+                    }
+                    else
+                    {
+                        float apronT = (dist - radiusNorm) / (radiusNorm * 0.5f);
+                        heights[z, x] += peakHeight * 0.1f * (1f - apronT);
+                    }
+                }
+            }
+        }
+
+        td.SetHeights(0, 0, heights);
+        Debug.Log($"rocky outcrops carved: {outcropCount} formations in upland zone");
+    }
+
+    private static void CarveWetland(TerrainData td)
+    {
+        int res = td.heightmapResolution;
+        float[,] heights = td.GetHeights(0, 0, res, res);
+
+        float centerX = 0.55f;
+        float centerZ = 0.78f;
+        float radiusNorm = 35f / TerrainWidth;
+        float depth = 2.5f / TerrainHeight;
+        float elongation = 1.8f;
+
+        for (int z = 0; z < res; z++)
+        {
+            for (int x = 0; x < res; x++)
+            {
+                float nx = (float)x / (res - 1);
+                float nz = (float)z / (res - 1);
+
+                float ddx = (nx - centerX) / elongation;
+                float ddz = nz - centerZ;
+                float dist = Mathf.Sqrt(ddx * ddx + ddz * ddz);
+
+                if (dist > radiusNorm) continue;
+
+                float t = dist / radiusNorm;
+                float profile;
+                if (t < 0.7f)
+                    profile = 1f;
+                else
+                {
+                    float edgeT = (t - 0.7f) / 0.3f;
+                    profile = 1f - edgeT * edgeT;
+                }
+
+                float microVar = Mathf.PerlinNoise(nx * 50f + 333f, nz * 50f + 333f) * 0.3f;
+                heights[z, x] -= depth * profile * (1f + microVar * 0.2f);
+            }
+        }
+
+        td.SetHeights(0, 0, heights);
+        Debug.Log("wetland depression carved: oxbow depression in floodplain");
+    }
+
+    private static void CarveWaystationPads(TerrainData td)
+    {
+        int res = td.heightmapResolution;
+        float[,] heights = td.GetHeights(0, 0, res, res);
+
+        for (int w = 0; w < WaystationPositions.Length; w++)
+        {
+            var pos = WaystationPositions[w];
+            var padSize = WaystationPadSizes[w];
+            float nx = (pos.x + TerrainWidth / 2f) / TerrainWidth;
+            float nz = (pos.y + TerrainWidth / 2f) / TerrainWidth;
+
+            int cx = Mathf.Clamp(Mathf.RoundToInt(nx * (res - 1)), 0, res - 1);
+            int cz = Mathf.Clamp(Mathf.RoundToInt(nz * (res - 1)), 0, res - 1);
+            float targetHeight = heights[cz, cx];
+
+            if (w == 2)
+                targetHeight -= 3f / TerrainHeight;
+            if (w == 1)
+                targetHeight += 1f / TerrainHeight;
+
+            float halfX = (padSize.x / 2f + 5f) / TerrainWidth;
+            float halfZ = (padSize.y / 2f + 5f) / TerrainWidth;
+
+            for (int z = 0; z < res; z++)
+            {
+                for (int x = 0; x < res; x++)
+                {
+                    float pnx = (float)x / (res - 1);
+                    float pnz = (float)z / (res - 1);
+                    float ddx = Mathf.Abs(pnx - nx);
+                    float ddz = Mathf.Abs(pnz - nz);
+
+                    if (ddx > halfX || ddz > halfZ) continue;
+
+                    float padHalfX = padSize.x / 2f / TerrainWidth;
+                    float padHalfZ = padSize.y / 2f / TerrainWidth;
+
+                    if (ddx < padHalfX && ddz < padHalfZ)
+                    {
+                        heights[z, x] = targetHeight;
+                    }
+                    else
+                    {
+                        float blendX = ddx > padHalfX ? (ddx - padHalfX) / (halfX - padHalfX) : 0f;
+                        float blendZ = ddz > padHalfZ ? (ddz - padHalfZ) / (halfZ - padHalfZ) : 0f;
+                        float blend = Mathf.Max(blendX, blendZ);
+                        heights[z, x] = Mathf.Lerp(targetHeight, heights[z, x], blend);
+                    }
+                }
+            }
+        }
+
+        td.SetHeights(0, 0, heights);
+        Debug.Log($"waystation pads flattened: {WaystationPositions.Length} locations");
     }
 
     private static void SmoothHeightmap(TerrainData td, int passes)
