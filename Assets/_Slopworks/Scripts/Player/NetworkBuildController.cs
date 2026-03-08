@@ -8,6 +8,7 @@ public class NetworkBuildController : NetworkBehaviour
     [SerializeField] private float _placementRange = 50f;
 
     private enum BuildTool { Foundation, Wall, Ramp, Machine, Storage, Belt }
+    private enum PlacementMode { None, Grid, Snap }
 
     private Camera _camera;
     private bool _buildMode;
@@ -23,6 +24,10 @@ public class NetworkBuildController : NetworkBehaviour
 
     // Machine/storage rotation
     private int _placeRotation;
+
+    // Unified placement state
+    private PlacementMode _placementMode;
+    private BuildingSnapPoint _activeSnapPoint;
 
     // Variant selection per tool type (Tab to cycle)
     private readonly int[] _variantIndex = new int[System.Enum.GetValues(typeof(BuildTool)).Length];
@@ -434,55 +439,71 @@ public class NetworkBuildController : NetworkBehaviour
 
     // -- Raycast helpers --
 
-    private bool RaycastGrid(out Vector3 hitPoint, out Vector2Int cell)
+    /// <summary>
+    /// Unified raycast for all build tools. Sets _placementMode and _activeSnapPoint
+    /// based on what the ray hits (snap point on existing building vs terrain grid).
+    /// </summary>
+    private bool RaycastPlacement(out RaycastHit hit)
     {
         var ray = new Ray(_camera.transform.position, _camera.transform.forward);
-        if (!Physics.Raycast(ray, out var hit, _placementRange, StructuralMask))
+        if (!Physics.Raycast(ray, out hit, _placementRange, StructuralMask))
+        {
+            _placementMode = PlacementMode.None;
+            _activeSnapPoint = null;
+            return false;
+        }
+
+        // Check if we hit an existing building with snap points
+        var placement = hit.collider.GetComponentInParent<PlacementInfo>();
+        if (placement != null)
+        {
+            var nearest = BuildingSnapPoint.FindNearest(placement.gameObject, hit.point);
+            if (nearest != null)
+            {
+                _placementMode = PlacementMode.Snap;
+                _activeSnapPoint = nearest;
+                _surfaceY = placement.SurfaceY + placement.ObjectHeight;
+                return true;
+            }
+        }
+
+        // Terrain hit -- grid mode
+        _placementMode = PlacementMode.Grid;
+        _activeSnapPoint = null;
+        _surfaceY = hit.point.y;
+        return true;
+    }
+
+    // Temporary compatibility stubs -- removed in Task 5
+    private bool RaycastGrid(out Vector3 hitPoint, out Vector2Int cell)
+    {
+        if (!RaycastPlacement(out var hit))
         {
             hitPoint = Vector3.zero;
             cell = Vector2Int.zero;
             return false;
         }
-
         hitPoint = hit.point;
         cell = GridManager.Instance.Grid.WorldToCell(hit.point);
         return true;
     }
 
-    /// <summary>
-    /// Raycasts for wall placement. If aiming at a foundation, snaps to its nearest edge.
-    /// Falls back to terrain-based grid placement.
-    /// </summary>
     private bool RaycastWallPlacement(out Vector2Int cell, out Vector2Int edgeDir)
     {
-        var ray = new Ray(_camera.transform.position, _camera.transform.forward);
-        if (!Physics.Raycast(ray, out var hit, _placementRange, StructuralMask))
+        if (!RaycastPlacement(out var hit))
         {
             cell = Vector2Int.zero;
             edgeDir = Vector2Int.up;
             return false;
         }
-
-        var placement = hit.collider.GetComponentInParent<PlacementInfo>();
-        if (placement != null && placement.Category == BuildingCategory.Foundation)
-        {
-            _surfaceY = placement.SurfaceY + placement.ObjectHeight;
-            edgeDir = GetFacingEdgeDirection();
-            cell = placement.Cell;
-            return true;
-        }
-
-        _surfaceY = hit.point.y;
-        cell = GridManager.Instance.Grid.WorldToCell(hit.point);
-        edgeDir = GetFacingEdgeDirection();
+        int fs = FactoryGrid.FoundationSize;
+        var raw = GridManager.Instance.Grid.WorldToCell(hit.point);
+        cell = new Vector2Int(raw.x - fs / 2, raw.y - fs / 2);
+        edgeDir = GetFacingEdgeDirectionCompat();
         return true;
     }
 
-    /// <summary>
-    /// Returns an edge direction based on camera facing (XZ plane).
-    /// Stable for terrain placement -- doesn't flicker as crosshair moves within a cell.
-    /// </summary>
-    private Vector2Int GetFacingEdgeDirection()
+    private Vector2Int GetFacingEdgeDirectionCompat()
     {
         var fwd = _camera.transform.forward;
         if (Mathf.Abs(fwd.x) > Mathf.Abs(fwd.z))
