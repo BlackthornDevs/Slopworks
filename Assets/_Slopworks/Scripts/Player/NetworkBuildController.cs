@@ -215,6 +215,14 @@ public class NetworkBuildController : NetworkBehaviour
             ghostRot = result.rotation;
         }
 
+        // Zoop: grid-mode batch placement
+        var cell = GridManager.Instance.Grid.WorldToCell(ghostPos);
+        if (_zoopMode && _placementMode == PlacementMode.Grid)
+        {
+            HandleZoopInput(mouse, ghostPos, ghostRot, cell);
+            return;
+        }
+
         // Show ghost
         EnsurePrefabGhost(prefab);
         _ghost.transform.position = ghostPos;
@@ -222,7 +230,6 @@ public class NetworkBuildController : NetworkBehaviour
         _ghost.SetActive(true);
 
         // Validity check
-        var cell = GridManager.Instance.Grid.WorldToCell(ghostPos);
         var category = ToolToCategory(_currentTool);
         bool valid = !GridManager.Instance.HasBuildingAt(cell, _surfaceY);
         SetGhostColor(valid ? ValidColor : InvalidColor);
@@ -776,7 +783,7 @@ public class NetworkBuildController : NetworkBehaviour
 
         if (!_buildMode) return;
 
-        int lineCount = 6;
+        int lineCount = 7;
         if (_zoopStartSet) lineCount++;
         if (_beltStartSet) lineCount++;
 
@@ -791,6 +798,12 @@ public class NetworkBuildController : NetworkBehaviour
             ? $"Surface: {EffectiveY:F1}m (nudge: {_nudgeOffset:+0.0;-0.0}m)"
             : $"Surface: {EffectiveY:F1}m";
         GUILayout.Label($"BUILD MODE  |  Tool: {_currentTool}  |  {surfaceLabel}{variantLabel}");
+
+        if (_placementMode == PlacementMode.Snap && _activeSnapPoint != null)
+            GUILayout.Label($"Snap: {_activeSnapPoint.Normal:F1} on {_activeSnapPoint.transform.parent?.name}");
+        else
+            GUILayout.Label("Mode: Grid");
+
         GUILayout.Label($"1:Foundation 2:Wall 3:Ramp 4:Machine 5:Storage 6:Belt  |  Mode: {zoopLabel}");
         GUILayout.Label($"Rotation: {_placeRotation}  |  [R] Rotate  [X] Delete  [Z] Zoop  [G] Grid  [Tab] Variant  [PgUp/Dn] Nudge (+Shift: 0.5m)");
         GUILayout.Label("[B] Exit  |  [Esc] Cancel  |  LMB: Place  |  RMB: Remove");
