@@ -377,6 +377,10 @@ a:hover {
   line-height: 1.5;
 }
 
+.card-grid .card:nth-child(5) {
+    grid-column: span 2;
+}
+
 /* === ART FRAMES (concept art images) === */
 .art-frame {
   position: relative;
@@ -857,6 +861,10 @@ a:hover {
   .card-grid {
     grid-template-columns: 1fr;
   }
+
+    .card-grid .card:nth-child(5) {
+        grid-column: span 1;
+    }
 
   .content-split {
     grid-template-columns: 1fr;
