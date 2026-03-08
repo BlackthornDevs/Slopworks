@@ -509,6 +509,137 @@ public class NetworkBuildController : NetworkBehaviour
             _zoopGhosts[i].SetActive(false);
     }
 
+    // -- Zoop (batch placement) --
+
+    private void HandleZoopInput(Mouse mouse, Vector3 currentPos, Quaternion currentRot, Vector2Int currentCell)
+    {
+        var prefab = GetSelectedPrefab();
+        if (prefab == null) return;
+
+        if (!_zoopStartSet)
+        {
+            // Show single ghost at current position
+            EnsurePrefabGhost(prefab);
+            _ghost.transform.position = currentPos;
+            _ghost.transform.rotation = currentRot;
+            _ghost.SetActive(true);
+            SetGhostColor(ValidColor);
+
+            if (mouse.leftButton.wasPressedThisFrame)
+            {
+                _zoopStartSet = true;
+                _zoopStartCell = currentCell;
+                _zoopStartSurfaceY = EffectiveY;
+                Debug.Log($"build: zoop start ({currentCell.x},{currentCell.y})");
+            }
+            return;
+        }
+
+        // Show preview line from start to current
+        UpdateZoopPreview(currentCell, currentRot);
+
+        if (mouse.leftButton.wasPressedThisFrame)
+        {
+            PlaceZoopLine(_zoopStartCell, currentCell, currentRot);
+            CancelZoop();
+        }
+        if (mouse.rightButton.wasPressedThisFrame)
+            CancelZoop();
+    }
+
+    private void UpdateZoopPreview(Vector2Int endCell, Quaternion rot)
+    {
+        var prefab = GetSelectedPrefab();
+        if (prefab == null) return;
+
+        var cells = GetZoopCells(_zoopStartCell, endCell);
+
+        // Ensure enough ghosts in pool
+        while (_zoopGhosts.Count < cells.Count)
+            _zoopGhosts.Add(CreateGhostFromPrefab(prefab));
+
+        for (int i = 0; i < _zoopGhosts.Count; i++)
+        {
+            if (i < cells.Count)
+            {
+                float cs = FactoryGrid.CellSize;
+                var worldHit = new Vector3(cells[i].x * cs + cs * 0.5f, _zoopStartSurfaceY, cells[i].y * cs + cs * 0.5f);
+                var result = GridManager.GetGridPlacementPosition(worldHit, prefab, Mathf.RoundToInt(rot.eulerAngles.y));
+                _zoopGhosts[i].transform.position = result.position;
+                _zoopGhosts[i].transform.rotation = result.rotation;
+                _zoopGhosts[i].SetActive(true);
+                ApplyGhostColor(_zoopGhosts[i], ValidColor);
+            }
+            else
+            {
+                _zoopGhosts[i].SetActive(false);
+            }
+        }
+
+        // Hide single ghost during preview
+        if (_ghost != null) _ghost.SetActive(false);
+    }
+
+    private List<Vector2Int> GetZoopCells(Vector2Int start, Vector2Int end)
+    {
+        var cells = new List<Vector2Int>();
+        int dx = end.x - start.x;
+        int dz = end.y - start.y;
+
+        // Walk along dominant axis
+        if (Mathf.Abs(dx) >= Mathf.Abs(dz))
+        {
+            int step = dx >= 0 ? 1 : -1;
+            var prefab = GetSelectedPrefab();
+            var extents = GridManager.GetPrefabExtents(prefab);
+            int footprintCells = Mathf.Max(1, Mathf.RoundToInt(extents.x * 2f / FactoryGrid.CellSize));
+
+            for (int x = start.x; step > 0 ? x <= end.x : x >= end.x; x += step * footprintCells)
+                cells.Add(new Vector2Int(x, start.y));
+        }
+        else
+        {
+            int step = dz >= 0 ? 1 : -1;
+            var prefab = GetSelectedPrefab();
+            var extents = GridManager.GetPrefabExtents(prefab);
+            int footprintCells = Mathf.Max(1, Mathf.RoundToInt(extents.z * 2f / FactoryGrid.CellSize));
+
+            for (int z = start.y; step > 0 ? z <= end.y : z >= end.y; z += step * footprintCells)
+                cells.Add(new Vector2Int(start.x, z));
+        }
+
+        return cells;
+    }
+
+    private void PlaceZoopLine(Vector2Int start, Vector2Int end, Quaternion rot)
+    {
+        var prefab = GetSelectedPrefab();
+        if (prefab == null) return;
+
+        var category = ToolToCategory(_currentTool);
+        int rotDeg = Mathf.RoundToInt(rot.eulerAngles.y);
+        var cells = GetZoopCells(start, end);
+
+        foreach (var cell in cells)
+        {
+            float cs = FactoryGrid.CellSize;
+            var worldHit = new Vector3(cell.x * cs + cs * 0.5f, _zoopStartSurfaceY, cell.y * cs + cs * 0.5f);
+            var result = GridManager.GetGridPlacementPosition(worldHit, prefab, rotDeg);
+
+            if (category == BuildingCategory.Wall || category == BuildingCategory.Ramp)
+            {
+                var dir = RotationToDirection(rotDeg);
+                GridManager.Instance.CmdPlaceDirectional(cell, _zoopStartSurfaceY, dir, CurrentVariant, category, result.position, result.rotation);
+            }
+            else
+            {
+                GridManager.Instance.CmdPlace(cell, _zoopStartSurfaceY, rotDeg, CurrentVariant, category, result.position);
+            }
+        }
+
+        Debug.Log($"build: zoop placed {cells.Count} {category}");
+    }
+
     // -- Raycast helpers --
 
     /// <summary>
