@@ -32,11 +32,13 @@
 
     <div class="caution-divider"></div>
 
-    <!-- Scene 1: NYC skyline -->
+    <!-- NYC skyline establishing shot -->
     <section class="section">
         <div class="container">
-            <div class="scene-container" id="nyc-skyline">
-                <div class="scene-label">S.L.O.P.://NYC_SECTOR [SCANNING]</div>
+            <div class="art-frame">
+                <img src="assets/img/tower-skyline.png"
+                     alt="Night NYC skyline with four skyscrapers glowing amber against a dark post-apocalyptic sky, bioluminescent patches at street level"
+                     loading="lazy">
             </div>
         </div>
     </section>
@@ -82,7 +84,7 @@
             <div class="fauna-grid">
                 <div class="fauna-card">
                     <img src="assets/img/tower-skyline.png"
-                         alt="30 Rockefeller Plaza silhouette against the night sky"
+                         alt="30 Rockefeller Plaza — the introductory contract, low threat"
                          loading="lazy">
                     <div class="fauna-info">
                         <div class="fauna-name">30 Rockefeller Plaza</div>
@@ -91,8 +93,8 @@
                     </div>
                 </div>
                 <div class="fauna-card">
-                    <img src="assets/img/tower-skyline.png"
-                         alt="MetLife Building silhouette against the night sky"
+                    <img src="assets/img/tower-contract-board.png"
+                         alt="MetLife Building — moderate threat, two-person squad recommended"
                          loading="lazy">
                     <div class="fauna-info">
                         <div class="fauna-name">MetLife Building</div>
@@ -102,7 +104,7 @@
                 </div>
                 <div class="fauna-card">
                     <img src="assets/img/tower-elevator.png"
-                         alt="Woolworth Building interior elevator shaft"
+                         alt="Woolworth Building — high threat, deep elevator shaft"
                          loading="lazy">
                     <div class="fauna-info">
                         <div class="fauna-name">Woolworth Building</div>
@@ -112,7 +114,7 @@
                 </div>
                 <div class="fauna-card">
                     <img src="assets/img/tower-boss-rooftop.png"
-                         alt="One World Trade Center rooftop boss encounter"
+                         alt="One World Trade Center — extreme threat, rooftop boss encounter"
                          loading="lazy">
                     <div class="fauna-info">
                         <div class="fauna-name">One World Trade Center</div>
@@ -148,11 +150,13 @@
         </div>
     </section>
 
-    <!-- Scene 3: Elevator shaft -->
+    <!-- Elevator shaft atmospheric break -->
     <section class="section">
         <div class="container">
-            <div class="scene-container" id="elevator-shaft">
-                <div class="scene-label">S.L.O.P.://ELEVATOR_CAM [ASCENDING]</div>
+            <div class="art-frame">
+                <img src="assets/img/tower-elevator.png"
+                     alt="First-person view looking up inside a dark elevator shaft with steel cables, floor numbers, and bioluminescent fungal growth"
+                     loading="lazy">
             </div>
         </div>
     </section>
@@ -184,9 +188,6 @@
     <div id="footer"></div>
 
     <script src="js/main.js"></script>
-    <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
-    <script type="module" src="js/scene-skyline.js"></script>
-    <script type="module" src="js/scene-elevator.js"></script>
     <script src="js/scene-contracts.js"></script>
 </body>
 </html>
