@@ -63,7 +63,7 @@ public class NetworkBuildController : NetworkBehaviour
     private static readonly int StructuralMask =
         (1 << PhysicsLayers.Terrain) | (1 << PhysicsLayers.Structures) | (1 << PhysicsLayers.SnapPoints);
     private static readonly int DeleteMask =
-        (1 << PhysicsLayers.Structures);
+        (1 << PhysicsLayers.Structures) | (1 << PhysicsLayers.Interactable);
 
     private static readonly Color ValidColor = new(0f, 1f, 0f, 0.5f);
     private static readonly Color InvalidColor = new(1f, 0f, 0f, 0.5f);
