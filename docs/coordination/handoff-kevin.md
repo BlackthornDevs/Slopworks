@@ -1,50 +1,71 @@
 # Kevin's Claude -- Session Handoff
 
-Last updated: 2026-03-06 07:30
+Last updated: 2026-03-08 23:00
 Branch: kevin/multiplayer-step1
-Last commit: 6a8a5ad Add NetworkInventory, item pickup, and hotbar HUD for multiplayer Step 3
+Last commit: b8a4921 Snap point sphere colliders and data-driven placement
 
 ## What was completed this session
 
-### Multiplayer Step 3: Inventory + Items (COMPLETE)
-- `Scripts/Network/NetworkInventory.cs` -- SyncList<ItemSlot> inventory on player, ServerRpc for pickup and hotbar selection
-- `Scripts/Network/NetworkWorldItem.cs` -- server-spawned pickup component (itemId + count)
-- `Scripts/Network/NetworkPickupTrigger.cs` -- trigger sphere on player, calls CmdPickupItem on overlap with NetworkWorldItem
-- `Scripts/Network/NetworkHotbarHUD.cs` -- OnGUI hotbar display at screen bottom, scroll wheel to select slot
-- `Scripts/Network/TestItemSpawner.cs` -- server-side spawner, drops test items in configurable circle (center/radius exposed in Inspector)
-- `Prefabs/Items/WorldItem.prefab` -- cube (0.3 scale), layer 14, NetworkObject + NetworkWorldItem
-- NetworkPlayer prefab updated with NetworkInventory, NetworkHotbarHUD, child PickupTrigger with NetworkPickupTrigger
-- Tested: host mode, walk over items, items despawn and appear in hotbar HUD
+### Snap point sphere collider system
+- Each `BuildingSnapPoint` child now gets a `SphereCollider` (radius 0.5, isTrigger=true) on layer 20 (SnapPoints)
+- Build raycasts hit snap colliders directly instead of relying on distance-based FindNearest
+- Added SnapPoints layer 20 to `PhysicsLayers.cs` and `TagManager.asset`
+- Configured physics collision matrix: SnapPoints collides with nothing (triggers only)
+- `NetworkBuildController.RaycastPlacement()` checks for direct snap point hit first, falls back to FindNearest with hitNormal
+
+### Data-driven snap placement (removed hardcoded category logic)
+- `ComputeSnapSurfaceY()` simplified to just `return snap.transform.position.y` -- no category-based sitsOnTop logic
+- `GridManager.GetSnapPlacementPosition()` horizontal Y uses `snapPos.y + baseOffset` instead of `surfaceY + baseOffset`
+- Rotation always comes from caller (`rotationDeg` param), no autoYaw fallback
+- Wall-to-wall and ramp-to-ramp inherit existing building's yaw as base, R-key adds offset
+
+### Ramp snap point reduction
+- Ramps get 7 snap points (4 cardinal mid + Top_Center + HighEdge + LowEdge) instead of 14+2
+- Both `BuildingSnapPoint.GenerateFromBounds()` and `SnapPointPrefabSetup` support `isRamp` parameter
+
+### Editor tool: SnapPointPrefabSetup
+- New editor tool at `Tools > Slopworks > Add Snap Points to Prefabs`
+- Preserves existing snap points (skips prefabs that already have them) so manual edits survive
+- Generates sphere colliders on each snap point child
+
+### New building prefabs
+- `SLAB_1m/2m/4m` (foundations), `WALL_0.5m`, `RAMP 4x1/4x2`
+- All have snap point children with sphere collider triggers
+
+### Test updates
+- `SnapPlacementTests.cs`: explicit autoYaw for east snap rotation
+- `UnifiedPlacementTests.cs`: new test file covering east/south/corner snaps with explicit rotation
+- `GridPlacementTests.cs`: updated for new API
 
 ## What's in progress (not yet committed)
-
-None -- all committed.
+- Unstaged terrain data, metal materials, old prefab deletions, "test 1" prefabs, FBX Raw assets, Recovery assets -- NOT part of snap point work
 
 ## Next task to pick up
 
-- **Step 4: Machines + Belts + Simulation** -- the biggest multiplayer step. Server-only factory simulation ticking over the network:
-  - NetworkMachine wrapping Machine simulation class, SyncVars for recipe/progress/state
-  - NetworkStorage wrapping StorageContainer, SyncList for contents
-  - NetworkBeltSegment wrapping BeltSimulation, SyncList<BeltItem>
-  - NetworkSimulationTick for server-side FixedUpdate ticking all factory objects
-  - Build mode extensions for machine/storage/belt placement
-- After Step 4: Steps 5-7 (Combat, Tower+Buildings, Supabase persistence)
+### Known bugs (from playtest)
+1. **Zoop ghost shifts to different grid after first click** -- ghost jumps to wrong cell when zoop starts
+2. **Ramp zoop should change elevation** -- currently places flat copies. Should increment elevation (high-to-low or low-to-high) so zooped ramps build upward
+3. **Ramp HighEdge/LowEdge snap points need manual positioning** -- auto-detection from mesh bounds doesn't match actual slope. Editor tool preserves manual edits.
+4. **Wall-to-floor snap positioning** -- foundation top flush with wall top requires correct snap point positioning on wall prefabs (tuning, not code)
+
+### After bugs
+- Continue Step 4: Machines + Belts + Simulation network wrappers
+- Steps 5-7: Combat, Tower+Buildings, Supabase
 
 ## Blockers or decisions needed
-
 - None
 
 ## Test status
-
-- EditMode tests not run this session (multiplayer work is scene/prefab/network setup)
-- Manual testing confirmed: host mode, item pickup, inventory sync, hotbar HUD all working
+- Tests not run via MCP this session (MCP run_tests corrupts FishNet DefaultPrefabObjects)
+- Run manually: Window > General > Test Runner > EditMode > Run All
 
 ## Key context the next session needs
-
-- **Branch:** Work is on `kevin/multiplayer-step1`, NOT `kevin/main`
-- **FishNet auto-collects prefabs** with NetworkObject -- no manual registration in DefaultPrefabObjects needed
-- **Assets/Refresh** menu item needed after creating new .cs files via Write tool -- MCP recompile alone doesn't generate .meta files for brand new scripts
-- **TestItemSpawner** has `_spawnCenter` (default 50,0.5,50) and `_spawnRadius` (default 5) fields -- terrain corner is at origin, center is ~(50,0,50) for default 100x100 terrain
-- **NetworkPickupTrigger** is on a child GameObject "PickupTrigger" of the NetworkPlayer prefab
-- **NetworkHotbarHUD** uses legacy Input.mouseScrollDelta for scroll wheel (New Input System not wired for this yet)
-- **MCP Unity limitations:** Still can't find asmdef-scoped components by name. Use Assets/Refresh after creating new files.
+- **Branch:** `kevin/multiplayer-step1`, NOT `kevin/main`
+- **NEVER use MCP run_tests** -- triggers recompilation that corrupts FishNet DefaultPrefabObjects.asset
+- **SnapPoints layer 20**: trigger colliders only, no physics collisions. Raycasts hit them via Physics.queriesHitTriggers
+- **Snap point Y drives placement**: no category-based surfaceY logic. Snap point position encodes the geometry.
+- **Editor tool preserves manual edits**: SnapPointPrefabSetup skips prefabs that already have snap points
+- **placeSurfaceY includes nudge**: `_surfaceY + _nudgeOffset` used for all placement commands
+- **Zoop skipped during snap detection**: `if (!_zoopMode)` guards snap point checking
+- **Ghost system**: Prefab-based ghosts via `CreateGhostFromPrefab()` / `EnsurePrefabGhost()`
+- **Camera-facing edge**: `GetFacingEdgeDirection()` determines wall/ramp edge based on camera direction

@@ -79,6 +79,8 @@ These are non-negotiable. Violating any of them creates bugs that are hard to fi
 
 **When adding a new PortOwnerType, update ConnectionResolver.** `CreateSource` and `CreateDestination` in `ConnectionResolver.cs` have switch statements over `PortOwnerType`. Adding a new enum value without adding corresponding cases causes exceptions at runtime when ports try to wire up. This is an integration seam that unit tests don't catch — it only fails when you place buildings adjacent to each other.
 
+**Never duplicate placement math, physics constants, or derived values.** Every building type's world position, Y offset, rotation, and scale must come from a single source of truth -- currently `GridManager`'s universal placement methods (`GetFoundationWorldPos`, `GetWallWorldPos`, `GetBuildingWorldPos`, `GetBeltEndpointPos`, `GetRampPlacement`). Ghost previews and server spawns call the same method. Y offsets derive from prefab renderer bounds via `GetPrefabHalfHeight()`, not hardcoded magic numbers. If you're writing `new Vector3(x, someOffset, z)` for placement anywhere outside GridManager, you're doing it wrong. This rule extends beyond placement: any logic that could apply to multiple building/item/enemy types belongs in a shared method parameterized by the type's data (prefab, definition SO, etc.), not copy-pasted per type.
+
 ---
 
 ## Before writing C# code
@@ -282,9 +284,11 @@ Follow this checklist every time. Missing any step causes silent runtime failure
 3. **PortOwnerType** — add new value to `PortOwnerType` enum
 4. **ConnectionResolver** — add cases for the new type in both `CreateSource` and `CreateDestination`. If the port owner is a `StorageContainer`, fall through to the Storage case.
 5. **BuildingPlacementService** — add `Place[BuildingName]` method following `PlaceMachine`/`PlaceStorage`/`PlaceTurret` pattern
-6. **MonoBehaviour wrapper** — thin wrapper (e.g. `TurretBehaviour`) using inactive-then-activate pattern
-7. **StructuralPlaytestSetup** — add tool mode, build page slot, input handler, visual spawner, OnGUI stats
-8. **PreSeedFactory** (optional) — add a pre-built chain to verify the full automation loop
+6. **GridManager placement method** — add a `Get[BuildingName]WorldPos()` method to `GridManager`'s universal placement block. Derive Y offset from the prefab via `GetPrefabHalfHeight()`. Both ghost preview (NetworkBuildController) and server spawn (GridManager.CmdPlace*) must call this single method. Never hardcode offsets inline.
+7. **Prefab** — add a `_[buildingName]Prefab` serialized field to `GridManager`, a public getter, and wire it in `FactoryPrefabSetup.cs`. Ghost preview uses the prefab via `EnsurePrefabGhost()`.
+8. **MonoBehaviour wrapper** — thin wrapper (e.g. `TurretBehaviour`) using inactive-then-activate pattern
+9. **StructuralPlaytestSetup** — add tool mode, build page slot, input handler, visual spawner, OnGUI stats
+10. **PreSeedFactory** (optional) — add a pre-built chain to verify the full automation loop
 
 Reference implementation: turret system (J-013 through J-015). Files: `TurretController.cs`, `TurretDefinitionSO.cs`, `TurretBehaviour.cs`, plus modifications to `PortOwnerType.cs`, `ConnectionResolver.cs`, `BuildingPlacementService.cs`, `StructuralPlaytestSetup.cs`.
 

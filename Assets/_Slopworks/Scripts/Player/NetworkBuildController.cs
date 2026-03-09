@@ -8,20 +8,25 @@ public class NetworkBuildController : NetworkBehaviour
     [SerializeField] private float _placementRange = 50f;
 
     private enum BuildTool { Foundation, Wall, Ramp, Machine, Storage, Belt }
+    private enum PlacementMode { None, Grid, Snap }
 
     private Camera _camera;
     private bool _buildMode;
     private BuildTool _currentTool;
-    private Vector2Int _lastCell;
-    private int _lastLevel;
-    private Vector2Int _lastEdgeDir;
-    private bool _lastValid;
-
-    // Level control
-    private int _levelOverrideFrames;
+    // Surface-based placement
+    private float _surfaceY;
+    private float _nudgeOffset;
+    private float EffectiveY => _surfaceY + _nudgeOffset;
 
     // Machine/storage rotation
     private int _placeRotation;
+
+    // Unified placement state
+    private PlacementMode _placementMode;
+    private BuildingSnapPoint _activeSnapPoint;
+
+    // Variant selection per tool type (Tab to cycle)
+    private readonly int[] _variantIndex = new int[System.Enum.GetValues(typeof(BuildTool)).Length];
 
     // Delete mode (X key toggle, auto-exits after delete)
     private bool _deleteMode;
@@ -32,9 +37,7 @@ public class NetworkBuildController : NetworkBehaviour
     private bool _zoopMode;
     private bool _zoopStartSet;
     private Vector2Int _zoopStartCell;
-    private Vector2Int _zoopStartDir; // for walls: edge direction at start
-    private int _zoopStartLevel;
-    private bool _zoopStartOnFoundation;
+    private float _zoopStartSurfaceY;
     private readonly List<GameObject> _ghostPool = new();
     private readonly List<GameObject> _zoopGhosts = new();
 
@@ -52,7 +55,7 @@ public class NetworkBuildController : NetworkBehaviour
     private GridOverlay _gridOverlay;
 
     private static readonly int StructuralMask =
-        (1 << PhysicsLayers.Terrain) | (1 << PhysicsLayers.Structures);
+        (1 << PhysicsLayers.Terrain) | (1 << PhysicsLayers.Structures) | (1 << PhysicsLayers.SnapPoints);
 
     private static readonly Color ValidColor = new(0f, 1f, 0f, 0.5f);
     private static readonly Color InvalidColor = new(1f, 0f, 0f, 0.5f);
@@ -73,6 +76,9 @@ public class NetworkBuildController : NetworkBehaviour
         _gridOverlay.Init(_camera);
     }
 
+    // Available recipes for cycling
+    private static readonly string[] RecipeIds = { "smelt_iron", "smelt_copper" };
+
     private void Update()
     {
         if (!IsOwner) return;
@@ -82,10 +88,15 @@ public class NetworkBuildController : NetworkBehaviour
         var mouse = Mouse.current;
         if (kb == null || mouse == null) return;
 
+        // F key: interact with machine (set recipe)
+        if (kb.fKey.wasPressedThisFrame)
+            TryInteract();
+
         // Delete mode toggle (X key) -- works regardless of build mode
         if (kb.xKey.wasPressedThisFrame)
         {
             _deleteMode = !_deleteMode;
+            _nudgeOffset = 0f;
             if (_deleteMode)
             {
                 CancelAllPending();
@@ -109,6 +120,7 @@ public class NetworkBuildController : NetworkBehaviour
         if (kb.bKey.wasPressedThisFrame)
         {
             _buildMode = !_buildMode;
+            _nudgeOffset = 0f;
             Debug.Log($"build: mode {(_buildMode ? "ON" : "OFF")}");
             if (!_buildMode) CancelAllPending();
         }
@@ -130,9 +142,9 @@ public class NetworkBuildController : NetworkBehaviour
             return;
         }
 
-        // Level change: PgUp/PgDn
-        HandleLevelChange(kb);
-        HandleAutoLevel(mouse);
+        // Surface Y detection and nudge
+        UpdateSurfaceY();
+        HandleNudge(kb);
 
         // Rotation: R key
         if (kb.rKey.wasPressedThisFrame)
@@ -140,6 +152,10 @@ public class NetworkBuildController : NetworkBehaviour
             _placeRotation = (_placeRotation + 90) % 360;
             Debug.Log($"build: rotation = {_placeRotation}");
         }
+
+        // Variant cycle: Tab key
+        if (kb.tabKey.wasPressedThisFrame)
+            CycleVariant();
 
         // Zoop toggle: Z key
         if (kb.zKey.wasPressedThisFrame)
@@ -157,27 +173,125 @@ public class NetworkBuildController : NetworkBehaviour
         }
 
         // Tool-specific input
-        switch (_currentTool)
+        if (_currentTool == BuildTool.Belt)
+            HandleBeltInput(mouse);
+        else
+            HandleBuildInput(mouse);
+    }
+
+    // -- Unified build input (all tools except belt) --
+
+    private void HandleBuildInput(Mouse mouse)
+    {
+        if (!RaycastPlacement(out var hit))
         {
-            case BuildTool.Foundation:
-                HandleFoundationInput(mouse);
-                break;
-            case BuildTool.Wall:
-                HandleWallInput(kb, mouse);
-                break;
-            case BuildTool.Ramp:
-                HandleRampInput(mouse);
-                break;
-            case BuildTool.Machine:
-                HandleMachineInput(mouse);
-                break;
-            case BuildTool.Storage:
-                HandleStorageInput(mouse);
-                break;
-            case BuildTool.Belt:
-                HandleBeltInput(mouse);
-                break;
+            HideGhost();
+            return;
         }
+
+        var prefab = GetSelectedPrefab();
+        if (prefab == null)
+        {
+            HideGhost();
+            return;
+        }
+
+        Vector3 ghostPos;
+        Quaternion ghostRot;
+
+        if (_placementMode == PlacementMode.Snap && _activeSnapPoint != null)
+        {
+            int effectiveRotation;
+            if (Mathf.Abs(_activeSnapPoint.Normal.y) > 0.9f)
+            {
+                effectiveRotation = _placeRotation;
+            }
+            else
+            {
+                var targetInfo = _activeSnapPoint.GetComponentInParent<PlacementInfo>();
+                bool isWallOnWall = targetInfo != null
+                    && targetInfo.Category == BuildingCategory.Wall
+                    && _currentTool == BuildTool.Wall;
+                bool isRampOnRamp = targetInfo != null
+                    && targetInfo.Category == BuildingCategory.Ramp
+                    && _currentTool == BuildTool.Ramp;
+
+                int baseYaw;
+                if (isWallOnWall || isRampOnRamp)
+                {
+                    baseYaw = Mathf.RoundToInt(_activeSnapPoint.transform.root.eulerAngles.y);
+                }
+                else
+                {
+                    float autoYaw = Mathf.Atan2(_activeSnapPoint.Normal.x, _activeSnapPoint.Normal.z) * Mathf.Rad2Deg;
+                    baseYaw = Mathf.RoundToInt(autoYaw);
+                }
+
+                effectiveRotation = (baseYaw + _placeRotation) % 360;
+            }
+
+            var result = GridManager.GetSnapPlacementPosition(
+                _activeSnapPoint, prefab, effectiveRotation, _surfaceY);
+            ghostPos = result.position + new Vector3(0f, _nudgeOffset, 0f);
+            ghostRot = result.rotation;
+        }
+        else
+        {
+            var effectiveHit = new Vector3(hit.point.x, EffectiveY, hit.point.z);
+            var result = GridManager.GetGridPlacementPosition(
+                effectiveHit, prefab, _placeRotation);
+            ghostPos = result.position;
+            ghostRot = result.rotation;
+        }
+
+        // Zoop: grid-mode batch placement
+        var cell = GridManager.Instance.Grid.WorldToCell(ghostPos);
+        if (_zoopMode && _placementMode == PlacementMode.Grid)
+        {
+            HandleZoopInput(mouse, ghostPos, ghostRot, cell);
+            return;
+        }
+
+        // Show ghost
+        EnsurePrefabGhost(prefab);
+        _ghost.transform.position = ghostPos;
+        _ghost.transform.rotation = ghostRot;
+        _ghost.SetActive(true);
+
+        // Validity check
+        var category = ToolToCategory(_currentTool);
+        float placeSurfaceY = _surfaceY + _nudgeOffset;
+        bool valid = !GridManager.Instance.HasBuildingAt(cell, placeSurfaceY);
+        SetGhostColor(valid ? ValidColor : InvalidColor);
+
+        // Place on left click
+        if (mouse.leftButton.wasPressedThisFrame && valid)
+        {
+            int rotDeg = Mathf.RoundToInt(ghostRot.eulerAngles.y);
+
+            if (category == BuildingCategory.Wall || category == BuildingCategory.Ramp)
+            {
+                var dir = RotationToDirection(rotDeg);
+                GridManager.Instance.CmdPlaceDirectional(cell, placeSurfaceY, dir, CurrentVariant, category, ghostPos, ghostRot);
+            }
+            else
+            {
+                GridManager.Instance.CmdPlace(cell, placeSurfaceY, rotDeg, CurrentVariant, category, ghostPos);
+            }
+            Debug.Log($"build: placed {category} at ({cell.x},{cell.y}) y={placeSurfaceY:F1}");
+        }
+
+        // Delete on right click
+        if (mouse.rightButton.wasPressedThisFrame)
+        {
+            var hitCell = GridManager.Instance.Grid.WorldToCell(hit.point);
+            GridManager.Instance.CmdDelete(hitCell, placeSurfaceY);
+        }
+    }
+
+    private void HideGhost()
+    {
+        if (_ghost != null) _ghost.SetActive(false);
     }
 
     // -- Delete mode (X key) --
@@ -230,22 +344,11 @@ public class NetworkBuildController : NetworkBehaviour
         if (mouse.leftButton.wasPressedThisFrame)
         {
             ClearDeleteHighlight();
-            switch (placement.Type)
-            {
-                case PlacementInfo.PlacementType.Foundation:
-                    GridManager.Instance.CmdRemoveFoundation(placement.Cell, placement.Level);
-                    break;
-                case PlacementInfo.PlacementType.Wall:
-                    GridManager.Instance.CmdRemoveWall(placement.Cell, placement.Level, placement.EdgeDirection);
-                    break;
-                case PlacementInfo.PlacementType.Ramp:
-                    GridManager.Instance.CmdRemoveRamp(placement.Cell, placement.Level, placement.EdgeDirection);
-                    break;
-                default:
-                    GridManager.Instance.CmdDeleteAt(placement.Cell, placement.Level);
-                    break;
-            }
-            Debug.Log($"build: deleted {placement.Type} at ({placement.Cell.x},{placement.Cell.y}) level {placement.Level}");
+            if (placement.Category == BuildingCategory.Wall || placement.Category == BuildingCategory.Ramp)
+                GridManager.Instance.CmdDeleteDirectional(placement.Cell, placement.SurfaceY, placement.EdgeDirection);
+            else
+                GridManager.Instance.CmdDelete(placement.Cell, placement.SurfaceY);
+            Debug.Log($"build: deleted {placement.Category} at ({placement.Cell.x},{placement.Cell.y}) y={placement.SurfaceY:F1}");
         }
     }
 
@@ -260,42 +363,81 @@ public class NetworkBuildController : NetworkBehaviour
         _deleteHighlight = null;
     }
 
-    // -- Level controls --
+    // -- Machine/Storage interaction --
 
-    private void HandleLevelChange(Keyboard kb)
+    private void TryInteract()
     {
-        if (kb.pageUpKey.wasPressedThisFrame)
-        {
-            _lastLevel = Mathf.Min(_lastLevel + 1, FactoryGrid.MaxLevels - 1);
-            _levelOverrideFrames = 90;
-            Debug.Log($"build: level {_lastLevel} (manual)");
-        }
-        else if (kb.pageDownKey.wasPressedThisFrame)
-        {
-            _lastLevel = Mathf.Max(_lastLevel - 1, 0);
-            _levelOverrideFrames = 90;
-            Debug.Log($"build: level {_lastLevel} (manual)");
-        }
-    }
+        var ray = new Ray(_camera.transform.position, _camera.transform.forward);
+        if (!Physics.Raycast(ray, out var hit, _placementRange)) return;
 
-    private void HandleAutoLevel(Mouse mouse)
-    {
-        if (_levelOverrideFrames > 0)
+        // Machine: cycle recipe
+        var netMachine = hit.collider.GetComponentInParent<NetworkMachine>();
+        if (netMachine != null)
         {
-            _levelOverrideFrames--;
+            string currentRecipe = netMachine.ActiveRecipeId;
+            int nextIndex = 0;
+            if (!string.IsNullOrEmpty(currentRecipe))
+            {
+                for (int i = 0; i < RecipeIds.Length; i++)
+                {
+                    if (RecipeIds[i] == currentRecipe)
+                    {
+                        nextIndex = (i + 1) % RecipeIds.Length;
+                        break;
+                    }
+                }
+            }
+
+            netMachine.CmdSetRecipe(RecipeIds[nextIndex]);
+            Debug.Log($"build: set machine recipe to {RecipeIds[nextIndex]}");
             return;
         }
 
-        // Lock level during any 2-click operation (zoop or belt)
+        // Storage: deposit selected hotbar item
+        var netStorage = hit.collider.GetComponentInParent<NetworkStorage>();
+        if (netStorage != null)
+        {
+            var inventory = GetComponent<NetworkInventory>();
+            if (inventory == null) return;
+
+            var nob = netStorage.GetComponent<NetworkObject>();
+            if (nob == null) return;
+
+            inventory.CmdDepositIntoStorage(nob, inventory.SelectedHotbarIndex);
+        }
+    }
+
+    // -- Surface Y detection and nudge --
+
+    private void UpdateSurfaceY()
+    {
         if (_zoopStartSet || _beltStartSet) return;
 
         var ray = new Ray(_camera.transform.position, _camera.transform.forward);
         if (Physics.Raycast(ray, out var hit, _placementRange, StructuralMask))
         {
-            int level = Mathf.Clamp(
-                Mathf.RoundToInt(hit.point.y / FactoryGrid.LevelHeight),
-                0, FactoryGrid.MaxLevels - 1);
-            _lastLevel = level;
+            var info = hit.collider.GetComponentInParent<PlacementInfo>();
+            if (info != null)
+                _surfaceY = info.SurfaceY + info.ObjectHeight;
+            else
+                _surfaceY = hit.point.y;
+        }
+    }
+
+    private void HandleNudge(Keyboard kb)
+    {
+        bool shift = kb.leftShiftKey.isPressed || kb.rightShiftKey.isPressed;
+        float step = shift ? 0.5f : 1f;
+
+        if (kb.pageUpKey.wasPressedThisFrame)
+        {
+            _nudgeOffset += step;
+            Debug.Log($"build: nudge +{_nudgeOffset:F1}m");
+        }
+        if (kb.pageDownKey.wasPressedThisFrame)
+        {
+            _nudgeOffset -= step;
+            Debug.Log($"build: nudge {_nudgeOffset:F1}m");
         }
     }
 
@@ -306,9 +448,79 @@ public class NetworkBuildController : NetworkBehaviour
         if (_currentTool == tool) return;
         CancelAllPending();
         _currentTool = tool;
+        _nudgeOffset = 0f;
         if (tool == BuildTool.Machine || tool == BuildTool.Storage)
             _placeRotation = 0;
         Debug.Log($"build: tool = {tool}");
+    }
+
+    private int CurrentVariant => _variantIndex[(int)_currentTool];
+
+    private GameObject[] GetVariantsForCurrentTool()
+    {
+        var gm = GridManager.Instance;
+        if (gm == null) return null;
+        return gm.GetPrefabs(ToolToCategory(_currentTool));
+    }
+
+    private GameObject GetSelectedPrefab()
+    {
+        var gm = GridManager.Instance;
+        if (gm == null) return null;
+        return gm.GetPrefab(ToolToCategory(_currentTool), CurrentVariant);
+    }
+
+    private static BuildingCategory ToolToCategory(BuildTool tool)
+    {
+        return tool switch
+        {
+            BuildTool.Foundation => BuildingCategory.Foundation,
+            BuildTool.Wall => BuildingCategory.Wall,
+            BuildTool.Ramp => BuildingCategory.Ramp,
+            BuildTool.Machine => BuildingCategory.Machine,
+            BuildTool.Storage => BuildingCategory.Storage,
+            BuildTool.Belt => BuildingCategory.Belt,
+            _ => BuildingCategory.Foundation
+        };
+    }
+
+    private static Vector2Int RotationToDirection(int rotDeg)
+    {
+        return rotDeg switch
+        {
+            0 => Vector2Int.up,
+            90 => Vector2Int.right,
+            180 => Vector2Int.down,
+            270 => Vector2Int.left,
+            _ => Vector2Int.up
+        };
+    }
+
+    private void CycleVariant()
+    {
+        var variants = GetVariantsForCurrentTool();
+        if (variants == null || variants.Length <= 1) return;
+
+        int idx = (int)_currentTool;
+        _variantIndex[idx] = (_variantIndex[idx] + 1) % variants.Length;
+        DestroyAllGhosts(); // Destroy all ghost pools so they rebuild from new prefab
+        Debug.Log($"build: variant {_variantIndex[idx] + 1}/{variants.Length} ({variants[_variantIndex[idx]].name})");
+    }
+
+    private void DestroyAllGhosts()
+    {
+        DestroyGhost();
+        DestroyGhostPool(_ghostPool);
+        DestroyGhostPool(_zoopGhosts);
+    }
+
+    private static void DestroyGhostPool(List<GameObject> pool)
+    {
+        for (int i = 0; i < pool.Count; i++)
+        {
+            if (pool[i] != null) Destroy(pool[i]);
+        }
+        pool.Clear();
     }
 
     private void CancelAllPending()
@@ -323,610 +535,216 @@ public class NetworkBuildController : NetworkBehaviour
         _zoopStartSet = false;
         for (int i = 0; i < _ghostPool.Count; i++)
             _ghostPool[i].SetActive(false);
+        // Destroy zoop ghosts -- pool may contain ghosts from a different tool
+        DestroyGhostPool(_zoopGhosts);
+    }
+
+    // -- Zoop (batch placement) --
+
+    private void HandleZoopInput(Mouse mouse, Vector3 currentPos, Quaternion currentRot, Vector2Int currentCell)
+    {
+        var prefab = GetSelectedPrefab();
+        if (prefab == null) return;
+
+        if (!_zoopStartSet)
+        {
+            // Show single ghost at current position
+            EnsurePrefabGhost(prefab);
+            _ghost.transform.position = currentPos;
+            _ghost.transform.rotation = currentRot;
+            _ghost.SetActive(true);
+            SetGhostColor(ValidColor);
+
+            if (mouse.leftButton.wasPressedThisFrame)
+            {
+                _zoopStartSet = true;
+                _zoopStartCell = currentCell;
+                _zoopStartSurfaceY = EffectiveY;
+                Debug.Log($"build: zoop start ({currentCell.x},{currentCell.y})");
+            }
+            return;
+        }
+
+        // Show preview line from start to current
+        UpdateZoopPreview(currentCell, currentRot);
+
+        if (mouse.leftButton.wasPressedThisFrame)
+        {
+            PlaceZoopLine(_zoopStartCell, currentCell, currentRot);
+            CancelZoop();
+        }
+        if (mouse.rightButton.wasPressedThisFrame)
+            CancelZoop();
+    }
+
+    private void UpdateZoopPreview(Vector2Int endCell, Quaternion rot)
+    {
+        var prefab = GetSelectedPrefab();
+        if (prefab == null) return;
+
+        var cells = GetZoopCells(_zoopStartCell, endCell);
+
+        // Ensure enough ghosts in pool
+        while (_zoopGhosts.Count < cells.Count)
+            _zoopGhosts.Add(CreateGhostFromPrefab(prefab));
+
         for (int i = 0; i < _zoopGhosts.Count; i++)
-            _zoopGhosts[i].SetActive(false);
-        for (int i = 0; i < _rampZoopGhosts.Count; i++)
-            _rampZoopGhosts[i].SetActive(false);
+        {
+            if (i < cells.Count)
+            {
+                float cs = FactoryGrid.CellSize;
+                var worldHit = new Vector3(cells[i].x * cs + cs * 0.5f, _zoopStartSurfaceY, cells[i].y * cs + cs * 0.5f);
+                var result = GridManager.GetGridPlacementPosition(worldHit, prefab, Mathf.RoundToInt(rot.eulerAngles.y));
+                _zoopGhosts[i].transform.position = result.position;
+                _zoopGhosts[i].transform.rotation = result.rotation;
+                _zoopGhosts[i].SetActive(true);
+                ApplyGhostColor(_zoopGhosts[i], ValidColor);
+            }
+            else
+            {
+                _zoopGhosts[i].SetActive(false);
+            }
+        }
+
+        // Hide single ghost during preview
+        if (_ghost != null) _ghost.SetActive(false);
+    }
+
+    private List<Vector2Int> GetZoopCells(Vector2Int start, Vector2Int end)
+    {
+        var cells = new List<Vector2Int>();
+        int dx = end.x - start.x;
+        int dz = end.y - start.y;
+
+        // Walk along dominant axis
+        if (Mathf.Abs(dx) >= Mathf.Abs(dz))
+        {
+            int step = dx >= 0 ? 1 : -1;
+            var prefab = GetSelectedPrefab();
+            var extents = GridManager.GetPrefabExtents(prefab);
+            int footprintCells = Mathf.Max(1, Mathf.RoundToInt(extents.x * 2f / FactoryGrid.CellSize));
+
+            for (int x = start.x; step > 0 ? x <= end.x : x >= end.x; x += step * footprintCells)
+                cells.Add(new Vector2Int(x, start.y));
+        }
+        else
+        {
+            int step = dz >= 0 ? 1 : -1;
+            var prefab = GetSelectedPrefab();
+            var extents = GridManager.GetPrefabExtents(prefab);
+            int footprintCells = Mathf.Max(1, Mathf.RoundToInt(extents.z * 2f / FactoryGrid.CellSize));
+
+            for (int z = start.y; step > 0 ? z <= end.y : z >= end.y; z += step * footprintCells)
+                cells.Add(new Vector2Int(start.x, z));
+        }
+
+        return cells;
+    }
+
+    private void PlaceZoopLine(Vector2Int start, Vector2Int end, Quaternion rot)
+    {
+        var prefab = GetSelectedPrefab();
+        if (prefab == null) return;
+
+        var category = ToolToCategory(_currentTool);
+        int rotDeg = Mathf.RoundToInt(rot.eulerAngles.y);
+        var cells = GetZoopCells(start, end);
+
+        foreach (var cell in cells)
+        {
+            float cs = FactoryGrid.CellSize;
+            var worldHit = new Vector3(cell.x * cs + cs * 0.5f, _zoopStartSurfaceY, cell.y * cs + cs * 0.5f);
+            var result = GridManager.GetGridPlacementPosition(worldHit, prefab, rotDeg);
+
+            if (category == BuildingCategory.Wall || category == BuildingCategory.Ramp)
+            {
+                var dir = RotationToDirection(rotDeg);
+                GridManager.Instance.CmdPlaceDirectional(cell, _zoopStartSurfaceY, dir, CurrentVariant, category, result.position, result.rotation);
+            }
+            else
+            {
+                GridManager.Instance.CmdPlace(cell, _zoopStartSurfaceY, rotDeg, CurrentVariant, category, result.position);
+            }
+        }
+
+        Debug.Log($"build: zoop placed {cells.Count} {category}");
     }
 
     // -- Raycast helpers --
 
-    private bool RaycastGrid(out Vector3 hitPoint, out Vector2Int cell)
+    /// <summary>
+    /// Unified raycast for all build tools. Sets _placementMode and _activeSnapPoint
+    /// based on what the ray hits (snap point on existing building vs terrain grid).
+    /// </summary>
+    private bool RaycastPlacement(out RaycastHit hit)
     {
         var ray = new Ray(_camera.transform.position, _camera.transform.forward);
-        if (!Physics.Raycast(ray, out var hit, _placementRange, StructuralMask))
+        if (!Physics.Raycast(ray, out hit, _placementRange, StructuralMask))
         {
-            hitPoint = Vector3.zero;
-            cell = Vector2Int.zero;
+            _placementMode = PlacementMode.None;
+            _activeSnapPoint = null;
             return false;
         }
 
-        hitPoint = hit.point;
-        cell = GridManager.Instance.Grid.WorldToCell(hit.point);
+        // Check if we hit a snap point collider directly
+        // Skip during zoop -- zoop always uses grid placement
+        if (!_zoopMode)
+        {
+            var directSnap = hit.collider.GetComponent<BuildingSnapPoint>();
+            if (directSnap == null)
+                directSnap = hit.collider.GetComponentInParent<BuildingSnapPoint>();
+
+            var placement = directSnap != null
+                ? directSnap.GetComponentInParent<PlacementInfo>()
+                : hit.collider.GetComponentInParent<PlacementInfo>();
+
+            // Direct hit on snap point sphere
+            BuildingSnapPoint chosen = directSnap;
+
+            // Fallback: hit building mesh, find nearest snap point
+            if (chosen == null && placement != null)
+                chosen = BuildingSnapPoint.FindNearest(placement.gameObject, hit.point, hit.normal);
+
+            if (chosen != null && placement != null)
+            {
+                _placementMode = PlacementMode.Snap;
+                _activeSnapPoint = chosen;
+                _surfaceY = ComputeSnapSurfaceY(chosen, placement);
+                return true;
+            }
+        }
+
+        // Terrain hit -- grid mode
+        _placementMode = PlacementMode.Grid;
+        _activeSnapPoint = null;
+        _surfaceY = hit.point.y;
         return true;
     }
 
-    /// <summary>
-    /// Raycasts for wall placement. If aiming at a foundation, snaps to its nearest edge.
-    /// Falls back to terrain-based grid placement.
-    /// </summary>
-    private bool _lastHitFoundation;
-
-    private bool RaycastWallPlacement(out Vector2Int cell, out Vector2Int edgeDir, out int level)
+    private float ComputeSnapSurfaceY(BuildingSnapPoint snap, PlacementInfo placement)
     {
-        var ray = new Ray(_camera.transform.position, _camera.transform.forward);
-        if (!Physics.Raycast(ray, out var hit, _placementRange, StructuralMask))
-        {
-            cell = Vector2Int.zero;
-            edgeDir = Vector2Int.up;
-            level = _lastLevel;
-            _lastHitFoundation = false;
-            return false;
-        }
-
-        var placement = hit.collider.GetComponentInParent<PlacementInfo>();
-        if (placement != null && placement.Type == PlacementInfo.PlacementType.Foundation)
-        {
-            _lastHitFoundation = true;
-            level = placement.Level;
-
-            // Use camera facing direction -- more intuitive than nearest-edge-to-hit-point
-            edgeDir = GetFacingEdgeDirection();
-            cell = placement.Cell;
-            return true;
-        }
-
-        // Fallback: terrain-based placement
-        // No wall-grid snapping on terrain -- wall follows the crosshair cell directly
-        _lastHitFoundation = false;
-        cell = GridManager.Instance.Grid.WorldToCell(hit.point);
-        edgeDir = GetFacingEdgeDirection();
-        level = _lastLevel;
-        return true;
-    }
-
-    private Vector2Int GetEdgeDirection(Vector3 hitPoint, Vector2Int cell)
-    {
-        Vector3 cellCenter = GridManager.Instance.Grid.CellToWorld(cell, 0);
-        float dx = hitPoint.x - cellCenter.x;
-        float dz = hitPoint.z - cellCenter.z;
-
-        if (Mathf.Abs(dx) > Mathf.Abs(dz))
-            return dx > 0 ? Vector2Int.right : Vector2Int.left;
-        return dz > 0 ? Vector2Int.up : Vector2Int.down;
-    }
-
-    /// <summary>
-    /// Returns an edge direction based on camera facing (XZ plane).
-    /// Stable for terrain placement -- doesn't flicker as crosshair moves within a cell.
-    /// </summary>
-    private Vector2Int GetFacingEdgeDirection()
-    {
-        var fwd = _camera.transform.forward;
-        if (Mathf.Abs(fwd.x) > Mathf.Abs(fwd.z))
-            return fwd.x > 0 ? Vector2Int.right : Vector2Int.left;
-        return fwd.z > 0 ? Vector2Int.up : Vector2Int.down;
-    }
-
-    // -- Foundation: click to place 4x4 block, drag for multiple --
-
-    private void HandleFoundationInput(Mouse mouse)
-    {
-        if (!RaycastGrid(out var hitPoint, out var cell))
-        {
-            HideFoundationGhosts();
-            return;
-        }
-
-        if (_zoopMode)
-        {
-            if (!_zoopStartSet)
-            {
-                int fs = FactoryGrid.FoundationSize;
-                var centered = new Vector2Int(cell.x - fs / 2, cell.y - fs / 2);
-                ShowFoundationGhostSingle(centered);
-
-                if (mouse.leftButton.wasPressedThisFrame)
-                {
-                    _zoopStartSet = true;
-                    _zoopStartCell = centered;
-                    _zoopStartLevel = _lastLevel;
-                    Debug.Log($"build: foundation zoop start ({centered.x},{centered.y}) level {_lastLevel} -- click end");
-                }
-            }
-            else
-            {
-                var centered = new Vector2Int(cell.x - FactoryGrid.FoundationSize / 2, cell.y - FactoryGrid.FoundationSize / 2);
-                UpdateFoundationZoopPreview(centered);
-
-                if (mouse.leftButton.wasPressedThisFrame)
-                {
-                    PlaceFoundationRect(_zoopStartCell, centered);
-                    CancelZoop();
-                }
-
-                if (mouse.rightButton.wasPressedThisFrame)
-                    CancelZoop();
-            }
-        }
-        else
-        {
-            // Single placement: follows 1x1 grid, centered on crosshair
-            int fs = FactoryGrid.FoundationSize;
-            var centered = new Vector2Int(cell.x - fs / 2, cell.y - fs / 2);
-            ShowFoundationGhostSingle(centered);
-
-            if (mouse.leftButton.wasPressedThisFrame)
-            {
-                GridManager.Instance.CmdPlaceFoundation(centered, _lastLevel);
-            }
-        }
-
-        if (mouse.rightButton.wasPressedThisFrame)
-        {
-            GridManager.Instance.CmdRemoveFoundation(cell, _lastLevel);
-        }
-    }
-
-    private void ShowFoundationGhostSingle(Vector2Int snapped)
-    {
-        var grid = GridManager.Instance.Grid;
-        int fs = FactoryGrid.FoundationSize;
-        float blockSize = fs * FactoryGrid.CellSize;
-        bool valid = grid.CanPlace(snapped, new Vector2Int(fs, fs), _lastLevel);
-
-        while (_ghostPool.Count < 1)
-            _ghostPool.Add(CreateFoundationGhost());
-
-        float halfBlock = blockSize * 0.5f;
-        var worldPos = new Vector3(
-            snapped.x * FactoryGrid.CellSize + halfBlock,
-            _lastLevel * FactoryGrid.LevelHeight + 0.5f,
-            snapped.y * FactoryGrid.CellSize + halfBlock);
-
-        _ghostPool[0].SetActive(true);
-        _ghostPool[0].transform.position = worldPos;
-        ApplyGhostColor(_ghostPool[0], valid ? ValidColor : InvalidColor);
-
-        for (int i = 1; i < _ghostPool.Count; i++)
-            _ghostPool[i].SetActive(false);
-    }
-
-    private void UpdateFoundationZoopPreview(Vector2Int endCell)
-    {
-        var grid = GridManager.Instance.Grid;
-        int fs = FactoryGrid.FoundationSize;
-        float blockSize = fs * FactoryGrid.CellSize;
-
-        int dirX = endCell.x >= _zoopStartCell.x ? 1 : -1;
-        int dirZ = endCell.y >= _zoopStartCell.y ? 1 : -1;
-        int countX = Mathf.Abs(endCell.x - _zoopStartCell.x) / fs + 1;
-        int countZ = Mathf.Abs(endCell.y - _zoopStartCell.y) / fs + 1;
-        int needed = countX * countZ;
-
-        while (_ghostPool.Count < needed)
-            _ghostPool.Add(CreateFoundationGhost());
-
-        int idx = 0;
-        for (int nx = 0; nx < countX; nx++)
-        {
-            for (int nz = 0; nz < countZ; nz++)
-            {
-                var origin = new Vector2Int(
-                    _zoopStartCell.x + nx * fs * dirX,
-                    _zoopStartCell.y + nz * fs * dirZ);
-                bool valid = grid.CanPlace(origin, new Vector2Int(fs, fs), _zoopStartLevel);
-                float halfBlock = blockSize * 0.5f;
-                var worldPos = new Vector3(
-                    origin.x * FactoryGrid.CellSize + halfBlock,
-                    _zoopStartLevel * FactoryGrid.LevelHeight + 0.5f,
-                    origin.y * FactoryGrid.CellSize + halfBlock);
-
-                _ghostPool[idx].SetActive(true);
-                _ghostPool[idx].transform.position = worldPos;
-                ApplyGhostColor(_ghostPool[idx], valid ? ValidColor : InvalidColor);
-                idx++;
-            }
-        }
-
-        for (int i = idx; i < _ghostPool.Count; i++)
-            _ghostPool[i].SetActive(false);
-    }
-
-    private GameObject CreateFoundationGhost()
-    {
-        return CreateGhostFromPrefab(GridManager.Instance.FoundationPrefab);
-    }
-
-    private void PlaceFoundationRect(Vector2Int start, Vector2Int end)
-    {
-        int fs = FactoryGrid.FoundationSize;
-        int dirX = end.x >= start.x ? 1 : -1;
-        int dirZ = end.y >= start.y ? 1 : -1;
-        int countX = Mathf.Abs(end.x - start.x) / fs + 1;
-        int countZ = Mathf.Abs(end.y - start.y) / fs + 1;
-
-        for (int nx = 0; nx < countX; nx++)
-        {
-            for (int nz = 0; nz < countZ; nz++)
-            {
-                var cell = new Vector2Int(
-                    start.x + nx * fs * dirX,
-                    start.y + nz * fs * dirZ);
-                GridManager.Instance.CmdPlaceFoundation(cell, _zoopStartLevel);
-            }
-        }
-        Debug.Log($"build: foundation zoop placed at level {_zoopStartLevel}");
-    }
-
-    private void HideFoundationGhosts()
-    {
-        for (int i = 0; i < _ghostPool.Count; i++)
-            _ghostPool[i].SetActive(false);
-    }
-
-    // -- Wall: drag-zoop along edge --
-
-    private Vector2Int _lastWallCell;
-
-    private void HandleWallInput(Keyboard kb, Mouse mouse)
-    {
-        bool hasHit = RaycastWallPlacement(out var cell, out var edgeDir, out var level);
-
-        if (!hasHit && !_zoopStartSet)
-        {
-            DestroyGhost();
-            return;
-        }
-
-        if (hasHit)
-        {
-            _lastWallCell = cell;
-            if (!_zoopStartSet)
-                _lastLevel = level;
-        }
-
-        if (_zoopMode)
-        {
-            if (!_zoopStartSet)
-            {
-                if (!hasHit) return;
-                UpdateWallGhost(GridManager.Instance.Grid, cell, _lastLevel, edgeDir);
-
-                if (mouse.leftButton.wasPressedThisFrame && _lastValid)
-                {
-                    _zoopStartSet = true;
-                    _zoopStartCell = cell;
-                    _zoopStartDir = edgeDir;
-                    _zoopStartLevel = _lastLevel;
-                    _zoopStartOnFoundation = _lastHitFoundation;
-                    DestroyGhost();
-                    Debug.Log($"build: wall zoop start ({cell.x},{cell.y}) level {_lastLevel} -- click end");
-                }
-            }
-            else
-            {
-                // Use last known cell if current raycast missed
-                var zoopCell = hasHit ? cell : _lastWallCell;
-                UpdateWallZoopPreview(zoopCell);
-
-                if (mouse.leftButton.wasPressedThisFrame && _wallZoopCells.Count > 0)
-                {
-                    PlaceWallZoop();
-                    CancelZoop();
-                }
-
-                if (mouse.rightButton.wasPressedThisFrame)
-                    CancelZoop();
-            }
-        }
-        else
-        {
-            // Single placement: click to place one wall
-            UpdateWallGhost(GridManager.Instance.Grid, cell, _lastLevel, edgeDir);
-
-            if (mouse.leftButton.wasPressedThisFrame && _lastValid)
-            {
-                GridManager.Instance.CmdPlaceWall(cell, _lastLevel, edgeDir, _lastHitFoundation);
-            }
-        }
-
-        if (mouse.rightButton.wasPressedThisFrame && !_zoopStartSet)
-        {
-            GridManager.Instance.CmdRemoveWall(cell, _lastLevel, edgeDir);
-        }
-    }
-
-    private readonly List<Vector2Int> _wallZoopCells = new();
-
-    private void UpdateWallZoopPreview(Vector2Int currentCell)
-    {
-        _wallZoopCells.Clear();
-
-        int ww = FactoryGrid.WallWidth;
-        bool walkX = (_zoopStartDir == Vector2Int.up || _zoopStartDir == Vector2Int.down);
-        int anchor = walkX ? _zoopStartCell.x : _zoopStartCell.y;
-        int target = walkX ? currentCell.x : currentCell.y;
-        int dir = target >= anchor ? 1 : -1;
-        int count = Mathf.Abs(target - anchor) / ww + 1;
-
-        for (int n = 0; n < count; n++)
-        {
-            int pos = anchor + n * ww * dir;
-            var wallCell = walkX
-                ? new Vector2Int(pos, _zoopStartCell.y)
-                : new Vector2Int(_zoopStartCell.x, pos);
-
-            bool wallExists = GridManager.Instance.HasWallAt(wallCell, _zoopStartLevel, _zoopStartDir);
-            if (!wallExists)
-                _wallZoopCells.Add(wallCell);
-        }
-
-        float wallHeight = FactoryGrid.WallHeight;
-        bool isEW = (_zoopStartDir == Vector2Int.left || _zoopStartDir == Vector2Int.right);
-
-        while (_zoopGhosts.Count < _wallZoopCells.Count)
-            _zoopGhosts.Add(CreateGhostFromPrefab(GridManager.Instance.WallPrefab));
-
-        for (int i = 0; i < _wallZoopCells.Count; i++)
-        {
-            var ghost = _zoopGhosts[i];
-            ghost.SetActive(true);
-            var wc = _wallZoopCells[i];
-            var wallPos = GetWallPosition(wc, _zoopStartLevel, _zoopStartDir, _zoopStartOnFoundation, wallHeight);
-            ghost.transform.position = wallPos;
-            ghost.transform.rotation = isEW ? Quaternion.Euler(0f, 90f, 0f) : Quaternion.identity;
-            ApplyGhostColor(ghost, ValidColor);
-        }
-
-        for (int i = _wallZoopCells.Count; i < _zoopGhosts.Count; i++)
-            _zoopGhosts[i].SetActive(false);
-    }
-
-    private void PlaceWallZoop()
-    {
-        var gm = GridManager.Instance;
-        for (int i = 0; i < _wallZoopCells.Count; i++)
-        {
-            gm.CmdPlaceWall(_wallZoopCells[i], _zoopStartLevel, _zoopStartDir, _zoopStartOnFoundation);
-        }
-        Debug.Log($"build: wall zoop placed {_wallZoopCells.Count} walls");
-    }
-
-    // -- Ramp --
-
-    private Vector2Int _lastRampCell;
-    private readonly List<Vector2Int> _rampZoopCells = new();
-    private readonly List<GameObject> _rampZoopGhosts = new();
-
-    private void HandleRampInput(Mouse mouse)
-    {
-        // Reuse wall raycast logic -- ramps also snap to foundation edges
-        bool hasHit = RaycastWallPlacement(out var cell, out var edgeDir, out var level);
-
-        if (!hasHit && !_zoopStartSet)
-        {
-            DestroyGhost();
-            return;
-        }
-
-        if (hasHit)
-        {
-            _lastRampCell = cell;
-            if (!_zoopStartSet)
-                _lastLevel = level;
-        }
-
-        if (_zoopMode)
-        {
-            if (!_zoopStartSet)
-            {
-                if (!hasHit) return;
-                _lastEdgeDir = edgeDir;
-                UpdateRampGhost(GridManager.Instance.Grid, cell, _lastLevel, edgeDir);
-
-                if (mouse.leftButton.wasPressedThisFrame && _lastValid)
-                {
-                    _zoopStartSet = true;
-                    _zoopStartCell = cell;
-                    _zoopStartDir = edgeDir;
-                    _zoopStartLevel = _lastLevel;
-                    _zoopStartOnFoundation = _lastHitFoundation;
-                    DestroyGhost();
-                    Debug.Log($"build: ramp zoop start ({cell.x},{cell.y}) level {_lastLevel} -- click end");
-                }
-            }
-            else
-            {
-                var zoopCell = hasHit ? cell : _lastRampCell;
-                UpdateRampZoopPreview(zoopCell);
-
-                if (mouse.leftButton.wasPressedThisFrame && _rampZoopCells.Count > 0)
-                {
-                    PlaceRampZoop();
-                    CancelZoop();
-                }
-
-                if (mouse.rightButton.wasPressedThisFrame)
-                    CancelZoop();
-            }
-        }
-        else
-        {
-            _lastLevel = level;
-            _lastEdgeDir = edgeDir;
-            UpdateRampGhost(GridManager.Instance.Grid, cell, _lastLevel, edgeDir);
-
-            if (mouse.leftButton.wasPressedThisFrame && _lastValid)
-            {
-                GridManager.Instance.CmdPlaceRamp(cell, _lastLevel, edgeDir, _lastHitFoundation);
-            }
-        }
-
-        if (mouse.rightButton.wasPressedThisFrame && !_zoopStartSet)
-        {
-            GridManager.Instance.CmdRemoveRamp(cell, _lastLevel, edgeDir);
-        }
-    }
-
-    private void UpdateRampZoopPreview(Vector2Int currentCell)
-    {
-        _rampZoopCells.Clear();
-
-        int ww = FactoryGrid.WallWidth;
-        bool walkX = (_zoopStartDir == Vector2Int.up || _zoopStartDir == Vector2Int.down);
-        int anchor = walkX ? _zoopStartCell.x : _zoopStartCell.y;
-        int target = walkX ? currentCell.x : currentCell.y;
-        int dir = target >= anchor ? 1 : -1;
-        int count = Mathf.Abs(target - anchor) / ww + 1;
-
-        for (int n = 0; n < count; n++)
-        {
-            int pos = anchor + n * ww * dir;
-            var rampCell = walkX
-                ? new Vector2Int(pos, _zoopStartCell.y)
-                : new Vector2Int(_zoopStartCell.x, pos);
-
-            bool rampExists = GridManager.Instance.HasRampAt(rampCell, _zoopStartLevel, _zoopStartDir);
-            if (!rampExists)
-                _rampZoopCells.Add(rampCell);
-        }
-
-        float rampLength = 3f * FactoryGrid.CellSize;
-        float rampRise = FactoryGrid.WallHeight;
-        float slopeLength = Mathf.Sqrt(rampLength * rampLength + rampRise * rampRise);
-
-        float yAngle = 0f;
-        if (_zoopStartDir == Vector2Int.right) yAngle = 90f;
-        else if (_zoopStartDir == Vector2Int.down) yAngle = 180f;
-        else if (_zoopStartDir == Vector2Int.left) yAngle = 270f;
-
-        float pitch = Mathf.Atan2(rampRise, rampLength) * Mathf.Rad2Deg;
-        Quaternion rot = Quaternion.Euler(-pitch, yAngle, 0f);
-
-        while (_rampZoopGhosts.Count < _rampZoopCells.Count)
-            _rampZoopGhosts.Add(CreateGhostFromPrefab(GridManager.Instance.RampPrefab));
-
-        for (int i = 0; i < _rampZoopCells.Count; i++)
-        {
-            var ghost = _rampZoopGhosts[i];
-            ghost.SetActive(true);
-            var rc = _rampZoopCells[i];
-            var rampPos = GetRampGhostPosition(rc, _zoopStartLevel, _zoopStartDir, _zoopStartOnFoundation, rot, slopeLength);
-            ghost.transform.position = rampPos;
-            ghost.transform.rotation = rot;
-            ApplyGhostColor(ghost, ValidColor);
-        }
-
-        for (int i = _rampZoopCells.Count; i < _rampZoopGhosts.Count; i++)
-            _rampZoopGhosts[i].SetActive(false);
-    }
-
-    private Vector3 GetRampGhostPosition(Vector2Int cell, int level, Vector2Int edgeDir, bool onFoundation, Quaternion rot, float slopeLength)
-    {
-        float cs = FactoryGrid.CellSize;
-        float baseY = onFoundation
-            ? level * FactoryGrid.LevelHeight + 1f
-            : level * FactoryGrid.LevelHeight;
-
-        Vector3 baseEdge;
-        if (onFoundation)
-        {
-            int fs = FactoryGrid.FoundationSize;
-            float blockSize = fs * cs;
-            float halfBlock = blockSize * 0.5f;
-            Vector3 blockCenter = new Vector3(
-                cell.x * cs + halfBlock, baseY, cell.y * cs + halfBlock);
-            baseEdge = blockCenter + new Vector3(edgeDir.x * halfBlock, 0f, edgeDir.y * halfBlock);
-        }
-        else
-        {
-            float cellCenter = 0.5f * cs;
-            baseEdge = new Vector3(cell.x * cs + cellCenter, baseY, cell.y * cs + cellCenter);
-        }
-
-        Vector3 localForward = rot * Vector3.forward;
-        return baseEdge + localForward * (slopeLength * 0.5f);
-    }
-
-    private void PlaceRampZoop()
-    {
-        var gm = GridManager.Instance;
-        for (int i = 0; i < _rampZoopCells.Count; i++)
-        {
-            gm.CmdPlaceRamp(_rampZoopCells[i], _zoopStartLevel, _zoopStartDir, _zoopStartOnFoundation);
-        }
-        Debug.Log($"build: ramp zoop placed {_rampZoopCells.Count} ramps");
-    }
-
-    // -- Machine --
-
-    private void HandleMachineInput(Mouse mouse)
-    {
-        if (!RaycastGrid(out _, out var cell))
-        {
-            DestroyGhost();
-            return;
-        }
-
-        var grid = GridManager.Instance.Grid;
-        bool cellFree = !GridManager.Instance.HasBuildingAt(cell, _lastLevel);
-        _lastValid = cellFree;
-
-        EnsureGhost(new Vector3(FactoryGrid.CellSize * 0.8f, 0.5f, FactoryGrid.CellSize * 0.8f));
-        _ghost.transform.position = grid.CellToWorld(cell, _lastLevel) + new Vector3(0f, 0.35f, 0f);
-        _ghost.transform.rotation = Quaternion.Euler(0f, _placeRotation, 0f);
-        _ghost.SetActive(true);
-        SetGhostColor(_lastValid ? new Color(0.8f, 0.5f, 0f, 0.5f) : InvalidColor);
-
-        if (mouse.leftButton.wasPressedThisFrame && _lastValid)
-        {
-            GridManager.Instance.CmdPlaceMachine(cell, _lastLevel, _placeRotation);
-        }
-    }
-
-    // -- Storage --
-
-    private void HandleStorageInput(Mouse mouse)
-    {
-        if (!RaycastGrid(out _, out var cell))
-        {
-            DestroyGhost();
-            return;
-        }
-
-        var grid = GridManager.Instance.Grid;
-        bool cellFree = !GridManager.Instance.HasBuildingAt(cell, _lastLevel);
-        _lastValid = cellFree;
-
-        EnsureGhost(new Vector3(FactoryGrid.CellSize * 0.8f, 0.4f, FactoryGrid.CellSize * 0.8f));
-        _ghost.transform.position = grid.CellToWorld(cell, _lastLevel) + new Vector3(0f, 0.3f, 0f);
-        _ghost.transform.rotation = Quaternion.Euler(0f, _placeRotation, 0f);
-        _ghost.SetActive(true);
-        SetGhostColor(_lastValid ? new Color(0.3f, 0.3f, 1f, 0.5f) : InvalidColor);
-
-        if (mouse.leftButton.wasPressedThisFrame && _lastValid)
-        {
-            GridManager.Instance.CmdPlaceStorage(cell, _lastLevel, _placeRotation);
-        }
+        // The snap point's world Y already encodes the correct attachment height.
+        // Top snap on a foundation = foundation top. Mid snap = face center. etc.
+        // No category-specific logic needed.
+        return snap.transform.position.y;
     }
 
     // -- Belt: 2-click placement --
 
     private void HandleBeltInput(Mouse mouse)
     {
-        if (!RaycastGrid(out _, out var cell))
+        if (!RaycastPlacement(out var hit))
         {
             if (!_beltStartSet) DestroyGhost();
             return;
         }
 
-        var grid = GridManager.Instance.Grid;
+        var cell = GridManager.Instance.Grid.WorldToCell(hit.point);
 
         if (!_beltStartSet)
         {
             EnsureGhost(new Vector3(0.6f, 0.08f, 0.6f));
-            _ghost.transform.position = grid.CellToWorld(cell, _lastLevel) + new Vector3(0f, 0.15f, 0f);
+            _ghost.transform.position = BeltCellCenter(cell, EffectiveY);
             _ghost.transform.rotation = Quaternion.identity;
             _ghost.SetActive(true);
             SetGhostColor(new Color(1f, 1f, 0f, 0.5f));
@@ -953,7 +771,7 @@ public class NetworkBuildController : NetworkBehaviour
                     snappedEnd = new Vector2Int(_beltStartCell.x, cell.y);
 
                 if (snappedEnd != _beltStartCell)
-                    GridManager.Instance.CmdPlaceBelt(_beltStartCell, snappedEnd, _lastLevel);
+                    GridManager.Instance.CmdPlaceBelt(_beltStartCell, snappedEnd, EffectiveY, CurrentVariant);
                 else
                     Debug.Log("build: belt start and end are the same cell");
 
@@ -980,10 +798,9 @@ public class NetworkBuildController : NetworkBehaviour
 
         if (snappedEnd == _beltStartCell) return;
 
-        var grid = GridManager.Instance.Grid;
-        var startWorld = grid.CellToWorld(_beltStartCell, _lastLevel);
-        var endWorld = grid.CellToWorld(snappedEnd, _lastLevel);
-        var center = (startWorld + endWorld) * 0.5f + Vector3.up * 0.15f;
+        var startWorld = BeltCellCenter(_beltStartCell, EffectiveY);
+        var endWorld = BeltCellCenter(snappedEnd, EffectiveY);
+        var center = (startWorld + endWorld) * 0.5f;
         var d = endWorld - startWorld;
         float len = d.magnitude + FactoryGrid.CellSize;
 
@@ -1019,122 +836,19 @@ public class NetworkBuildController : NetworkBehaviour
         DestroyGhost();
     }
 
-    // -- Ghost helpers --
-
-    private void UpdateWallGhost(FactoryGrid grid, Vector2Int cell, int level, Vector2Int edgeDir)
-    {
-        bool wallExists = GridManager.Instance.HasWallAt(cell, level, edgeDir);
-        _lastValid = !wallExists;
-
-        EnsurePrefabGhost(GridManager.Instance.WallPrefab);
-
-        float wallHeight = FactoryGrid.WallHeight;
-        Vector3 wallCenter = GetWallPosition(cell, level, edgeDir, _lastHitFoundation, wallHeight);
-
-        _ghost.transform.position = wallCenter;
-        _ghost.transform.rotation = (edgeDir == Vector2Int.left || edgeDir == Vector2Int.right)
-            ? Quaternion.Euler(0f, 90f, 0f)
-            : Quaternion.identity;
-        _ghost.SetActive(true);
-
-        SetGhostColor(_lastValid ? ValidColor : OccupiedColor);
-    }
-
     /// <summary>
-    /// Computes wall world position. Shared between ghost preview and zoop preview.
-    /// On foundations: wall sits on the edge of a 4x4 block.
-    /// On terrain: wall sits at the cell origin, centered on WallWidth span.
+    /// Returns the world-space center of a cell at the given surface Y, offset by belt half-height.
     /// </summary>
-    private static Vector3 GetWallPosition(Vector2Int cell, int level, Vector2Int edgeDir, bool onFoundation, float wallHeight)
+    private static Vector3 BeltCellCenter(Vector2Int cell, float surfaceY)
     {
         float cs = FactoryGrid.CellSize;
-        float halfWidth = FactoryGrid.WallWidth * cs * 0.5f;
-        float baseY = onFoundation
-            ? level * FactoryGrid.LevelHeight + 1f
-            : level * FactoryGrid.LevelHeight;
-
-        if (onFoundation)
-        {
-            // On foundation: position at the edge of the 4x4 block
-            int fs = FactoryGrid.FoundationSize;
-            float blockSize = fs * cs;
-            float halfBlock = blockSize * 0.5f;
-            Vector3 blockCenter = new Vector3(
-                cell.x * cs + halfBlock,
-                baseY,
-                cell.y * cs + halfBlock);
-            return blockCenter + new Vector3(
-                edgeDir.x * halfBlock,
-                wallHeight * 0.5f,
-                edgeDir.y * halfBlock);
-        }
-
-        // On terrain: wall centered on the crosshair cell
-        float cellCenter = 0.5f * cs;
-        if (edgeDir == Vector2Int.up || edgeDir == Vector2Int.down)
-        {
-            // Wall runs along X, face at cell center Z
-            return new Vector3(
-                cell.x * cs + cellCenter,
-                baseY + wallHeight * 0.5f,
-                cell.y * cs + cellCenter);
-        }
-        // Wall runs along Z, face at cell center X
         return new Vector3(
-            cell.x * cs + cellCenter,
-            baseY + wallHeight * 0.5f,
-            cell.y * cs + cellCenter);
+            cell.x * cs + cs * 0.5f,
+            surfaceY + 0.04f,
+            cell.y * cs + cs * 0.5f);
     }
 
-    private void UpdateRampGhost(FactoryGrid grid, Vector2Int cell, int level, Vector2Int edgeDir)
-    {
-        bool rampExists = GridManager.Instance.HasRampAt(cell, level, edgeDir);
-        _lastValid = !rampExists && level + 1 < FactoryGrid.MaxLevels;
-
-        EnsurePrefabGhost(GridManager.Instance.RampPrefab);
-
-        float rampLength = 3f * FactoryGrid.CellSize;
-        float rampRise = FactoryGrid.WallHeight;
-        float slopeLength = Mathf.Sqrt(rampLength * rampLength + rampRise * rampRise);
-
-        float yAngle = 0f;
-        if (edgeDir == Vector2Int.right) yAngle = 90f;
-        else if (edgeDir == Vector2Int.down) yAngle = 180f;
-        else if (edgeDir == Vector2Int.left) yAngle = 270f;
-
-        float pitch = Mathf.Atan2(rampRise, rampLength) * Mathf.Rad2Deg;
-        Quaternion rot = Quaternion.Euler(-pitch, yAngle, 0f);
-
-        float cs = FactoryGrid.CellSize;
-        float baseY = _lastHitFoundation
-            ? level * FactoryGrid.LevelHeight + 1f
-            : level * FactoryGrid.LevelHeight;
-
-        Vector3 baseEdge;
-        if (_lastHitFoundation)
-        {
-            int fs = FactoryGrid.FoundationSize;
-            float blockSize = fs * cs;
-            float halfBlock = blockSize * 0.5f;
-            Vector3 blockCenter = new Vector3(
-                cell.x * cs + halfBlock, baseY, cell.y * cs + halfBlock);
-            baseEdge = blockCenter + new Vector3(edgeDir.x * halfBlock, 0f, edgeDir.y * halfBlock);
-        }
-        else
-        {
-            float cellCenter = 0.5f * cs;
-            baseEdge = new Vector3(cell.x * cs + cellCenter, baseY, cell.y * cs + cellCenter);
-        }
-
-        Vector3 localForward = rot * Vector3.forward;
-        Vector3 rampCenter = baseEdge + localForward * (slopeLength * 0.5f);
-
-        _ghost.transform.position = rampCenter;
-        _ghost.transform.rotation = rot;
-        _ghost.SetActive(true);
-
-        SetGhostColor(_lastValid ? ValidColor : (rampExists ? OccupiedColor : InvalidColor));
-    }
+    // -- Ghost helpers --
 
     private void EnsureGhost(Vector3 scale)
     {
@@ -1239,6 +953,9 @@ public class NetworkBuildController : NetworkBehaviour
         GUI.DrawTexture(new Rect(cx - size, cy - thickness / 2, size * 2, thickness), Texture2D.whiteTexture);
         GUI.DrawTexture(new Rect(cx - thickness / 2, cy - size, thickness, size * 2), Texture2D.whiteTexture);
 
+        // Interaction prompt when looking at machines/storage
+        ShowInteractionPrompt();
+
         if (_deleteMode)
         {
             GUILayout.BeginArea(new Rect(10, 50, 420, 50));
@@ -1249,17 +966,29 @@ public class NetworkBuildController : NetworkBehaviour
 
         if (!_buildMode) return;
 
-        int lineCount = 6;
+        int lineCount = 7;
         if (_zoopStartSet) lineCount++;
         if (_beltStartSet) lineCount++;
 
-        GUILayout.BeginArea(new Rect(10, 50, 420, 22 * lineCount + 10));
+        GUILayout.BeginArea(new Rect(10, 50, 520, 22 * lineCount + 10));
 
-        string levelMode = _levelOverrideFrames > 0 ? "(manual)" : "(auto)";
         string zoopLabel = _zoopMode ? "ZOOP" : "Single";
-        GUILayout.Label($"BUILD MODE  |  Tool: {_currentTool}  |  Level: {_lastLevel} ({_lastLevel * FactoryGrid.LevelHeight}m) {levelMode}");
+        var variants = GetVariantsForCurrentTool();
+        string variantLabel = (variants != null && variants.Length > 1)
+            ? $"  |  Variant: {CurrentVariant + 1}/{variants.Length} ({variants[CurrentVariant].name})"
+            : "";
+        string surfaceLabel = _nudgeOffset != 0f
+            ? $"Surface: {EffectiveY:F1}m (nudge: {_nudgeOffset:+0.0;-0.0}m)"
+            : $"Surface: {EffectiveY:F1}m";
+        GUILayout.Label($"BUILD MODE  |  Tool: {_currentTool}  |  {surfaceLabel}{variantLabel}");
+
+        if (_placementMode == PlacementMode.Snap && _activeSnapPoint != null)
+            GUILayout.Label($"Snap: {_activeSnapPoint.Normal:F1} on {_activeSnapPoint.transform.parent?.name}");
+        else
+            GUILayout.Label("Mode: Grid");
+
         GUILayout.Label($"1:Foundation 2:Wall 3:Ramp 4:Machine 5:Storage 6:Belt  |  Mode: {zoopLabel}");
-        GUILayout.Label($"Rotation: {_placeRotation}  |  [R] Rotate  [X] Delete  [Z] Zoop  [G] Grid  [PgUp/Dn] Level");
+        GUILayout.Label($"Rotation: {_placeRotation}  |  [R] Rotate  [X] Delete  [Z] Zoop  [G] Grid  [Tab] Variant  [PgUp/Dn] Nudge (+Shift: 0.5m)");
         GUILayout.Label("[B] Exit  |  [Esc] Cancel  |  LMB: Place  |  RMB: Remove");
 
         if (_zoopStartSet)
@@ -1271,6 +1000,47 @@ public class NetworkBuildController : NetworkBehaviour
             GUILayout.Label($"Belt start: ({_beltStartCell.x},{_beltStartCell.y}) -- click end cell");
 
         GUILayout.EndArea();
+    }
+
+    private void ShowInteractionPrompt()
+    {
+        if (_buildMode || _deleteMode) return;
+
+        var ray = new Ray(_camera.transform.position, _camera.transform.forward);
+        if (!Physics.Raycast(ray, out var hit, _placementRange)) return;
+
+        var netMachine = hit.collider.GetComponentInParent<NetworkMachine>();
+        if (netMachine != null)
+        {
+            string recipe = string.IsNullOrEmpty(netMachine.ActiveRecipeId) ? "none" : netMachine.ActiveRecipeId;
+            string status = netMachine.Status.ToString();
+            float progress = netMachine.CraftProgress;
+
+            GUILayout.BeginArea(new Rect(Screen.width / 2f - 120, Screen.height / 2f + 30, 240, 80));
+            GUI.color = Color.white;
+            GUILayout.Label($"Machine ({status})");
+            GUILayout.Label($"Recipe: {recipe}  Progress: {progress:F1}s");
+            GUILayout.Label("[F] Cycle recipe");
+            GUILayout.EndArea();
+            return;
+        }
+
+        var netStorage = hit.collider.GetComponentInParent<NetworkStorage>();
+        if (netStorage != null)
+        {
+            int usedSlots = 0;
+            for (int i = 0; i < netStorage.SlotCount; i++)
+            {
+                if (!netStorage.GetSlot(i).IsEmpty)
+                    usedSlots++;
+            }
+
+            GUILayout.BeginArea(new Rect(Screen.width / 2f - 120, Screen.height / 2f + 30, 240, 60));
+            GUI.color = Color.white;
+            GUILayout.Label($"Storage ({usedSlots}/{netStorage.SlotCount} slots used)");
+            GUILayout.Label("[F] Deposit held item");
+            GUILayout.EndArea();
+        }
     }
 
     private void OnDestroy()
