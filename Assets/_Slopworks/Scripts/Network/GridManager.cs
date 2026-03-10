@@ -82,7 +82,8 @@ public class GridManager : NetworkBehaviour
             { BuildingCategory.Ramp, "Prefabs/Buildings/Ramps" },
             { BuildingCategory.Machine, "Prefabs/Buildings/Machines" },
             { BuildingCategory.Storage, "Prefabs/Buildings/Storage" },
-            { BuildingCategory.Belt, "Prefabs/Buildings/Belts" }
+            { BuildingCategory.Belt, "Prefabs/Buildings/Belts" },
+            { BuildingCategory.Support, "Prefabs/Buildings/Supports" }
         };
 
         foreach (var kvp in folders)
@@ -379,45 +380,47 @@ public class GridManager : NetworkBehaviour
     }
 
     [ServerRpc(RequireOwnership = false)]
-    public void CmdPlaceBelt(Vector2Int fromCell, Vector2Int toCell, float surfaceY,
-        int variant = 0, NetworkConnection sender = null)
+    public void CmdPlaceBelt(Vector3 startPos, Vector3 startDir, Vector3 endPos, Vector3 endDir,
+        byte tier = 0, int variant = 0, NetworkConnection sender = null)
     {
         if (!IsServerInitialized) return;
+
+        var validation = BeltPlacementValidator.Validate(startPos, startDir, endPos, endDir);
+        if (!validation.IsValid)
+        {
+            Debug.Log($"grid: belt placement rejected: {validation.Error} by {sender?.ClientId}");
+            return;
+        }
 
         var prefab = GetPrefab(BuildingCategory.Belt, variant);
         if (prefab == null) return;
 
-        float cs = FactoryGrid.CellSize;
-        float beltHalfH = GetPrefabHalfHeight(prefab);
-        Vector3 startPos = new Vector3(fromCell.x * cs + cs * 0.5f, surfaceY + beltHalfH, fromCell.y * cs + cs * 0.5f);
-        Vector3 endPos = new Vector3(toCell.x * cs + cs * 0.5f, surfaceY + beltHalfH, toCell.y * cs + cs * 0.5f);
-        int length = Mathf.Max(1, Mathf.Abs(toCell.x - fromCell.x) + Mathf.Abs(toCell.y - fromCell.y));
+        var splineData = BeltSplineBuilder.Build(startPos, startDir, endPos, endDir);
+        var segment = BeltSegment.FromArcLength(splineData.ArcLength);
 
-        var go = Instantiate(prefab, (startPos + endPos) * 0.5f, Quaternion.identity);
+        var midpoint = splineData.Evaluate(0.5f);
+        var go = Instantiate(prefab, midpoint, Quaternion.identity);
 
-
-        var diff = endPos - startPos;
-        float beltLen = diff.magnitude + FactoryGrid.CellSize;
-        if (Mathf.Abs(diff.x) > Mathf.Abs(diff.z))
-            go.transform.localScale = new Vector3(beltLen, 0.08f, 0.6f);
-        else
-            go.transform.localScale = new Vector3(0.6f, 0.08f, beltLen);
+        // Reset scale -- mesh comes from SplineExtrude, not prefab scale
+        go.transform.localScale = Vector3.one;
 
         var info = go.AddComponent<PlacementInfo>();
         info.Category = BuildingCategory.Belt;
-        info.Cell = fromCell;
-        info.SurfaceY = surfaceY;
-        info.ObjectHeight = GetPrefabHalfHeight(prefab) * 2f;
+        info.SurfaceY = startPos.y;
 
         var netBelt = go.GetComponent<NetworkBeltSegment>();
         if (netBelt != null)
-        {
-            var segment = new BeltSegment(length);
-            netBelt.ServerInit(segment, startPos, endPos);
-        }
+            netBelt.ServerInit(segment, splineData, tier);
 
         ServerManager.Spawn(go);
-        BuildingSnapPoint.GenerateFromBounds(go, BuildingCategory.Belt);
+
+        // Server also bakes mesh (host needs to see it)
+        var material = go.GetComponent<MeshRenderer>()?.sharedMaterial;
+        BeltSplineMeshBaker.BakeMesh(go, splineData, material);
+
+        // Add belt collider for raycast interaction (D-BLT-005)
+        var meshCollider = go.AddComponent<MeshCollider>();
+        meshCollider.sharedMesh = go.GetComponent<MeshFilter>()?.sharedMesh;
 
         var visualizer = go.AddComponent<BeltItemVisualizer>();
         visualizer.Init(netBelt);
@@ -425,19 +428,67 @@ public class GridManager : NetworkBehaviour
         if (netBelt != null && _factorySimulation != null)
             _factorySimulation.RegisterBelt(netBelt);
 
-        var fromKey = RecordKey(fromCell, surfaceY);
-        var record = new PlacedRecord
+        // Add BeltPort children at endpoints for port-based connections
+        AddBeltPort(go, startPos, -startDir, BeltPortDirection.Input, 0);
+        AddBeltPort(go, endPos, endDir, BeltPortDirection.Output, 0);
+
+        Debug.Log($"grid: belt placed from {startPos} to {endPos} arc={splineData.ArcLength:F1}m by {sender?.ClientId}");
+    }
+
+    private static void AddBeltPort(GameObject parent, Vector3 worldPos, Vector3 worldDir, BeltPortDirection direction, int slotIndex)
+    {
+        var portName = direction == BeltPortDirection.Input ? "BeltPort_Input" : "BeltPort_Output";
+        var child = new GameObject($"{portName}_{slotIndex}");
+        child.transform.SetParent(parent.transform);
+        child.transform.position = worldPos;
+        child.transform.forward = worldDir;
+        child.layer = PhysicsLayers.SnapPoints;
+
+        var port = child.AddComponent<BeltPort>();
+        port.Direction = direction;
+        port.SlotIndex = slotIndex;
+
+        var col = child.AddComponent<SphereCollider>();
+        col.radius = 0.15f;
+        col.isTrigger = true;
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    public void CmdPlaceSupport(Vector3 position, Quaternion rotation,
+        int variant = 0, NetworkConnection sender = null)
+    {
+        if (!IsServerInitialized) return;
+
+        var prefab = GetPrefab(BuildingCategory.Support, variant);
+        if (prefab == null)
         {
-            Category = BuildingCategory.Belt, Instance = go,
-            SurfaceY = surfaceY, NetBelt = netBelt
-        };
-        _placedRecords[fromKey] = record;
+            // Runtime fallback: create a simple pole with snap anchor
+            var go = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            go.transform.position = position;
+            go.transform.rotation = rotation;
+            go.transform.localScale = new Vector3(0.15f, 1f, 0.15f);
+            go.GetComponent<Renderer>().material.color = new Color(0.4f, 0.4f, 0.45f);
 
-        if (fromCell != toCell)
-            _placedRecords[RecordKey(toCell, surfaceY)] = record;
+            var anchorChild = new GameObject("SnapAnchor");
+            anchorChild.transform.SetParent(go.transform);
+            anchorChild.transform.localPosition = new Vector3(0, 1f, 0);
+            anchorChild.transform.localRotation = Quaternion.identity;
+            anchorChild.AddComponent<BeltSnapAnchor>();
+            anchorChild.layer = PhysicsLayers.SnapPoints;
+            var col = anchorChild.AddComponent<SphereCollider>();
+            col.radius = 0.2f;
+            col.isTrigger = true;
 
-        AutoWire(record, fromCell);
-        Debug.Log($"grid: belt placed from ({fromCell.x},{fromCell.y}) to ({toCell.x},{toCell.y}) y={surfaceY:F1} by {sender?.ClientId}");
+            go.AddComponent<NetworkObject>();
+            ServerManager.Spawn(go);
+
+            Debug.Log($"grid: support placed at {position} by {sender?.ClientId}");
+            return;
+        }
+
+        var instance = Instantiate(prefab, position, rotation);
+        ServerManager.Spawn(instance);
+        Debug.Log($"grid: support placed at {position} by {sender?.ClientId}");
     }
 
     // ------------------------------------------------------------------
