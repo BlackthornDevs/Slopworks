@@ -46,6 +46,10 @@ public class BuildingSnapPoint : MonoBehaviour
         var localCenter = go.transform.InverseTransformPoint(worldBounds.center);
         var ext = worldExtents;
 
+        // Belts and supports use BeltPort/BeltSnapAnchor, not BuildingSnapPoints
+        if (category == BuildingCategory.Belt || category == BuildingCategory.Support)
+            return;
+
         bool isRamp = category == BuildingCategory.Ramp;
         bool isMachine = category == BuildingCategory.Machine;
         bool isStorage = category == BuildingCategory.Storage;

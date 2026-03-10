@@ -467,7 +467,7 @@ public class NetworkBuildController : NetworkBehaviour
 
     private void UpdateSurfaceY()
     {
-        if (_zoopStartSet || _beltStartSet) return;
+        if (_zoopStartSet || _beltState == BeltPlacementState.Dragging) return;
 
         var ray = new Ray(_camera.transform.position, _camera.transform.forward);
         if (Physics.Raycast(ray, out var hit, _placementRange, StructuralMask))
@@ -1292,7 +1292,7 @@ public class NetworkBuildController : NetworkBehaviour
 
         int lineCount = 7;
         if (_zoopStartSet) lineCount++;
-        if (_beltStartSet) lineCount++;
+        if (_beltState == BeltPlacementState.Dragging) lineCount++;
 
         GUILayout.BeginArea(new Rect(10, 50, 520, 22 * lineCount + 10));
 
@@ -1326,8 +1326,8 @@ public class NetworkBuildController : NetworkBehaviour
             GUILayout.Label($"{_currentTool} zoop: start ({_zoopStartCell.x},{_zoopStartCell.y}) -- click end");
         }
 
-        if (_beltStartSet)
-            GUILayout.Label($"Belt start: ({_beltStartCell.x},{_beltStartCell.y}) -- click end cell");
+        if (_beltState == BeltPlacementState.Dragging)
+            GUILayout.Label($"Belt start: {_beltStartPos} -- click end point");
 
         GUILayout.EndArea();
     }
