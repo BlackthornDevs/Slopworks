@@ -1,58 +1,63 @@
 # Kevin's Claude -- Session Handoff
 
-Last updated: 2026-03-10 00:15
-Branch: kevin/multiplayer-step1
-Last commit: 236d10a Restrict machine placement to foundations, fix equipment layer, add pipeline doc
+Last updated: 2026-03-10 09:30
+Branch: kevin/belts
+Last commit: 408e3fa Add straight belt routing with S-curve elevation, grid snap, validation
 
 ## What was completed this session
 
-### Post-commit fixes
-- Machine/Storage FOUNDATION mode restricted to Foundation targets only (was allowing walls/ramps)
-- Machine/Storage/Belt layer set to Interactable (14) at spawn so delete tool works
-- Wall-on-foundation-edge tier pairing fixed (Bot-to-Bot only for machine/storage peers)
-- Created `docs/reference/building-prefab-pipeline.md` -- living reference for the full prefab pipeline
+### Straight belt routing system (BeltRouteBuilder.cs -- new file)
+- Orthogonal routing with 90-degree arc turns: L-shape (1 corner), Z-shape (2 corners same dir), U-shape (2 corners opposite dir)
+- Bezier quarter-circle arcs at corners using k=0.5523 approximation
+- `DirectionBetween()` helper computes actual leg directions from geometry (fixed Y-shape bug at second Z-shape turn)
+- Symmetric two-pass radius clamping: first pass per-corner, second pass splits shared legs fairly
+- Aligned-path early exit when crossDist < 0.1f
 
-### Machine/storage snap-point placement system
-- `BuildingSnapPoint.cs`: `GenerateFromBounds()` now accepts `BuildingCategory` instead of `bool isRamp`. Machine gets 5 snaps (4 cardinal Bot + Center_Bot), Storage gets 6 snaps (4 cardinal Bot + Center_Bot + Center_Top for vertical stacking). Combined renderer bounds for multi-mesh FBX models.
-- `SnapPointPrefabSetup.cs`: Editor tool auto-discovers prefabs under `Resources/Prefabs/Buildings/` via `AssetDatabase.FindAssets`. Detects category from subfolder path (`/Machines/`, `/Storage/`, etc.). Same Machine/Storage snap split as runtime code.
-- `GridManager.cs`: `SetBuildingLayer()` preserves snap point layer (skips children on SnapPoints layer). `FindGhostAttachSnap()` forces Center_Bot when machine/storage snaps to structural. Machine-to-machine pairs Bot-to-Bot. `GetSnapPlacementPosition()` accepts ghostCategory and targetCategory.
-- `NetworkBuildController.cs`: Added `_peerSnapMode` for machine/storage tools. Scroll wheel toggles between FOUNDATION (structural Top snaps) and MACHINE/STORAGE (peer equipment snaps). HUD always shows current filter mode. `MatchesSnapFilter()` checks target building category.
-- Naming convention fix: `Top_Center` -> `Center_Top`, `Bot_Center` -> `Center_Bot` across all files
-- Deleted old placeholder prefabs (Foundation, Wall, Ramp, Machine, Storage cubes + materials)
-- Added real FBX prefabs: SLAB 1m/2m/4m, WALL 0.5m, RAMP 4x1/4x2, CONSTRUCTOR, STORAGE CONTAINER
+### S-curve elevation changes
+- Single rampEnd waypoint (type 5) with horizontal-only tangents creates smooth Bezier S-curve
+- 1.5x ramp distance factor compensates for cubic Bezier peak angle being steeper than average
+- Aligned belts (no turn) skip post-ramp flat reserve -- S-curve goes directly to endpoint
+- L-shape belts reserve MinPostRampLength (0.5m) flat before the turn
+- MaxRampAngle = 30 degrees
+
+### Grid snap and validation (NetworkBuildController.cs)
+- Free endpoints snap to 1x1 grid in both curved and straight modes
+- Port endpoints use exact world position (bypass grid snap)
+- Free endpoints: max 1 turn (straight or L-shape). Port-to-port: multi-turn allowed
+- Elevation validation: red line when not enough room for ramp at MaxRampAngle
+- Removed shift-for-straight (Tab toggles mode, scroll wheel still works for curved yaw)
+- Line renderer uses Sprites/Default shader for proper vertex color (green/red)
+- Removed all TryResolveBeltEndpoint debug logs
+
+### Mesh twist fix (BeltSplineMeshBaker.cs)
+- Horizontal knot rotation projection: forward direction projected to Y=0 before computing rotation
+- Belt cross-section stays level on ramps without affecting spline path (rot * invRot cancels out)
+
+### Network sync (NetworkBeltSegment.cs, BeltRoutingMode.cs)
+- BeltRoutingMode enum (Curved/Straight) synced as single byte
+- Clients reconstruct waypoints deterministically from synced start/end vectors + mode
 
 ## What's in progress (not yet committed)
-- Unstaged terrain data, metal materials, Joe scene, docs images (not part of this session's work)
-- `test 1.prefab` files in Foundations/Walls/Ramps subfolders (user's editor test assets, untracked)
+- Various unstaged asset changes (terrain data, metal materials, prefabs, scene files) -- not from this session
 
 ## Next task to pick up
-
-### Playtest verification
-1. Re-run **Tools > Slopworks > Add Snap Points to Prefabs** -- storage prefabs need new Center_Top snap baked in. Delete existing snap point children first if already present.
-2. Run all EditMode tests in Test Runner
-3. Playtest: machine placement on foundations, machine-to-machine side-by-side snapping, storage stacking via Center_Top, scroll wheel mode toggle
-
-### After verification
-- Continue Step 4: Belts + Simulation network wrappers
-- Steps 5-7: Combat, Tower+Buildings, Supabase
+- Continue Step 4 belt work: ghost preview mesh during belt placement (currently just line renderer)
+- Support placement input wiring (CmdPlaceSupport exists but no input handler)
+- Double-bake optimization in host mode (server + client both bake mesh unnecessarily)
+- `isStatic = true` on belt GameObjects may cause issues with networked objects -- investigate
+- Consider adding BeltRouteBuilder unit tests for the routing patterns
 
 ## Blockers or decisions needed
-- Storage prefabs need snap point re-bake (delete old snap children, re-run editor tool) to get new Center_Top
-- Machine prefab (CONSTRUCTOR) needs real NetworkMachine component (currently has EmptyNetworkBehaviour)
-- Storage prefab (STORAGE CONTAINER) needs real NetworkStorage component
+- None
 
 ## Test status
 - Tests not run this session (MCP run_tests corrupts FishNet DefaultPrefabObjects)
 - Run manually: Window > General > Test Runner > EditMode > Run All
-- Expected: all existing tests pass. SnapPlacementTests updated for BuildingCategory signature.
 
 ## Key context the next session needs
-- **Branch:** `kevin/multiplayer-step1`
-- **NEVER use MCP run_tests** -- corrupts FishNet DefaultPrefabObjects.asset
-- **Snap point counts:** Foundation/Wall = 14, Ramp = 6, Machine = 5 (no Center_Top), Storage = 6 (has Center_Top for stacking)
-- **SnapPointPrefabSetup** auto-discovers prefabs by scanning `Resources/Prefabs/Buildings/` subfolders. Category detected from path. Skips prefabs that already have snap points.
-- **SetBuildingLayer** skips children on SnapPoints layer to prevent overwriting baked snap colliders
-- **Scroll wheel** toggles `_peerSnapMode` for machine/storage tools: FOUNDATION mode (structural Top snaps) vs MACHINE/STORAGE mode (peer equipment snaps)
-- **FindGhostAttachSnap** forces Center_Bot when machine/storage targets structural. Bot-to-Bot pairing for machine-to-machine.
-- **Combined renderer bounds** for multi-mesh FBX: `GetComponentsInChildren<Renderer>()` + `Encapsulate()`
-- **Storage stacking**: Storage-on-Storage uses Center_Bot (ghost) meeting Center_Top (target). FindGhostAttachSnap standard tier pairing handles this automatically.
+- **Branch:** `kevin/belts` (ahead of origin by 17 commits)
+- BeltRouteBuilder is pure math (no MonoBehaviour) -- very testable, should add EditMode tests
+- The 1.5x factor on ramp distance is empirical (cubic Bezier S-curve peak angle). If belts still look steep, increase factor.
+- Elevation validation in controller must match route builder's ramp calculation exactly or belts get rejected/accepted incorrectly
+- Type 5 (rampEnd) in BeltRouteBuilder tangent switch: horizontal-only tangents. Type 0 (start) also projects to horizontal when next point has Y offset.
+- Grid snap for both modes. Ports bypass snap. Curved mode scroll wheel yaw still works.
