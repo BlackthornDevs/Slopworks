@@ -1240,7 +1240,7 @@ public class NetworkBuildController : NetworkBehaviour
                 }
                 else
                 {
-                    // Port endpoint: allow multi-turn, use standard validation
+                    // Port endpoint: use standard validation (no TurnTooSharp override)
                     var validation = BeltPlacementValidator.Validate(
                         _beltStartPos, startDir, endPos, endDir);
                     isValid = validation.IsValid;
