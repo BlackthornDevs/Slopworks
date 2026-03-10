@@ -5,7 +5,8 @@ public enum BeltValidationError
     None,
     TooShort,
     TooLong,
-    TooSteep
+    TooSteep,
+    TurnTooSharp
 }
 
 public struct BeltValidationResult
@@ -33,11 +34,16 @@ public static class BeltPlacementValidator
     public const float MinLength = 0.5f;
     public const float MaxLength = 56f;
     public const float MaxSlopeAngle = 45f;
+    public const float MinTurnAngle = 30f; // minimum angle between startDir and endDir
 
     public static BeltValidationResult Validate(
         Vector3 startPos, Vector3 startDir,
         Vector3 endPos, Vector3 endDir)
     {
+        // Zero endDir signals an invalid direction (e.g. straight backward)
+        if (endDir.sqrMagnitude < 0.001f)
+            return BeltValidationResult.Invalid(BeltValidationError.TurnTooSharp);
+
         float distance = Vector3.Distance(startPos, endPos);
 
         if (distance < MinLength)
@@ -58,6 +64,18 @@ public static class BeltPlacementValidator
         else if (verticalDist > 0.001f)
         {
             return BeltValidationResult.Invalid(BeltValidationError.TooSteep);
+        }
+
+        // Reject belts where start and end tangents diverge too sharply.
+        // Angle between tangents below MinTurnAngle would create a jagged kink.
+        var startFlat = new Vector3(startDir.x, 0, startDir.z).normalized;
+        var endFlat = new Vector3(endDir.x, 0, endDir.z).normalized;
+        if (startFlat.sqrMagnitude > 0.001f && endFlat.sqrMagnitude > 0.001f)
+        {
+            float dot = Vector3.Dot(startFlat, endFlat);
+            float angle = Mathf.Acos(Mathf.Clamp(dot, -1f, 1f)) * Mathf.Rad2Deg;
+            if (angle > (180f - MinTurnAngle))
+                return BeltValidationResult.Invalid(BeltValidationError.TurnTooSharp);
         }
 
         return BeltValidationResult.Valid();

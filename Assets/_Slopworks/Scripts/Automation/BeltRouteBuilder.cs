@@ -521,7 +521,12 @@ public static class BeltRouteBuilder
 
         if (alongDist < -0.1f)
         {
-            // Behind start: U-turn, end faces opposite direction
+            if (crossDist < 0.1f)
+            {
+                // Straight backward: invalid, return zero to signal rejection
+                return Vector3.zero;
+            }
+            // Behind with offset: U-turn, end faces opposite direction
             return -startAxis;
         }
 
