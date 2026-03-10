@@ -421,7 +421,7 @@ public class NetworkBuildController : NetworkBehaviour
         if (mouse.leftButton.wasPressedThisFrame)
         {
             ClearDeleteHighlight();
-            if (placement.Category == BuildingCategory.Belt)
+            if (placement.Category == BuildingCategory.Belt || placement.Category == BuildingCategory.Support)
             {
                 var nob = placement.GetComponent<NetworkObject>();
                 if (nob != null)

@@ -538,6 +538,11 @@ public class GridManager : NetworkBehaviour
         }
 
         var instance = Instantiate(prefab, groundPos, rotation);
+
+        var info = instance.AddComponent<PlacementInfo>();
+        info.Category = BuildingCategory.Support;
+        info.SurfaceY = groundPos.y;
+
         ServerManager.Spawn(instance);
 
         var anchor = instance.GetComponentInChildren<BeltSnapAnchor>();
