@@ -35,6 +35,14 @@ public class NetworkFactorySimulation : NetworkBehaviour
         _simulation.RegisterBelt(netBelt.Segment);
     }
 
+    public void UnregisterBelt(NetworkBeltSegment netBelt)
+    {
+        if (netBelt == null) return;
+        _belts.Remove(netBelt);
+        if (netBelt.Segment != null)
+            _simulation.UnregisterBelt(netBelt.Segment);
+    }
+
     public void RegisterInserter(Inserter inserter)
     {
         _simulation.RegisterInserter(inserter);

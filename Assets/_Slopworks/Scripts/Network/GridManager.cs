@@ -512,7 +512,12 @@ public class GridManager : NetworkBehaviour
         if (_placedRecords.TryGetValue(key, out var record))
         {
             if (record.Instance != null)
+            {
+                var netBelt = record.Instance.GetComponent<NetworkBeltSegment>();
+                if (netBelt != null && _factorySimulation != null)
+                    _factorySimulation.UnregisterBelt(netBelt);
                 ServerManager.Despawn(record.Instance);
+            }
             _placedRecords.Remove(key);
 
             if (record.Category == BuildingCategory.Foundation)
@@ -538,7 +543,12 @@ public class GridManager : NetworkBehaviour
         if (_placedRecords.TryGetValue(key, out var record))
         {
             if (record.Instance != null)
+            {
+                var netBelt = record.Instance.GetComponent<NetworkBeltSegment>();
+                if (netBelt != null && _factorySimulation != null)
+                    _factorySimulation.UnregisterBelt(netBelt);
                 ServerManager.Despawn(record.Instance);
+            }
             _placedRecords.Remove(key);
             Debug.Log($"grid: deleted {record.Category} at ({cell.x},{cell.y}) y={surfaceY:F1} dir ({direction.x},{direction.y}) by {sender?.ClientId}");
             return;
@@ -552,6 +562,16 @@ public class GridManager : NetworkBehaviour
     {
         if (!IsServerInitialized) return;
         if (nob == null) return;
+
+        // Unregister belt from factory simulation before despawn
+        var netBelt = nob.GetComponent<NetworkBeltSegment>();
+        if (netBelt != null && _factorySimulation != null)
+            _factorySimulation.UnregisterBelt(netBelt);
+
+        // TODO: networked port disconnection -- BeltPort child objects are destroyed
+        // with the parent on despawn, but adjacent buildings holding references to
+        // this belt's ports need notification. Implement when ConnectionResolver is
+        // integrated into the networked path.
 
         ServerManager.Despawn(nob.gameObject);
         Debug.Log($"grid: deleted network object {nob.gameObject.name} by {sender?.ClientId}");

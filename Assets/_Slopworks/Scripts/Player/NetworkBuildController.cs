@@ -1313,6 +1313,21 @@ public class NetworkBuildController : NetworkBehaviour
                         }
                     }
                 }
+
+                // Port endpoint elevation validation (same 1.5x factor as free endpoints)
+                if (isValid && endFromPort)
+                {
+                    float heightDiff = Mathf.Abs(endPos.y - _beltStartPos.y);
+                    if (heightDiff > 0.01f)
+                    {
+                        var axis = BeltRouteBuilder.SnapToCardinal(startDir);
+                        var delta = new Vector3(endPos.x - _beltStartPos.x, 0, endPos.z - _beltStartPos.z);
+                        float alongDist = Mathf.Abs(Vector3.Dot(delta, axis));
+                        float idealRamp = 1.5f * heightDiff / Mathf.Tan(BeltRouteBuilder.MaxRampAngle * Mathf.Deg2Rad);
+                        if (alongDist < idealRamp)
+                            isValid = false;
+                    }
+                }
             }
 
             // Ghost support at end position
