@@ -433,7 +433,7 @@ public class NetworkBuildController : NetworkBehaviour
     [ServerRpc]
     private void CmdDeleteBelt(NetworkObject nob)
     {
-        if (NetworkObject != null && !IsServerInitialized) return;
+        if (!IsServerInitialized) return;
         if (nob == null || !nob.IsSpawned) return;
         ServerManager.Despawn(nob);
     }

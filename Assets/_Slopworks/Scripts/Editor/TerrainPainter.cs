@@ -177,7 +177,7 @@ public static class TerrainPainter
                 if (total > 0.001f)
                     for (int i = 0; i < _layerCount; i++) alphas[z, x, i] = w[i] / total;
                 else
-                    alphas[z, x, L_LeafyGrass] = 1f;
+                    alphas[z, x, L_SparseGrass] = 1f;
             }
         }
 

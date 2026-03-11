@@ -108,6 +108,7 @@ public static class SceneCleanup
         int count = 0;
         foreach (var go in Object.FindObjectsOfType<GameObject>())
         {
+            if (go == null) continue;
             string lower = go.name.ToLowerInvariant();
             if (lower.Contains("patch-grass") || lower.Contains("patch_grass"))
             {
