@@ -24,7 +24,9 @@ public class NetworkPlayerController : NetworkBehaviour
         (1 << PhysicsLayers.Terrain) |
         (1 << PhysicsLayers.BIM_Static) |
         (1 << PhysicsLayers.Structures) |
-        (1 << PhysicsLayers.GridPlane);
+        (1 << PhysicsLayers.GridPlane) |
+        (1 << PhysicsLayers.Interactable) |
+        (1 << 0); // Default layer (belts)
 
     public override void OnStartClient()
     {

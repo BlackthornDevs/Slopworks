@@ -399,107 +399,54 @@ public class GridManager : NetworkBehaviour
 
         // Validate using anchor-derived positions
         var validation = BeltPlacementValidator.Validate(beltStartPos, startDir, beltEndPos, endDir);
-        if (!validation.IsValid)
+        if (!validation.IsValid && validation.Error != BeltValidationError.TurnTooSharp)
         {
-            // Allow TurnTooSharp in straight mode -- route builder creates valid 90-degree turns
-            if (!(mode == BeltRoutingMode.Straight && validation.Error == BeltValidationError.TurnTooSharp))
-            {
-                Debug.Log($"grid: belt placement rejected: {validation.Error} by {sender?.ClientId}");
-                return;
-            }
+            Debug.Log($"grid: belt placement rejected: {validation.Error} by {sender?.ClientId}");
+            return;
         }
 
         var prefab = GetPrefab(BuildingCategory.Belt, variant);
         if (prefab == null) return;
 
-        float arcLength;
-        Vector3 midpoint;
+        var waypoints = BeltRouteBuilder.Build(beltStartPos, startDir, beltEndPos, endDir, mode);
+        var arcLength = BeltRouteBuilder.ComputeRouteLength(waypoints);
+        var segment = BeltSegment.FromArcLength(arcLength);
 
-        if (mode == BeltRoutingMode.Straight)
-        {
-            var waypoints = BeltRouteBuilder.Build(beltStartPos, startDir, beltEndPos, endDir);
-            arcLength = BeltRouteBuilder.ComputeRouteLength(waypoints);
-            var segment = BeltSegment.FromArcLength(arcLength);
+        var midpoint = BeltRouteBuilder.EvaluateRoute(waypoints, arcLength, 0.5f);
+        var go = Instantiate(prefab, midpoint, Quaternion.identity);
+        go.transform.localScale = Vector3.one;
+        go.layer = PhysicsLayers.Structures;
 
-            // Place object at route midpoint
-            midpoint = BeltRouteBuilder.EvaluateRoute(waypoints, arcLength, 0.5f);
-            var go = Instantiate(prefab, midpoint, Quaternion.identity);
-            go.transform.localScale = Vector3.one;
-            go.layer = PhysicsLayers.Structures;
+        var prefabCollider = go.GetComponent<Collider>();
+        if (prefabCollider != null)
+            DestroyImmediate(prefabCollider);
 
-            var prefabCollider = go.GetComponent<Collider>();
-            if (prefabCollider != null)
-                DestroyImmediate(prefabCollider);
+        var info = go.AddComponent<PlacementInfo>();
+        info.Category = BuildingCategory.Belt;
+        info.SurfaceY = beltStartPos.y;
 
-            var info = go.AddComponent<PlacementInfo>();
-            info.Category = BuildingCategory.Belt;
-            info.SurfaceY = beltStartPos.y;
+        var netBelt = go.GetComponent<NetworkBeltSegment>();
+        if (netBelt != null)
+            netBelt.ServerInit(segment, beltStartPos, startDir, beltEndPos, endDir, waypoints, tier, mode);
 
-            var netBelt = go.GetComponent<NetworkBeltSegment>();
-            if (netBelt != null)
-                netBelt.ServerInitStraight(segment, beltStartPos, startDir, beltEndPos, endDir, waypoints, tier);
+        ServerManager.Spawn(go);
 
-            ServerManager.Spawn(go);
+        var material = go.GetComponent<MeshRenderer>()?.sharedMaterial;
+        BeltSplineMeshBaker.BakeMesh(go, waypoints, material);
 
-            var material = go.GetComponent<MeshRenderer>()?.sharedMaterial;
-            BeltSplineMeshBaker.BakeMesh(go, waypoints, material);
+        var meshCollider = go.AddComponent<MeshCollider>();
+        meshCollider.sharedMesh = go.GetComponent<MeshFilter>()?.sharedMesh;
 
-            var meshCollider = go.AddComponent<MeshCollider>();
-            meshCollider.sharedMesh = go.GetComponent<MeshFilter>()?.sharedMesh;
+        var visualizer = go.AddComponent<BeltItemVisualizer>();
+        visualizer.Init(netBelt);
 
-            var visualizer = go.AddComponent<BeltItemVisualizer>();
-            visualizer.Init(netBelt);
+        if (netBelt != null && _factorySimulation != null)
+            _factorySimulation.RegisterBelt(netBelt);
 
-            if (netBelt != null && _factorySimulation != null)
-                _factorySimulation.RegisterBelt(netBelt);
+        AddBeltPort(go, beltStartPos, -startDir, BeltPortDirection.Input, 0);
+        AddBeltPort(go, beltEndPos, endDir, BeltPortDirection.Output, 0);
 
-            AddBeltPort(go, beltStartPos, -startDir, BeltPortDirection.Input, 0);
-            AddBeltPort(go, beltEndPos, endDir, BeltPortDirection.Output, 0);
-
-            Debug.Log($"grid: straight belt placed from {beltStartPos} to {beltEndPos} route={arcLength:F1}m by {sender?.ClientId}");
-        }
-        else
-        {
-            var splineData = BeltSplineBuilder.Build(beltStartPos, startDir, beltEndPos, endDir);
-            var segment = BeltSegment.FromArcLength(splineData.ArcLength);
-            arcLength = splineData.ArcLength;
-
-            midpoint = splineData.Evaluate(0.5f);
-            var go = Instantiate(prefab, midpoint, Quaternion.identity);
-            go.transform.localScale = Vector3.one;
-            go.layer = PhysicsLayers.Structures;
-
-            var prefabCollider = go.GetComponent<Collider>();
-            if (prefabCollider != null)
-                DestroyImmediate(prefabCollider);
-
-            var info = go.AddComponent<PlacementInfo>();
-            info.Category = BuildingCategory.Belt;
-            info.SurfaceY = beltStartPos.y;
-
-            var netBelt = go.GetComponent<NetworkBeltSegment>();
-            if (netBelt != null)
-                netBelt.ServerInit(segment, splineData, tier);
-
-            ServerManager.Spawn(go);
-
-            var material = go.GetComponent<MeshRenderer>()?.sharedMaterial;
-            BeltSplineMeshBaker.BakeMesh(go, splineData, material);
-
-            var meshCollider = go.AddComponent<MeshCollider>();
-            meshCollider.sharedMesh = go.GetComponent<MeshFilter>()?.sharedMesh;
-
-            var visualizer = go.AddComponent<BeltItemVisualizer>();
-            visualizer.Init(netBelt);
-
-            if (netBelt != null && _factorySimulation != null)
-                _factorySimulation.RegisterBelt(netBelt);
-
-            AddBeltPort(go, beltStartPos, -startDir, BeltPortDirection.Input, 0);
-            AddBeltPort(go, beltEndPos, endDir, BeltPortDirection.Output, 0);
-
-            Debug.Log($"grid: curved belt placed from {beltStartPos} to {beltEndPos} arc={arcLength:F1}m by {sender?.ClientId}");
-        }
+        Debug.Log($"grid: {mode} belt placed from {beltStartPos} to {beltEndPos} route={arcLength:F1}m by {sender?.ClientId}");
     }
 
     private static void AddBeltPort(GameObject parent, Vector3 worldPos, Vector3 worldDir, BeltPortDirection direction, int slotIndex)
