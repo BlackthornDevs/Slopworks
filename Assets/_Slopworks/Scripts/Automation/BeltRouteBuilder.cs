@@ -82,17 +82,32 @@ public static class BeltRouteBuilder
             positions[i] = h00 * startPos + h10 * t0 + h01 * endPos + h11 * t1;
         }
 
-        // Build waypoints with chord-based tangents
+        // Build waypoints with Catmull-Rom tangents (smooth, no overshoot).
+        // Chord-based d/3 tangents caused Bezier overshoot between knots,
+        // producing visible ripple on ramps.
         var waypoints = new List<Waypoint>(FreeformSamples + 1);
         for (int i = 0; i <= FreeformSamples; i++)
         {
-            var toNext = i < FreeformSamples ? positions[i + 1] - positions[i] : Vector3.zero;
-            var toPrev = i > 0 ? positions[i - 1] - positions[i] : Vector3.zero;
-            float dNext = toNext.magnitude;
-            float dPrev = toPrev.magnitude;
-
-            var tanIn = dPrev > 0.001f ? toPrev / dPrev * (dPrev / 3f) : Vector3.zero;
-            var tanOut = dNext > 0.001f ? toNext / dNext * (dNext / 3f) : Vector3.zero;
+            Vector3 tanOut, tanIn;
+            if (i == 0)
+            {
+                var chord = positions[1] - positions[0];
+                tanOut = chord / 3f;
+                tanIn = Vector3.zero;
+            }
+            else if (i == FreeformSamples)
+            {
+                var chord = positions[i] - positions[i - 1];
+                tanIn = -chord / 3f;
+                tanOut = Vector3.zero;
+            }
+            else
+            {
+                // Catmull-Rom: tangent = (P[i+1] - P[i-1]) / 2, scaled to 1/3 for Bezier
+                var catmull = (positions[i + 1] - positions[i - 1]) * 0.5f;
+                tanOut = catmull / 3f;
+                tanIn = -catmull / 3f;
+            }
 
             waypoints.Add(new Waypoint { Position = positions[i], TangentIn = tanIn, TangentOut = tanOut });
         }
@@ -230,11 +245,12 @@ public static class BeltRouteBuilder
         Vector3 endPos, Vector3 endAxis, float turnRadius = TurnRadius)
     {
         bool alongZ = Mathf.Abs(startAxis.z) > 0.5f;
-        // Clamp overshoot for curved mode (turnRadius=MaxValue would produce infinity)
+        // Clamp overshoot: U-turn needs two arcs sharing crossDist, so max radius = crossDist/2
         float crossDist = alongZ
             ? Mathf.Abs(endPos.x - startPos.x)
             : Mathf.Abs(endPos.z - startPos.z);
-        float effectiveRadius = Mathf.Min(turnRadius, Mathf.Max(crossDist, 1f));
+        float maxRadius = Mathf.Max(crossDist * 0.5f, 0.5f);
+        float effectiveRadius = Mathf.Min(turnRadius, maxRadius);
         float overshoot = effectiveRadius + MinSegLength;
 
         Vector3 c1, c2, crossAxis;
