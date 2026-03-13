@@ -398,7 +398,7 @@ public class GridManager : NetworkBehaviour
             beltEndPos = SpawnSupportAt(endPos, Quaternion.LookRotation(endDir), sender);
 
         // Server is final authority -- validate without bypasses
-        var validation = BeltPlacementValidator.Validate(beltStartPos, startDir, beltEndPos, endDir);
+        var validation = BeltRouteBuilder.Validate(beltStartPos, startDir, beltEndPos, endDir);
         if (!validation.IsValid)
         {
             Debug.Log($"grid: belt placement rejected: {validation.Error} by {sender?.ClientId}");
@@ -446,6 +446,12 @@ public class GridManager : NetworkBehaviour
         AddBeltPort(go, beltStartPos, -startDir, BeltPortDirection.Input, 0);
         AddBeltPort(go, beltEndPos, endDir, BeltPortDirection.Output, 0);
 
+        // Register belt connections on nearby snap anchors and existing belt ports
+        RegisterBeltOnNearbyAnchor(go, beltStartPos, 0.6f);
+        RegisterBeltOnNearbyAnchor(go, beltEndPos, 0.6f);
+        if (startFromPort) RegisterBeltOnNearbyPorts(go, beltStartPos, 0.6f);
+        if (endFromPort) RegisterBeltOnNearbyPorts(go, beltEndPos, 0.6f);
+
         Debug.Log($"grid: {mode} belt placed from {beltStartPos} to {beltEndPos} route={arcLength:F1}m by {sender?.ClientId}");
     }
 
@@ -465,6 +471,56 @@ public class GridManager : NetworkBehaviour
         var col = child.AddComponent<SphereCollider>();
         col.radius = 0.4f;
         col.isTrigger = true;
+    }
+
+    /// <summary>
+    /// Find the nearest BeltSnapAnchor within radius and register the belt on it.
+    /// </summary>
+    private static void RegisterBeltOnNearbyAnchor(GameObject belt, Vector3 position, float radius)
+    {
+        var anchor = FindNearbyAnchor(position, radius);
+        if (anchor != null)
+            anchor.Connect(belt);
+    }
+
+    /// <summary>
+    /// Register the belt on all existing BeltPorts near the position (from other belts/machines/storage).
+    /// Skips ports that belong to the belt itself.
+    /// </summary>
+    private static void RegisterBeltOnNearbyPorts(GameObject belt, Vector3 position, float radius)
+    {
+        var colliders = Physics.OverlapSphere(position, radius, 1 << PhysicsLayers.BeltPorts);
+        foreach (var col in colliders)
+        {
+            var port = col.GetComponentInParent<BeltPort>();
+            if (port == null) continue;
+            // Skip ports that belong to this belt
+            if (port.transform.IsChildOf(belt.transform)) continue;
+            port.Connect(belt);
+        }
+    }
+
+    /// <summary>
+    /// Find the nearest BeltSnapAnchor within radius of a position.
+    /// Searches BeltPorts layer (21) where anchor colliders live.
+    /// </summary>
+    public static BeltSnapAnchor FindNearbyAnchor(Vector3 position, float radius)
+    {
+        var colliders = Physics.OverlapSphere(position, radius, 1 << PhysicsLayers.BeltPorts);
+        BeltSnapAnchor closest = null;
+        float closestDist = float.MaxValue;
+        foreach (var col in colliders)
+        {
+            var anchor = col.GetComponentInParent<BeltSnapAnchor>();
+            if (anchor == null) continue;
+            float dist = Vector3.Distance(position, anchor.WorldPosition);
+            if (dist < closestDist)
+            {
+                closestDist = dist;
+                closest = anchor;
+            }
+        }
+        return closest;
     }
 
     [ServerRpc(RequireOwnership = false)]

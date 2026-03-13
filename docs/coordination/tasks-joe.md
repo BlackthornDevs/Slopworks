@@ -747,3 +747,72 @@ The multiplayer HomeBase scene currently uses a flat checkerboard Plane as terra
 - Visual variety (not a flat plane)
 - Post-apocalyptic atmosphere (muted colors, some fog)
 - No gameplay objects in the scene (those live in HomeBase.unity)
+
+---
+
+## Visor HUD Integration (Part 3 of input system plan)
+
+**Prerequisites:** Merge master after `kevin/input-shared` PR lands. This gives you `BuildStateSnapshot`, `IBuildStateReceiver`, the Build action map, and `hotkeys.md`.
+
+**Reference:** `docs/plans/serene-hatching-moon.md` (full visor HUD + input system plan), `docs/reference/hotkeys.md` (keybinding reference for tooltip labels), `docs/reference/input-system.md` (action map reference).
+
+### TASK J-030: Create VisorBuildAdapter
+
+**Status:** Pending
+**Priority:** High
+**Branch:** `joe/main`
+**Ownership:** `Scripts/UI/`
+**Depends on:** `kevin/input-shared` merged to master
+
+Create the adapter that translates `BuildStateSnapshot` into calls to your visor UI components. This is the ONLY file that knows about both the snapshot and Joe's UI components. Kevin never touches it.
+
+**Files to create:**
+- `Scripts/UI/VisorBuildAdapter.cs` -- implements `IBuildStateReceiver`
+
+**Implementation:**
+1. `VisorBuildAdapter : MonoBehaviour, IBuildStateReceiver`
+2. Implement `OnBuildStateChanged(BuildStateSnapshot state)`:
+   - `ReticleController.SetStyle()` based on `state.ToolName` and `state.BeltRoutingMode`
+   - `BuildTooltipUI.SetVisible()` / `SetActiveKeycap()` based on mode
+   - Show `state.ValidationError` when non-null
+3. Implement `OnBuildModeEntered()`:
+   - Show build tooltips, swap reticle to build style
+4. Implement `OnBuildModeExited()`:
+   - Hide build tooltips, reticle back to gameplay style
+5. Tooltip keycap labels come from `state.KeycapLabels[]` (populated from Input Action display names, supports player rebinding)
+6. Attach as a child of the player prefab so `GetComponentInChildren<IBuildStateReceiver>()` finds it
+
+**ToolName values Kevin's controller sends:** "Foundation", "Wall", "Ramp", "Belt", "Machine", "Storage", "Delete"
+**BeltRoutingMode values:** "Default", "Straight", "Curved"
+**SnapFilter values:** "CENTER", "EDGE", "FOUNDATION", "MACHINE/STORAGE"
+
+**Acceptance criteria:**
+- Implements `IBuildStateReceiver` correctly
+- Translates snapshot to UI component calls
+- Attached to player prefab hierarchy
+- No references to `NetworkBuildController` internals (only reads snapshot)
+- No references to `Keyboard.current` or `Mouse.current` -- all input comes through snapshot
+
+### TASK J-031: Update VisorAutoBootstrap guard
+
+**Status:** Pending
+**Priority:** Medium
+**Branch:** `joe/main`
+**Ownership:** `Scripts/Debug/`
+**Depends on:** J-030
+
+Gate `VisorAutoBootstrap` to skip auto-spawn when `NetworkBuildController` is present in the scene. This lets Joe iterate on UI in his standalone test scene while the real controller drives UI in the HomeBase scene.
+
+**Implementation:**
+```csharp
+// In VisorAutoBootstrap, early in Awake or Start:
+if (Object.FindObjectOfType<NetworkBuildController>() != null) return;
+```
+
+- Joe's standalone test scene: no NetworkBuildController, auto-bootstrap fires, Joe tests freely
+- Kevin's HomeBase scene: NetworkBuildController present, auto-bootstrap skips, real controller drives UI
+
+**Acceptance criteria:**
+- VisorAutoBootstrap does NOT fire when NetworkBuildController exists in scene
+- VisorAutoBootstrap still works in Joe's standalone test scene
+- No compilation errors

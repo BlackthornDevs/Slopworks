@@ -41,7 +41,7 @@ public class NetworkPlayerController : NetworkBehaviour
         }
 
         _controls = new SlopworksControls();
-        _controls.Exploration.Enable();
+        _controls.Combat.Enable();
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
     }
@@ -51,7 +51,7 @@ public class NetworkPlayerController : NetworkBehaviour
         base.OnStopClient();
         if (IsOwner && _controls != null)
         {
-            _controls.Exploration.Disable();
+            _controls.Combat.Disable();
         }
     }
 
@@ -100,7 +100,7 @@ public class NetworkPlayerController : NetworkBehaviour
 
     private void Look()
     {
-        Vector2 look = _controls.Exploration.Look.ReadValue<Vector2>();
+        Vector2 look = _controls.Combat.Look.ReadValue<Vector2>();
 
         float yaw = look.x * _mouseSensitivity;
         _pitch -= look.y * _mouseSensitivity;
@@ -115,8 +115,8 @@ public class NetworkPlayerController : NetworkBehaviour
 
     private void Move()
     {
-        Vector2 input = _controls.Exploration.Move.ReadValue<Vector2>();
-        bool sprinting = _controls.Exploration.Sprint.IsPressed();
+        Vector2 input = _controls.Combat.Move.ReadValue<Vector2>();
+        bool sprinting = _controls.Combat.Sprint.IsPressed();
         float speed = sprinting ? _sprintSpeed : _walkSpeed;
 
         Vector3 direction = transform.right * input.x + transform.forward * input.y;
@@ -135,7 +135,7 @@ public class NetworkPlayerController : NetworkBehaviour
 
     private void CheckJump()
     {
-        if (_isGrounded && _controls.Exploration.Jump.WasPressedThisFrame())
+        if (_isGrounded && _controls.Combat.Jump.WasPressedThisFrame())
         {
             _rb.linearVelocity = new Vector3(_rb.linearVelocity.x, _jumpForce, _rb.linearVelocity.z);
         }

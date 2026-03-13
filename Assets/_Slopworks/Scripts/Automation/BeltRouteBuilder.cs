@@ -1,22 +1,50 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+public enum BeltValidationError
+{
+    None,
+    TooShort,
+    TooLong,
+    TooSteep,
+    TurnTooSharp
+}
+
+public struct BeltValidationResult
+{
+    public bool IsValid;
+    public BeltValidationError Error;
+
+    public static BeltValidationResult Valid()
+    {
+        return new BeltValidationResult { IsValid = true, Error = BeltValidationError.None };
+    }
+
+    public static BeltValidationResult Invalid(BeltValidationError error)
+    {
+        return new BeltValidationResult { IsValid = false, Error = error };
+    }
+}
+
 /// <summary>
-/// Computes waypoints for all belt routing modes: Default (free-form Hermite),
-/// Straight (orthogonal with fixed-radius arcs), and Curved (orthogonal with
-/// arcs that fill available space). Pure math -- no MonoBehaviour, no side effects.
+/// Computes waypoints for all belt routing modes and validates belt placement.
+/// Pure math -- no MonoBehaviour, no side effects.
+/// Runtime-tunable values are public static fields set by BeltSettings.
 /// </summary>
 public static class BeltRouteBuilder
 {
-    public const float TurnRadius = 1.0f;
-    public const float MaxRampAngle = 30f;
+    // -- Runtime-tunable parameters (set by BeltSettings MonoBehaviour) --
+    public static float MinStraight = 0.5f;
+    public static float MaxLength = 56f;
+    public static float TurnRadius = 1.0f;
+    public static float MaxRampAngle = 30f;
+    public static float MinTurnAngle = 30f;
+    public static float MinFreeformTangent = 2f;
+    public static int FreeformSamples = 8;
+
+    // -- Internal math constants (not tunable) --
     private const float BezierK = 0.5523f; // 4/3 * tan(pi/8), quarter-circle approximation
-    public const float MinSegLength = 0.2f;
-    public const float MinExitLength = 0.5f; // minimum straight out of port before ramp
-    public const float MinPostRampLength = 0.5f; // minimum flat after ramp before first turn
-    private const float MinFreeformTangent = 2f;
-    private const float MaxFreeformTangent = 42f; // 56m * 0.75
-    private const int FreeformSamples = 8;
+    private static float MaxFreeformTangent => MaxLength * 0.75f;
 
     public struct Waypoint
     {
@@ -34,6 +62,52 @@ public static class BeltRouteBuilder
         public Vector3 InDir;    // normalized horizontal direction arriving
         public Vector3 OutDir;   // normalized horizontal direction leaving
     }
+
+    // -- Validation (merged from BeltPlacementValidator) --
+
+    /// <summary>
+    /// Validate belt placement parameters before building the route.
+    /// Checks endpoint distance, slope, and direction.
+    /// </summary>
+    public static BeltValidationResult Validate(
+        Vector3 startPos, Vector3 startDir,
+        Vector3 endPos, Vector3 endDir)
+    {
+        // Zero endDir signals an invalid direction (e.g. straight backward)
+        if (endDir.sqrMagnitude < 0.001f)
+            return BeltValidationResult.Invalid(BeltValidationError.TurnTooSharp);
+
+        float distance = Vector3.Distance(startPos, endPos);
+
+        if (distance < MinStraight)
+            return BeltValidationResult.Invalid(BeltValidationError.TooShort);
+
+        if (distance > MaxLength)
+            return BeltValidationResult.Invalid(BeltValidationError.TooLong);
+
+        float horizontalDist = new Vector2(endPos.x - startPos.x, endPos.z - startPos.z).magnitude;
+        float verticalDist = Mathf.Abs(endPos.y - startPos.y);
+
+        if (horizontalDist > 0.001f)
+        {
+            float slopeAngle = Mathf.Atan2(verticalDist, horizontalDist) * Mathf.Rad2Deg;
+            if (slopeAngle > MaxRampAngle)
+                return BeltValidationResult.Invalid(BeltValidationError.TooSteep);
+        }
+        else if (verticalDist > 0.001f)
+        {
+            return BeltValidationResult.Invalid(BeltValidationError.TooSteep);
+        }
+
+        // Turn angle is not rejected here. Zero endDir (straight backward with
+        // no offset) is caught above. All other angles including U-turns are valid
+        // -- the route builder and per-mode validation in NetworkBuildController
+        // handle turn geometry constraints.
+
+        return BeltValidationResult.Valid();
+    }
+
+    // -- Route building --
 
     /// <summary>
     /// Build a belt route based on routing mode.
@@ -64,11 +138,61 @@ public static class BeltRouteBuilder
         if (distance < 0.001f)
             return BuildStraightLine(startPos, endPos);
 
-        float tangentMag = Mathf.Clamp(distance * 0.75f, MinFreeformTangent, MaxFreeformTangent);
-        var t0 = startDir.normalized * tangentMag;
-        var t1 = endDir.normalized * tangentMag;
+        var sDir = startDir.normalized;
+        var eDir = endDir.normalized;
+        float straight = MinStraight;
 
-        // Sample Hermite curve into positions
+        float deltaY = endPos.y - startPos.y;
+        bool hasElevation = Mathf.Abs(deltaY) > 0.01f;
+
+        // Elevation-first: dedicated S-curve ramp on the start leg, then flat curve.
+        // Same formula as Straight mode in AssembleRoute.
+        float rampDist = 0f;
+        if (hasElevation)
+        {
+            rampDist = 1.5f * Mathf.Abs(deltaY) / Mathf.Tan(MaxRampAngle * Mathf.Deg2Rad);
+            rampDist = Mathf.Max(rampDist, MinStraight);
+        }
+
+        // Reserve distances: connector + ramp + post-ramp straight + end connector.
+        // Without elevation: just connector at each end.
+        float startReserve = hasElevation ? straight + rampDist + straight : straight;
+        float endReserve = straight;
+
+        // The curve needs enough room to turn. If the ramp would leave less than
+        // MinFreeformTangent for the Hermite, fall back to distributed elevation
+        // (old behavior: elevation spread through the curve, no dedicated ramp).
+        float minCurveDist = MinFreeformTangent;
+        if (hasElevation && startReserve + endReserve + minCurveDist > distance)
+        {
+            hasElevation = false;
+            rampDist = 0f;
+            startReserve = straight;
+        }
+
+        // Don't consume more than half the distance for connector straights (no-elevation case)
+        if (!hasElevation && straight * 2f > distance - 0.1f)
+            straight = Mathf.Max((distance - 0.1f) * 0.5f, 0f);
+
+        // Recompute after clamping
+        if (!hasElevation)
+            startReserve = straight;
+
+        // Curve endpoints: Hermite runs flat at destination elevation when ramping
+        var curveStart = startPos + sDir * startReserve;
+        var curveEnd = endPos - eDir * endReserve;
+        if (hasElevation)
+        {
+            curveStart.y = endPos.y;
+            curveEnd.y = endPos.y;
+        }
+
+        float curveDist = Vector3.Distance(curveStart, curveEnd);
+        float tangentMag = Mathf.Clamp(curveDist * 0.75f, MinFreeformTangent, MaxFreeformTangent);
+        var t0 = sDir * tangentMag;
+        var t1 = eDir * tangentMag;
+
+        // Sample Hermite curve into positions (flat when hasElevation)
         var positions = new Vector3[FreeformSamples + 1];
         for (int i = 0; i <= FreeformSamples; i++)
         {
@@ -79,37 +203,87 @@ public static class BeltRouteBuilder
             float h10 = t3 - 2f * t2 + t;
             float h01 = -2f * t3 + 3f * t2;
             float h11 = t3 - t2;
-            positions[i] = h00 * startPos + h10 * t0 + h01 * endPos + h11 * t1;
+            positions[i] = h00 * curveStart + h10 * t0 + h01 * curveEnd + h11 * t1;
         }
 
-        // Build waypoints with Catmull-Rom tangents (smooth, no overshoot).
-        // Chord-based d/3 tangents caused Bezier overshoot between knots,
-        // producing visible ripple on ramps.
-        var waypoints = new List<Waypoint>(FreeformSamples + 1);
+        // Build waypoints
+        var waypoints = new List<Waypoint>(FreeformSamples + 5);
+
+        if (hasElevation)
+        {
+            // Connector straight: startPos → connectorEnd (horizontal, at start Y)
+            var connectorEnd = startPos + sDir * straight;
+            waypoints.Add(new Waypoint
+            {
+                Position = startPos,
+                TangentIn = Vector3.zero,
+                TangentOut = sDir * (straight / 3f)
+            });
+
+            // S-curve ramp: connectorEnd → rampEnd (elevation change)
+            var rampEndPos = connectorEnd + sDir * rampDist;
+            rampEndPos.y = endPos.y;
+            float rampDist3D = Vector3.Distance(connectorEnd, rampEndPos);
+
+            waypoints.Add(new Waypoint
+            {
+                Position = connectorEnd,
+                TangentIn = -sDir * (straight / 3f),
+                TangentOut = sDir * (rampDist3D / 3f)
+            });
+
+            // RampEnd: horizontal tangents for smooth S-curve arrival
+            waypoints.Add(new Waypoint
+            {
+                Position = rampEndPos,
+                TangentIn = -sDir * (rampDist3D / 3f),
+                TangentOut = sDir * (straight / 3f)
+            });
+
+            // Post-ramp straight leads into Hermite[0] (= curveStart)
+        }
+        else if (straight > 0.01f)
+        {
+            // No elevation: simple connector straight
+            waypoints.Add(new Waypoint
+            {
+                Position = startPos,
+                TangentIn = Vector3.zero,
+                TangentOut = sDir * (straight / 3f)
+            });
+        }
+
+        // Hermite curve waypoints with Catmull-Rom tangents
         for (int i = 0; i <= FreeformSamples; i++)
         {
             Vector3 tanOut, tanIn;
             if (i == 0)
             {
-                var chord = positions[1] - positions[0];
-                tanOut = chord / 3f;
-                tanIn = Vector3.zero;
+                float chordDist = Vector3.Distance(positions[0], positions[1]);
+                tanOut = sDir * (chordDist / 3f);
+                tanIn = (hasElevation || straight > 0.01f) ? -sDir * (straight / 3f) : Vector3.zero;
             }
             else if (i == FreeformSamples)
             {
-                var chord = positions[i] - positions[i - 1];
-                tanIn = -chord / 3f;
-                tanOut = Vector3.zero;
+                float chordDist = Vector3.Distance(positions[i - 1], positions[i]);
+                tanIn = -eDir * (chordDist / 3f);
+                tanOut = straight > 0.01f ? eDir * (straight / 3f) : Vector3.zero;
             }
             else
             {
-                // Catmull-Rom: tangent = (P[i+1] - P[i-1]) / 2, scaled to 1/3 for Bezier
                 var catmull = (positions[i + 1] - positions[i - 1]) * 0.5f;
                 tanOut = catmull / 3f;
                 tanIn = -catmull / 3f;
             }
 
             waypoints.Add(new Waypoint { Position = positions[i], TangentIn = tanIn, TangentOut = tanOut });
+        }
+
+        // End connector straight
+        if (straight > 0.01f)
+        {
+            var straightTan = -eDir * (straight / 3f);
+            waypoints.Add(new Waypoint { Position = endPos, TangentIn = straightTan, TangentOut = Vector3.zero });
         }
 
         return waypoints;
@@ -120,7 +294,7 @@ public static class BeltRouteBuilder
     /// Elevation changes are ramped on the first straight segment.
     /// </summary>
     private static List<Waypoint> BuildOrthogonal(Vector3 startPos, Vector3 startDir,
-        Vector3 endPos, Vector3 endDir, float turnRadius = TurnRadius,
+        Vector3 endPos, Vector3 endDir, float turnRadius,
         bool distributeElevation = false)
     {
         var startAxis = SnapToCardinal(startDir);
@@ -150,6 +324,8 @@ public static class BeltRouteBuilder
         return AssembleRoute(startPos, startAxis, endPos, corners, turnRadius, distributeElevation);
     }
 
+    // -- Route analysis --
+
     /// <summary>
     /// Compute total path length from waypoints (piecewise straight segments).
     /// </summary>
@@ -164,8 +340,10 @@ public static class BeltRouteBuilder
     /// <summary>
     /// Validate a built route against max slope angle and max total length.
     /// Checks the actual waypoint-to-waypoint segments, not endpoint-to-endpoint.
+    /// Uses the runtime-tunable MaxRampAngle and MaxLength values.
     /// </summary>
-    public static bool ValidateRoute(List<Waypoint> waypoints, float maxSlopeAngle, float maxLength)
+    public static bool ValidateRoute(List<Waypoint> waypoints,
+        Vector3 startDir = default, Vector3 endDir = default)
     {
         float totalLength = 0f;
         for (int i = 1; i < waypoints.Count; i++)
@@ -180,16 +358,70 @@ public static class BeltRouteBuilder
             if (hDist > 0.001f)
             {
                 float angle = Mathf.Atan2(vDist, hDist) * Mathf.Rad2Deg;
-                if (angle > maxSlopeAngle)
+                if (angle > MaxRampAngle)
                     return false;
             }
             else if (vDist > 0.001f)
             {
                 return false; // vertical segment
             }
+
+            // Check bend angle between consecutive segments
+            if (i >= 2)
+            {
+                var dirA = (a - waypoints[i - 2].Position).normalized;
+                var dirB = (b - a).normalized;
+                if (dirA.sqrMagnitude > 0.001f && dirB.sqrMagnitude > 0.001f)
+                {
+                    float bend = Vector3.Angle(dirA, dirB);
+                    if (bend > 180f - MinTurnAngle)
+                        return false;
+                }
+            }
         }
 
-        return totalLength <= maxLength;
+        if (totalLength > MaxLength)
+            return false;
+
+        // Enforce minimum straight at connectors: the route must follow the
+        // connector direction for at least MinStraight before any deviation.
+        if (startDir.sqrMagnitude > 0.001f && waypoints.Count >= 2)
+        {
+            var flatStart = new Vector3(startDir.x, 0, startDir.z).normalized;
+            float walked = 0f;
+            for (int i = 1; i < waypoints.Count && walked < MinStraight; i++)
+            {
+                var seg = waypoints[i].Position - waypoints[i - 1].Position;
+                var flatSeg = new Vector3(seg.x, 0, seg.z);
+                if (flatSeg.sqrMagnitude > 0.001f)
+                {
+                    float deviation = Vector3.Angle(flatStart, flatSeg.normalized);
+                    if (deviation > MinTurnAngle)
+                        return false;
+                }
+                walked += seg.magnitude;
+            }
+        }
+
+        if (endDir.sqrMagnitude > 0.001f && waypoints.Count >= 2)
+        {
+            var flatEnd = new Vector3(endDir.x, 0, endDir.z).normalized;
+            float walked = 0f;
+            for (int i = waypoints.Count - 2; i >= 0 && walked < MinStraight; i--)
+            {
+                var seg = waypoints[i + 1].Position - waypoints[i].Position;
+                var flatSeg = new Vector3(seg.x, 0, seg.z);
+                if (flatSeg.sqrMagnitude > 0.001f)
+                {
+                    float deviation = Vector3.Angle(flatEnd, flatSeg.normalized);
+                    if (deviation > MinTurnAngle)
+                        return false;
+                }
+                walked += seg.magnitude;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>
@@ -273,7 +505,7 @@ public static class BeltRouteBuilder
     }
 
     private static List<Corner> ComputeUCorners(Vector3 startPos, Vector3 startAxis,
-        Vector3 endPos, Vector3 endAxis, float turnRadius = TurnRadius)
+        Vector3 endPos, Vector3 endAxis, float turnRadius)
     {
         bool alongZ = Mathf.Abs(startAxis.z) > 0.5f;
         // Clamp overshoot: U-turn needs two arcs sharing crossDist, so max radius = crossDist/2
@@ -282,7 +514,7 @@ public static class BeltRouteBuilder
             : Mathf.Abs(endPos.z - startPos.z);
         float maxRadius = Mathf.Max(crossDist * 0.5f, 0.5f);
         float effectiveRadius = Mathf.Min(turnRadius, maxRadius);
-        float overshoot = effectiveRadius + MinSegLength;
+        float overshoot = effectiveRadius + MinStraight;
 
         Vector3 c1, c2, crossAxis;
         if (alongZ)
@@ -321,7 +553,7 @@ public static class BeltRouteBuilder
     // -- Route assembly: expand corners into arc pairs, apply elevation, compute tangents --
 
     private static List<Waypoint> AssembleRoute(Vector3 startPos, Vector3 startAxis,
-        Vector3 endPos, List<Corner> corners, float turnRadius = TurnRadius,
+        Vector3 endPos, List<Corner> corners, float turnRadius,
         bool distributeElevation = false)
     {
         float deltaY = endPos.y - startPos.y;
@@ -350,7 +582,7 @@ public static class BeltRouteBuilder
         {
             float before = legDists[i];
             float after = legDists[i + 1];
-            radii[i] = Mathf.Min(turnRadius, before - MinSegLength, after - MinSegLength);
+            radii[i] = Mathf.Min(turnRadius, before - MinStraight, after - MinStraight);
             radii[i] = Mathf.Max(radii[i], 0.05f);
         }
 
@@ -359,9 +591,9 @@ public static class BeltRouteBuilder
         {
             float shared = legDists[i + 1];
             float combined = radii[i] + radii[i + 1];
-            if (combined > shared - MinSegLength)
+            if (combined > shared - MinStraight)
             {
-                float half = Mathf.Max((shared - MinSegLength) * 0.5f, 0.05f);
+                float half = Mathf.Max((shared - MinStraight) * 0.5f, 0.05f);
                 radii[i] = Mathf.Min(radii[i], half);
                 radii[i + 1] = Mathf.Min(radii[i + 1], half);
             }
@@ -380,10 +612,10 @@ public static class BeltRouteBuilder
                 : legDists[0];
 
             float rampDist = 1.5f * Mathf.Abs(deltaY) / Mathf.Tan(MaxRampAngle * Mathf.Deg2Rad);
-            rampDist = Mathf.Max(rampDist, MinSegLength);
+            rampDist = Mathf.Max(rampDist, MinStraight);
 
-            float reserve = corners.Count > 0 ? MinPostRampLength : 0f;
-            float maxRampDist = Mathf.Max(firstLegAvail - reserve, MinSegLength);
+            float reserve = corners.Count > 0 ? MinStraight : 0f;
+            float maxRampDist = Mathf.Max(firstLegAvail - reserve, MinStraight);
             rampDist = Mathf.Min(rampDist, maxRampDist);
 
             var rampEndPos = startPos + startAxis * rampDist;
@@ -463,9 +695,16 @@ public static class BeltRouteBuilder
                     break;
                 }
 
-                case 1: // End
-                    tanIn = dirPrev * (distPrev / 3f);
+                case 1: // End -- use horizontal tangent for level connector attachment
+                {
+                    Vector3 flatPrev = new Vector3(toPrev.x, 0, toPrev.z);
+                    float flatDistPrev = flatPrev.magnitude;
+                    if (flatDistPrev > 0.001f)
+                        tanIn = (flatPrev / flatDistPrev) * (distPrev / 3f);
+                    else
+                        tanIn = dirPrev * (distPrev / 3f);
                     break;
+                }
 
                 case 2: // Ramp transition -- dist/3 for perfect straight Bezier lines
                     tanIn = dirPrev * (distPrev / 3f);

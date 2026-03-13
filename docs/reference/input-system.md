@@ -1,6 +1,6 @@
 # Input system reference
 
-New Input System (com.unity.inputsystem) for all player input in Slopworks. This covers package setup, the two Action Maps, C# class generation, and network integration patterns.
+New Input System (com.unity.inputsystem) for all player input in Slopworks. This covers package setup, the three Action Maps, C# class generation, and network integration patterns.
 
 ---
 
@@ -20,34 +20,62 @@ Enable in Project Settings > Player > Active Input Handling: `Input System Packa
 
 ## Action Maps
 
-Two Action Maps cover all gameplay contexts. Never have both enabled simultaneously — they share bindings (WASD means different things in each).
+Three Action Maps cover all gameplay contexts. Only one map active at a time -- they share bindings (WASD means different things in each).
 
-### Factory (isometric view)
+### Combat (first-person -- was "Exploration")
 
-```
-Camera/Pan        → Mouse drag, WASD
-Camera/Zoom       → Mouse wheel, shoulder buttons
-Camera/Rotate     → Middle mouse drag, right stick
-Place/Select      → Mouse click, A button
-Place/Rotate      → R key, Y button
-Place/Cancel      → Escape, B button
-Inventory/Open    → Tab, Start button
-UI/Navigate       → Arrow keys, d-pad
-Switch/FPS        → V key, Select button
-```
-
-### Exploration (first-person)
+Active during FPS movement, combat, and exploration.
 
 ```
-Move              → WASD, left stick
-Look              → Mouse, right stick
-Jump              → Space, A button
-Fire              → Left click, right trigger
-Aim               → Right click, left trigger
-Interact          → E key, X button
-Sprint            → Shift, left stick click
-Inventory/Open    → Tab, Start button
-Switch/Isometric  → V key, Select button
+Move              -> WASD, left stick
+Look              -> Mouse, right stick
+Jump              -> Space, A button
+Fire              -> Left click, right trigger
+Aim               -> Right click, left trigger
+Interact          -> E key, X button
+Sprint            -> Shift, left stick click
+Reload            -> R key, Y button
+Inventory/Open    -> Tab, Start button
+Switch/Isometric  -> V key, Select button
+ToggleBuildMode   -> B key (enters Build map)
+```
+
+### Build (building and factory placement -- NEW)
+
+Active when build mode is on. Combat map disabled.
+
+```
+ToggleBuildMode   -> B key (exits back to Combat map)
+SelectTool1-6     -> 1-6 keys
+Rotate            -> R key, Y button
+DeleteMode        -> X key
+ZoopMode          -> Z key
+GridOverlay       -> G key
+CycleVariant      -> Tab key
+NudgeUp           -> PageUp
+NudgeDown         -> PageDown
+Place             -> Left click, A button
+Remove            -> Right click
+Cancel            -> Escape, B button (gamepad)
+MachineInteract   -> F key, X button (gamepad)
+SnapFilterToggle  -> Scroll wheel (Value/Axis)
+DebugDump         -> 0 key
+```
+
+### Command (isometric view -- was "Factory")
+
+Reserved for top-down factory view. Not currently active in multiplayer.
+
+```
+Camera/Pan        -> Mouse drag, WASD
+Camera/Zoom       -> Mouse wheel, shoulder buttons
+Camera/Rotate     -> Middle mouse drag, right stick
+Place/Select      -> Mouse click, A button
+Place/Rotate      -> R key, Y button
+Place/Cancel      -> Escape, B button
+Inventory/Open    -> Tab, Start button
+UI/Navigate       -> Arrow keys, d-pad
+Switch/FPS        -> V key, Select button
 ```
 
 ---
@@ -59,7 +87,7 @@ Switch/Isometric  → V key, Select button
 1. Right-click in Project window: Create > Input Actions
 2. Name it `SlopworksInput`
 3. Save to `Assets/_Slopworks/Input/SlopworksInput.inputactions`
-4. Add `Factory` and `Exploration` Action Maps
+4. Add `Combat`, `Build`, and `Command` Action Maps
 5. Add all actions above with bindings
 
 ### 2. Generate the C# class
@@ -67,7 +95,7 @@ Switch/Isometric  → V key, Select button
 In the InputActionAsset inspector:
 - Check **Generate C# Class**
 - Class Name: `SlopworksControls`
-- Path: `Assets/_Slopworks/Scripts/Player/SlopworksControls.cs`
+- Path: `Assets/_Slopworks/Scripts/Input/SlopworksInput.cs`
 - Click Apply
 
 This generates a type-safe wrapper. **Never edit the generated file.** Regenerate when the asset changes.
@@ -75,80 +103,49 @@ This generates a type-safe wrapper. **Never edit the generated file.** Regenerat
 ### 3. Use the generated class
 
 ```csharp
-public class PlayerController : NetworkBehaviour
+public class NetworkBuildController : NetworkBehaviour
 {
     private SlopworksControls _controls;
 
-    private void Awake()
+    public override void OnStartClient()
     {
         _controls = new SlopworksControls();
+        _controls.Combat.Enable();
     }
 
-    private void OnEnable()
+    private void Update()
     {
-        // only the owning client handles input
-        if (!IsOwner) return;
+        // Toggle build mode from Combat map
+        if (_controls.Combat.ToggleBuildMode.WasPressedThisFrame())
+        {
+            _controls.Combat.Disable();
+            _controls.Build.Enable();
+        }
 
-        _controls.Exploration.Enable();
-        _controls.Exploration.Move.performed += OnMove;
-        _controls.Exploration.Fire.performed += OnFire;
-        _controls.Exploration.Switch_Isometric.performed += OnSwitchToIsometric;
+        // Build actions from Build map
+        if (_controls.Build.Rotate.WasPressedThisFrame()) { ... }
+        if (_controls.Build.Place.WasPressedThisFrame()) { ... }
+
+        // Value actions
+        float scroll = _controls.Build.SnapFilterToggle.ReadValue<float>();
     }
-
-    private void OnDisable()
-    {
-        if (!IsOwner) return;
-
-        _controls.Exploration.Move.performed -= OnMove;
-        _controls.Exploration.Fire.performed -= OnFire;
-        _controls.Exploration.Switch_Isometric.performed -= OnSwitchToIsometric;
-        _controls.Exploration.Disable();
-    }
-
-    private void OnMove(InputAction.CallbackContext ctx)
-    {
-        var move = ctx.ReadValue<Vector2>();
-        MoveServerRpc(move);
-    }
-
-    private void OnFire(InputAction.CallbackContext ctx)
-    {
-        FireServerRpc(transform.position, _lookDirection);
-    }
-
-    [ServerRpc]
-    private void MoveServerRpc(Vector2 input) { ... }
-
-    [ServerRpc]
-    private void FireServerRpc(Vector3 origin, Vector3 direction) { ... }
 }
 ```
 
-### 4. Camera mode switching
+### 4. Map switching pattern
 
 ```csharp
-public class CameraModeManager : MonoBehaviour
-{
-    private SlopworksControls _controls;
+// Entering build mode:
+_controls.Combat.Disable();
+_controls.Build.Enable();
 
-    private void Awake()
-    {
-        _controls = new SlopworksControls();
-    }
+// Exiting build mode:
+_controls.Build.Disable();
+_controls.Combat.Enable();
 
-    public void SwitchToIsometric()
-    {
-        _controls.Exploration.Disable();
-        _controls.Factory.Enable();
-        // toggle camera GameObjects and Volume weights (see render-pipeline.md)
-    }
-
-    public void SwitchToFPS()
-    {
-        _controls.Factory.Disable();
-        _controls.Exploration.Enable();
-    }
-}
+// Switching to isometric (future):
+_controls.Combat.Disable();
+_controls.Command.Enable();
 ```
 
 ---
@@ -159,11 +156,11 @@ Input reads happen only on the owning client. The server never reads `SlopworksC
 
 ```csharp
 // Always guard input handling with IsOwner
-private void OnEnable()
+public override void OnStartClient()
 {
     if (!IsOwner) return;
-    _controls.Exploration.Enable();
-    // ...
+    _controls = new SlopworksControls();
+    _controls.Combat.Enable();
 }
 ```
 
@@ -171,12 +168,20 @@ Never send raw input state over the network. Send **intent** (fire, move to posi
 
 ---
 
+## Hotkey reference
+
+See `docs/reference/hotkeys.md` for the full keybinding table.
+
+---
+
 ## Pitfall quick reference
 
 | Pitfall | Fix |
 |---------|-----|
-| Legacy `Input.GetKey` calls | Replace with action callbacks |
-| Both Action Maps enabled at once | Disable Factory before enabling Exploration, and vice versa |
+| Legacy `Input.GetKey` calls | Replace with action callbacks or `WasPressedThisFrame()` |
+| Multiple Action Maps enabled at once | Disable one before enabling another |
 | Forgetting `-=` on `OnDisable` | Always unsubscribe in `OnDisable` |
 | Reading input on non-owner clients | Guard with `if (!IsOwner) return;` |
 | Sending raw input over network | Send intent ServerRpc instead |
+| Hardcoded `Keyboard.current.*` | Use `_controls.Build.ActionName` instead |
+| Shift modifier for nudge | OK to read `Keyboard.current.leftShiftKey.isPressed` directly for modifiers |

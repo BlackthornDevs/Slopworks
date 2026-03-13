@@ -38,16 +38,16 @@ public class WeaponBehaviour : NetworkBehaviour
 
     private void OnEnable()
     {
-        _controls.Exploration.Enable();
-        _controls.Exploration.Fire.performed += OnFire;
-        _controls.Exploration.Reload.performed += OnReload;
+        _controls.Combat.Enable();
+        _controls.Combat.Fire.performed += OnFire;
+        _controls.Combat.Reload.performed += OnReload;
     }
 
     private void OnDisable()
     {
-        _controls.Exploration.Fire.performed -= OnFire;
-        _controls.Exploration.Reload.performed -= OnReload;
-        _controls.Exploration.Disable();
+        _controls.Combat.Fire.performed -= OnFire;
+        _controls.Combat.Reload.performed -= OnReload;
+        _controls.Combat.Disable();
     }
 
     private void Update()

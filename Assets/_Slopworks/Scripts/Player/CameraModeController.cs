@@ -18,8 +18,8 @@ public class CameraModeController : MonoBehaviour
 
     private void OnEnable()
     {
-        _controls.Exploration.SwitchIsometric.performed += OnSwitchToIsometric;
-        _controls.Factory.SwitchFPS.performed += OnSwitchToFPS;
+        _controls.Combat.SwitchIsometric.performed += OnSwitchToIsometric;
+        _controls.Command.SwitchFPS.performed += OnSwitchToFPS;
 
         // start in FPS mode
         SwitchToFPS();
@@ -27,11 +27,11 @@ public class CameraModeController : MonoBehaviour
 
     private void OnDisable()
     {
-        _controls.Exploration.SwitchIsometric.performed -= OnSwitchToIsometric;
-        _controls.Factory.SwitchFPS.performed -= OnSwitchToFPS;
+        _controls.Combat.SwitchIsometric.performed -= OnSwitchToIsometric;
+        _controls.Command.SwitchFPS.performed -= OnSwitchToFPS;
 
-        _controls.Exploration.Disable();
-        _controls.Factory.Disable();
+        _controls.Combat.Disable();
+        _controls.Command.Disable();
     }
 
     private void OnSwitchToIsometric(InputAction.CallbackContext ctx)
@@ -48,8 +48,8 @@ public class CameraModeController : MonoBehaviour
     {
         _isFPS = true;
 
-        _controls.Factory.Disable();
-        _controls.Exploration.Enable();
+        _controls.Command.Disable();
+        _controls.Combat.Enable();
 
         if (_fpsCamera != null) _fpsCamera.gameObject.SetActive(true);
         if (_isometricCamera != null) _isometricCamera.gameObject.SetActive(false);
@@ -65,8 +65,8 @@ public class CameraModeController : MonoBehaviour
     {
         _isFPS = false;
 
-        _controls.Exploration.Disable();
-        _controls.Factory.Enable();
+        _controls.Combat.Disable();
+        _controls.Command.Enable();
 
         if (_fpsCamera != null) _fpsCamera.gameObject.SetActive(false);
         if (_isometricCamera != null) _isometricCamera.gameObject.SetActive(true);
