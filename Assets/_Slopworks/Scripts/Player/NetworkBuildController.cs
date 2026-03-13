@@ -442,7 +442,41 @@ public class NetworkBuildController : NetworkBehaviour
     {
         if (NetworkObject != null && !IsServerInitialized) return;
         if (nob == null || !nob.IsSpawned) return;
+
+        // Disconnect from any snap anchors before despawning
+        var netBelt = nob.GetComponent<NetworkBeltSegment>();
+        if (netBelt != null)
+        {
+            DisconnectBeltFromAnchors(nob.gameObject, netBelt.StartPos, netBelt.EndPos);
+        }
+
         ServerManager.Despawn(nob);
+    }
+
+    /// <summary>
+    /// Unregister a belt from snap anchors and neighboring belt ports at its endpoints.
+    /// </summary>
+    private static void DisconnectBeltFromAnchors(GameObject belt, Vector3 startPos, Vector3 endPos)
+    {
+        DisconnectBeltAtPosition(belt, startPos, 0.6f);
+        DisconnectBeltAtPosition(belt, endPos, 0.6f);
+    }
+
+    private static void DisconnectBeltAtPosition(GameObject belt, Vector3 position, float radius)
+    {
+        var anchor = GridManager.FindNearbyAnchor(position, radius);
+        if (anchor != null)
+            anchor.Disconnect(belt);
+
+        // Disconnect from neighboring belt ports (other belts, machines, storage)
+        var colliders = Physics.OverlapSphere(position, radius, 1 << PhysicsLayers.BeltPorts);
+        foreach (var col in colliders)
+        {
+            var port = col.GetComponentInParent<BeltPort>();
+            if (port == null) continue;
+            if (port.transform.IsChildOf(belt.transform)) continue;
+            port.Disconnect(belt);
+        }
     }
 
     private void ClearDeleteHighlight()
@@ -1166,7 +1200,7 @@ public class NetworkBuildController : NetworkBehaviour
 
         if (!mouse.leftButton.wasPressedThisFrame) return;
 
-        if (TryResolveBeltEndpoint(ray, true, out var pos, out var dir, out var fromPort))
+        if (TryResolveBeltEndpoint(ray, true, out var pos, out var dir, out var fromPort, log: true))
         {
             if (!fromPort)
             {
@@ -1211,7 +1245,25 @@ public class NetworkBuildController : NetworkBehaviour
 
     private void HandleBeltDragging(Mouse mouse, Ray ray)
     {
-        if (TryResolveBeltEndpoint(ray, false, out var endPos, out var endDir, out var endFromPort))
+        if (!TryResolveBeltEndpoint(ray, false, out var endPos, out var endDir, out var endFromPort))
+        {
+            // Endpoint rejected (port full, invalid surface, etc.) -- show red
+            _beltLineRenderer.startColor = Color.red;
+            _beltLineRenderer.endColor = Color.red;
+            if (_beltStartSupportGhost != null && _beltStartSupportGhost.activeSelf)
+                ApplyGhostColor(_beltStartSupportGhost, Color.red);
+            if (_beltEndSupportGhost != null)
+                _beltEndSupportGhost.SetActive(false);
+
+            if (mouse.rightButton.wasPressedThisFrame)
+            {
+                _beltState = BeltPlacementState.Idle;
+                if (_beltPreviewLine != null)
+                    _beltPreviewLine.SetActive(false);
+                HideSupportGhosts();
+            }
+            return;
+        }
         {
             var startDir = _beltStartDir;  // R-key direction, never overridden
             bool isValid;
@@ -1362,6 +1414,8 @@ public class NetworkBuildController : NetworkBehaviour
 
             if (mouse.leftButton.wasPressedThisFrame && isValid)
             {
+                // Re-resolve with logging on the actual click
+                TryResolveBeltEndpoint(ray, false, out _, out _, out _, log: true);
                 Debug.Log($"belt: placing {_beltRoutingMode} from {_beltStartGroundPos} to {endGroundPos}");
                 GridManager.Instance.CmdPlaceBelt(
                     _beltStartFromPort ? _beltStartPos : _beltStartGroundPos,
@@ -1420,7 +1474,7 @@ public class NetworkBuildController : NetworkBehaviour
     /// start of the belt (needs Output port), isStart=false means end (needs Input port).
     /// Direction always points in the belt's flow direction at that endpoint.
     /// </summary>
-    private bool TryResolveBeltEndpoint(Ray ray, bool isStart, out Vector3 pos, out Vector3 dir, out bool fromPort)
+    private bool TryResolveBeltEndpoint(Ray ray, bool isStart, out Vector3 pos, out Vector3 dir, out bool fromPort, bool log = false)
     {
         pos = Vector3.zero;
         dir = Vector3.forward;
@@ -1431,10 +1485,38 @@ public class NetworkBuildController : NetworkBehaviour
             (1 << PhysicsLayers.BeltPorts)))
             return false;
 
+        var endpoint = isStart ? "START" : "END";
+        if (log)
+        {
+            var hitObj = hit.collider.gameObject;
+            var parentName = hitObj.transform.parent != null ? hitObj.transform.parent.name : "(root)";
+            Debug.Log($"belt resolve {endpoint}: hit '{hitObj.name}' layer={hitObj.layer} parent='{parentName}' pos={hit.point}");
+        }
+
         // Direct hit on a BeltPort
         var beltPort = hit.collider.GetComponentInParent<BeltPort>();
         if (beltPort != null)
         {
+            if (log)
+            {
+                var portParent = beltPort.transform.parent;
+                var ownerType = portParent != null && portParent.GetComponent<NetworkBeltSegment>() != null ? "belt" : "machine/storage";
+                Debug.Log($"belt resolve {endpoint}: -> BeltPort {beltPort.Direction} on {ownerType} '{portParent?.name}' dir={GetPortFlowDirection(beltPort, isStart)}");
+            }
+
+            // Check port capacity and nearby anchor capacity
+            if (beltPort.IsFull)
+            {
+                if (log) Debug.Log($"belt resolve {endpoint}: -> REJECTED, port full ({beltPort.ConnectionCount} connections)");
+                return false;
+            }
+            var nearAnchor = GridManager.FindNearbyAnchor(beltPort.WorldPosition, 0.6f);
+            if (nearAnchor != null && nearAnchor.IsFull)
+            {
+                if (log) Debug.Log($"belt resolve {endpoint}: -> REJECTED, support anchor full ({nearAnchor.ConnectionCount} connections)");
+                return false;
+            }
+
             pos = beltPort.WorldPosition;
             dir = GetPortFlowDirection(beltPort, isStart);
             fromPort = true;
@@ -1445,6 +1527,26 @@ public class NetworkBuildController : NetworkBehaviour
         var nearbyPort = FindNearbyPort(hit.point, isStart, 0.6f);
         if (nearbyPort != null)
         {
+            if (log)
+            {
+                var portParent = nearbyPort.transform.parent;
+                var ownerType = portParent != null && portParent.GetComponent<NetworkBeltSegment>() != null ? "belt" : "machine/storage";
+                Debug.Log($"belt resolve {endpoint}: -> nearby BeltPort {nearbyPort.Direction} on {ownerType} '{portParent?.name}' dir={GetPortFlowDirection(nearbyPort, isStart)}");
+            }
+
+            // Check port capacity and nearby anchor capacity
+            if (nearbyPort.IsFull)
+            {
+                if (log) Debug.Log($"belt resolve {endpoint}: -> REJECTED, port full ({nearbyPort.ConnectionCount} connections)");
+                return false;
+            }
+            var nearAnchorForPort = GridManager.FindNearbyAnchor(nearbyPort.WorldPosition, 0.6f);
+            if (nearAnchorForPort != null && nearAnchorForPort.IsFull)
+            {
+                if (log) Debug.Log($"belt resolve {endpoint}: -> REJECTED, support anchor full ({nearAnchorForPort.ConnectionCount} connections)");
+                return false;
+            }
+
             pos = nearbyPort.WorldPosition;
             dir = GetPortFlowDirection(nearbyPort, isStart);
             fromPort = true;
@@ -1455,8 +1557,9 @@ public class NetworkBuildController : NetworkBehaviour
         var snapAnchor = hit.collider.GetComponentInParent<BeltSnapAnchor>();
         if (snapAnchor != null)
         {
-            // If anchor already has a belt port, it's occupied -- reject
-            if (HasExistingBeltPort(snapAnchor.WorldPosition, 0.6f))
+            // If anchor already has max belt connections, it's full -- reject
+            if (log) Debug.Log($"belt resolve {endpoint}: -> BeltSnapAnchor full={snapAnchor.IsFull} connections={snapAnchor.ConnectionCount} pos={snapAnchor.WorldPosition}");
+            if (snapAnchor.IsFull)
                 return false;
 
             pos = snapAnchor.WorldPosition;
@@ -1468,8 +1571,12 @@ public class NetworkBuildController : NetworkBehaviour
         // Ground/structure fallback -- server will spawn support here.
         // Only allow on terrain and foundations, not on belts or other structures.
         if (!IsValidSupportSurface(hit))
+        {
+            if (log) Debug.Log($"belt resolve {endpoint}: -> ground REJECTED (not valid support surface)");
             return false;
+        }
 
+        if (log) Debug.Log($"belt resolve {endpoint}: -> ground fallback at {hit.point}");
         pos = hit.point;
         if (isStart)
         {
@@ -1546,21 +1653,6 @@ public class NetworkBuildController : NetworkBehaviour
 
         // Return compatible port if found, otherwise any port (caller handles direction)
         return compatible ?? any;
-    }
-
-    /// <summary>
-    /// Check if any belt port exists near a position (regardless of direction).
-    /// Used to detect occupied snap anchors.
-    /// </summary>
-    private static bool HasExistingBeltPort(Vector3 position, float radius)
-    {
-        var colliders = Physics.OverlapSphere(position, radius, 1 << PhysicsLayers.BeltPorts);
-        foreach (var col in colliders)
-        {
-            if (col.GetComponentInParent<BeltPort>() != null)
-                return true;
-        }
-        return false;
     }
 
     private void CancelBeltPlacement()
