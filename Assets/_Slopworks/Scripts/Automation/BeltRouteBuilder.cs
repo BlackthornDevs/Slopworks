@@ -138,26 +138,61 @@ public static class BeltRouteBuilder
         if (distance < 0.001f)
             return BuildStraightLine(startPos, endPos);
 
-        // Insert mandatory straight segments at connectors before the curve begins.
-        // The Hermite curve runs between the inset points; straight waypoints are
-        // prepended/appended so the belt leaves each connector on-axis.
         var sDir = startDir.normalized;
         var eDir = endDir.normalized;
         float straight = MinStraight;
 
-        // Don't consume more than half the distance for straights
-        if (straight * 2f > distance - 0.1f)
+        float deltaY = endPos.y - startPos.y;
+        bool hasElevation = Mathf.Abs(deltaY) > 0.01f;
+
+        // Elevation-first: dedicated S-curve ramp on the start leg, then flat curve.
+        // Same formula as Straight mode in AssembleRoute.
+        float rampDist = 0f;
+        if (hasElevation)
+        {
+            rampDist = 1.5f * Mathf.Abs(deltaY) / Mathf.Tan(MaxRampAngle * Mathf.Deg2Rad);
+            rampDist = Mathf.Max(rampDist, MinStraight);
+        }
+
+        // Reserve distances: connector + ramp + post-ramp straight + end connector.
+        // Without elevation: just connector at each end.
+        float startReserve = hasElevation ? straight + rampDist + straight : straight;
+        float endReserve = straight;
+
+        // The curve needs enough room to turn. If the ramp would leave less than
+        // MinFreeformTangent for the Hermite, fall back to distributed elevation
+        // (old behavior: elevation spread through the curve, no dedicated ramp).
+        float minCurveDist = MinFreeformTangent;
+        if (hasElevation && startReserve + endReserve + minCurveDist > distance)
+        {
+            hasElevation = false;
+            rampDist = 0f;
+            startReserve = straight;
+        }
+
+        // Don't consume more than half the distance for connector straights (no-elevation case)
+        if (!hasElevation && straight * 2f > distance - 0.1f)
             straight = Mathf.Max((distance - 0.1f) * 0.5f, 0f);
 
-        var curveStart = startPos + sDir * straight;
-        var curveEnd = endPos - eDir * straight;
+        // Recompute after clamping
+        if (!hasElevation)
+            startReserve = straight;
+
+        // Curve endpoints: Hermite runs flat at destination elevation when ramping
+        var curveStart = startPos + sDir * startReserve;
+        var curveEnd = endPos - eDir * endReserve;
+        if (hasElevation)
+        {
+            curveStart.y = endPos.y;
+            curveEnd.y = endPos.y;
+        }
 
         float curveDist = Vector3.Distance(curveStart, curveEnd);
         float tangentMag = Mathf.Clamp(curveDist * 0.75f, MinFreeformTangent, MaxFreeformTangent);
         var t0 = sDir * tangentMag;
         var t1 = eDir * tangentMag;
 
-        // Sample Hermite curve into positions
+        // Sample Hermite curve into positions (flat when hasElevation)
         var positions = new Vector3[FreeformSamples + 1];
         for (int i = 0; i <= FreeformSamples; i++)
         {
@@ -171,28 +206,62 @@ public static class BeltRouteBuilder
             positions[i] = h00 * curveStart + h10 * t0 + h01 * curveEnd + h11 * t1;
         }
 
-        // Build waypoints with Catmull-Rom tangents (smooth, no overshoot).
-        var waypoints = new List<Waypoint>(FreeformSamples + 3);
+        // Build waypoints
+        var waypoints = new List<Waypoint>(FreeformSamples + 5);
 
-        // Prepend straight segment from connector to curve start
-        if (straight > 0.01f)
+        if (hasElevation)
         {
-            var straightTan = sDir * (straight / 3f);
-            waypoints.Add(new Waypoint { Position = startPos, TangentIn = Vector3.zero, TangentOut = straightTan });
+            // Connector straight: startPos → connectorEnd (horizontal, at start Y)
+            var connectorEnd = startPos + sDir * straight;
+            waypoints.Add(new Waypoint
+            {
+                Position = startPos,
+                TangentIn = Vector3.zero,
+                TangentOut = sDir * (straight / 3f)
+            });
+
+            // S-curve ramp: connectorEnd → rampEnd (elevation change)
+            var rampEndPos = connectorEnd + sDir * rampDist;
+            rampEndPos.y = endPos.y;
+            float rampDist3D = Vector3.Distance(connectorEnd, rampEndPos);
+
+            waypoints.Add(new Waypoint
+            {
+                Position = connectorEnd,
+                TangentIn = -sDir * (straight / 3f),
+                TangentOut = sDir * (rampDist3D / 3f)
+            });
+
+            // RampEnd: horizontal tangents for smooth S-curve arrival
+            waypoints.Add(new Waypoint
+            {
+                Position = rampEndPos,
+                TangentIn = -sDir * (rampDist3D / 3f),
+                TangentOut = sDir * (straight / 3f)
+            });
+
+            // Post-ramp straight leads into Hermite[0] (= curveStart)
+        }
+        else if (straight > 0.01f)
+        {
+            // No elevation: simple connector straight
+            waypoints.Add(new Waypoint
+            {
+                Position = startPos,
+                TangentIn = Vector3.zero,
+                TangentOut = sDir * (straight / 3f)
+            });
         }
 
+        // Hermite curve waypoints with Catmull-Rom tangents
         for (int i = 0; i <= FreeformSamples; i++)
         {
             Vector3 tanOut, tanIn;
             if (i == 0)
             {
-                // Use sDir (horizontal) as tangent direction at the curve-to-connector
-                // junction. The Hermite derivative at t=0 is analytically horizontal
-                // (sDir * tangentMag). Using the discrete chord introduces Y from
-                // elevation, causing a direction mismatch with the connector straight.
                 float chordDist = Vector3.Distance(positions[0], positions[1]);
                 tanOut = sDir * (chordDist / 3f);
-                tanIn = straight > 0.01f ? -sDir * (straight / 3f) : Vector3.zero;
+                tanIn = (hasElevation || straight > 0.01f) ? -sDir * (straight / 3f) : Vector3.zero;
             }
             else if (i == FreeformSamples)
             {
@@ -202,7 +271,6 @@ public static class BeltRouteBuilder
             }
             else
             {
-                // Catmull-Rom: tangent = (P[i+1] - P[i-1]) / 2, scaled to 1/3 for Bezier
                 var catmull = (positions[i + 1] - positions[i - 1]) * 0.5f;
                 tanOut = catmull / 3f;
                 tanIn = -catmull / 3f;
@@ -211,7 +279,7 @@ public static class BeltRouteBuilder
             waypoints.Add(new Waypoint { Position = positions[i], TangentIn = tanIn, TangentOut = tanOut });
         }
 
-        // Append straight segment from curve end to connector
+        // End connector straight
         if (straight > 0.01f)
         {
             var straightTan = -eDir * (straight / 3f);
