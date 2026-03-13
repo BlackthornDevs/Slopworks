@@ -1000,9 +1000,17 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: -5442355415925399799, guid: 98fef8224b51d8a40829a233860712a7, type: 3}
+      propertyPath: m_Layer
+      value: 13
+      objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: 98fef8224b51d8a40829a233860712a7, type: 3}
       propertyPath: m_Name
       value: SLAB_1m
+      objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: 98fef8224b51d8a40829a233860712a7, type: 3}
+      propertyPath: m_Layer
+      value: 13
       objectReference: {fileID: 0}
     - target: {fileID: 3748687090841664156, guid: 98fef8224b51d8a40829a233860712a7, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'

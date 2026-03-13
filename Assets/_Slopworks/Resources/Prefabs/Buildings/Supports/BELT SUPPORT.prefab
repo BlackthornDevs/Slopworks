@@ -122,6 +122,10 @@ PrefabInstance:
       propertyPath: m_Layer
       value: 13
       objectReference: {fileID: 0}
+    - target: {fileID: -2038074020016706084, guid: 77244732bcc4a1940bcafdf2fb32db3d, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: 2a8234130e7aeb8488b60a145af9e858, type: 2}
     - target: {fileID: 919132149155446097, guid: 77244732bcc4a1940bcafdf2fb32db3d, type: 3}
       propertyPath: m_Name
       value: BELT SUPPORT
@@ -130,6 +134,10 @@ PrefabInstance:
       propertyPath: m_Layer
       value: 13
       objectReference: {fileID: 0}
+    - target: {fileID: 1635527139131624557, guid: 77244732bcc4a1940bcafdf2fb32db3d, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: c2ae3be6d52eba641b1ea5ff0d971b52, type: 2}
     - target: {fileID: 4089604589332467278, guid: 77244732bcc4a1940bcafdf2fb32db3d, type: 3}
       propertyPath: m_Layer
       value: 13

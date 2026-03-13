@@ -1428,7 +1428,7 @@ public class NetworkBuildController : NetworkBehaviour
 
         if (!Physics.Raycast(ray, out var hit, BeltRaycastRange,
             PhysicsLayers.StructuralPlacementMask |
-            (1 << PhysicsLayers.SnapPoints)))
+            (1 << PhysicsLayers.BeltPorts)))
             return false;
 
         // Direct hit on a BeltPort
@@ -1516,7 +1516,7 @@ public class NetworkBuildController : NetworkBehaviour
 
     private static BeltPort FindNearbyPort(Vector3 position, bool isStart, float radius)
     {
-        var colliders = Physics.OverlapSphere(position, radius, 1 << PhysicsLayers.SnapPoints);
+        var colliders = Physics.OverlapSphere(position, radius, 1 << PhysicsLayers.BeltPorts);
 
         // Prefer direction-compatible port: start needs Output, end needs Input
         var wantDir = isStart ? BeltPortDirection.Output : BeltPortDirection.Input;
