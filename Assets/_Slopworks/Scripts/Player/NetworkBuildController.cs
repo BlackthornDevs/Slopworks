@@ -1296,7 +1296,7 @@ public class NetworkBuildController : NetworkBehaviour
             {
                 // Default mode: build the actual route and validate the real geometry.
                 // No duplicate math -- the route IS the source of truth.
-                var validation = BeltPlacementValidator.Validate(
+                var validation = BeltRouteBuilder.Validate(
                     _beltStartPos, startDir, endPos, endDir);
                 isValid = validation.IsValid;
 
@@ -1304,14 +1304,13 @@ public class NetworkBuildController : NetworkBehaviour
                 {
                     var testWaypoints = BeltRouteBuilder.Build(
                         _beltStartPos, startDir, endPos, endDir, BeltRoutingMode.Default);
-                    isValid = BeltRouteBuilder.ValidateRoute(testWaypoints,
-                        BeltRouteBuilder.MaxRampAngle, BeltPlacementValidator.MaxLength);
+                    isValid = BeltRouteBuilder.ValidateRoute(testWaypoints);
                 }
             }
             else
             {
                 // Straight/Curved: endpoint validation, then turn geometry checks
-                var validation = BeltPlacementValidator.Validate(
+                var validation = BeltRouteBuilder.Validate(
                     _beltStartPos, startDir, endPos, endDir);
                 isValid = validation.IsValid;
 
@@ -1330,27 +1329,27 @@ public class NetworkBuildController : NetworkBehaviour
 
                     if (isUturn)
                     {
-                        float minCross = BeltRouteBuilder.MinSegLength * 2;
+                        float minCross = BeltRouteBuilder.MinStraight * 2;
                         float endpointDist = Vector3.Distance(_beltStartPos, endPos);
                         isValid = crossDistVal >= minCross
-                               && endpointDist <= BeltPlacementValidator.MaxLength;
+                               && endpointDist <= BeltRouteBuilder.MaxLength;
                     }
                     else if (crossDistVal < 0.1f)
                     {
-                        isValid = alongDist >= BeltRouteBuilder.MinSegLength * 2;
+                        isValid = alongDist >= BeltRouteBuilder.MinStraight * 2;
                     }
                     else
                     {
                         if (_beltRoutingMode == BeltRoutingMode.Curved)
                         {
-                            isValid = alongDist >= BeltRouteBuilder.MinSegLength * 2
-                                   && crossDistVal >= BeltRouteBuilder.MinSegLength * 2;
+                            isValid = alongDist >= BeltRouteBuilder.MinStraight * 2
+                                   && crossDistVal >= BeltRouteBuilder.MinStraight * 2;
                         }
                         else
                         {
                             float minLeg = Mathf.Min(BeltRouteBuilder.TurnRadius,
-                                               alongDist - BeltRouteBuilder.MinSegLength)
-                                         + BeltRouteBuilder.MinSegLength;
+                                               alongDist - BeltRouteBuilder.MinStraight)
+                                         + BeltRouteBuilder.MinStraight;
                             isValid = alongDist >= minLeg && crossDistVal >= minLeg;
                         }
                     }
@@ -1363,15 +1362,15 @@ public class NetworkBuildController : NetworkBehaviour
                             float idealRamp = 1.5f * heightDiff / Mathf.Tan(BeltRouteBuilder.MaxRampAngle * Mathf.Deg2Rad);
                             float actualRadius = crossDistVal >= 0.1f
                                 ? Mathf.Min(BeltRouteBuilder.TurnRadius,
-                                    alongDist - BeltRouteBuilder.MinSegLength,
-                                    crossDistVal - BeltRouteBuilder.MinSegLength)
+                                    alongDist - BeltRouteBuilder.MinStraight,
+                                    crossDistVal - BeltRouteBuilder.MinStraight)
                                 : 0f;
                             if (_beltRoutingMode == BeltRoutingMode.Curved)
                                 actualRadius = 0f;
                             float availableForRamp = alongDist - actualRadius;
                             float minAlongForElevation = idealRamp;
                             if (crossDistVal >= 0.1f && _beltRoutingMode != BeltRoutingMode.Curved)
-                                minAlongForElevation += BeltRouteBuilder.MinPostRampLength;
+                                minAlongForElevation += BeltRouteBuilder.MinStraight;
                             if (availableForRamp < minAlongForElevation)
                                 isValid = false;
                         }
@@ -1819,16 +1818,16 @@ public class NetworkBuildController : NetworkBehaviour
                     }
 
                     // Validation results for both
-                    var valCurrent = BeltPlacementValidator.Validate(_beltStartPos, _beltStartDir, endPos, endDir);
-                    var valDerived = BeltPlacementValidator.Validate(_beltStartPos, _beltStartDir, endPos, derived);
+                    var valCurrent = BeltRouteBuilder.Validate(_beltStartPos, _beltStartDir, endPos, endDir);
+                    var valDerived = BeltRouteBuilder.Validate(_beltStartPos, _beltStartDir, endPos, derived);
                     Debug.Log($"  Validation (current): valid={valCurrent.IsValid} error={valCurrent.Error}");
                     Debug.Log($"  Validation (derived): valid={valDerived.IsValid} error={valDerived.Error}");
 
                     // Default mode extra: ValidateRoute
                     if (_beltRoutingMode == BeltRoutingMode.Default)
                     {
-                        var routeValCurrent = BeltRouteBuilder.ValidateRoute(waypointsCurrent, BeltRouteBuilder.MaxRampAngle, 56f);
-                        var routeValDerived = BeltRouteBuilder.ValidateRoute(waypointsDerived, BeltRouteBuilder.MaxRampAngle, 56f);
+                        var routeValCurrent = BeltRouteBuilder.ValidateRoute(waypointsCurrent);
+                        var routeValDerived = BeltRouteBuilder.ValidateRoute(waypointsDerived);
                         Debug.Log($"  ValidateRoute (current): {routeValCurrent}");
                         Debug.Log($"  ValidateRoute (derived): {routeValDerived}");
                     }

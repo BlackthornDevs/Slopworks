@@ -398,7 +398,7 @@ public class GridManager : NetworkBehaviour
             beltEndPos = SpawnSupportAt(endPos, Quaternion.LookRotation(endDir), sender);
 
         // Server is final authority -- validate without bypasses
-        var validation = BeltPlacementValidator.Validate(beltStartPos, startDir, beltEndPos, endDir);
+        var validation = BeltRouteBuilder.Validate(beltStartPos, startDir, beltEndPos, endDir);
         if (!validation.IsValid)
         {
             Debug.Log($"grid: belt placement rejected: {validation.Error} by {sender?.ClientId}");

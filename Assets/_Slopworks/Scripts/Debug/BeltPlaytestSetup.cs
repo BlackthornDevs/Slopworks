@@ -78,7 +78,7 @@ public class BeltPlaytestSetup : MonoBehaviour
 
     private void PlaceBelt(Vector3 startPos, Vector3 startDir, Vector3 endPos, Vector3 endDir)
     {
-        var validation = BeltPlacementValidator.Validate(startPos, startDir, endPos, endDir);
+        var validation = BeltRouteBuilder.Validate(startPos, startDir, endPos, endDir);
         if (!validation.IsValid)
         {
             Debug.Log($"belt playtest: placement rejected: {validation.Error}");
@@ -165,7 +165,7 @@ public class BeltPlaytestSetup : MonoBehaviour
 
             var waypoints = BeltRouteBuilder.Build(_startPos, _startDir, hit.point, endDir, BeltRoutingMode.Default);
             float routeLen = BeltRouteBuilder.ComputeRouteLength(waypoints);
-            var validation = BeltPlacementValidator.Validate(_startPos, _startDir, hit.point, endDir);
+            var validation = BeltRouteBuilder.Validate(_startPos, _startDir, hit.point, endDir);
 
             var color = validation.IsValid ? Color.green : Color.red;
             _previewLine.startColor = color;
