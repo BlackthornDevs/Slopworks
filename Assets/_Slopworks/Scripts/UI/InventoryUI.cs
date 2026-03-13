@@ -22,7 +22,7 @@ public class InventoryUI : MonoBehaviour
         _playerInventory = inventory;
         _itemRegistry = FindAnyObjectByType<ItemRegistry>();
         _controls = new SlopworksControls();
-        _controls.Exploration.Enable();
+        _controls.Combat.Enable();
 
         CreatePanel();
 
@@ -42,7 +42,7 @@ public class InventoryUI : MonoBehaviour
 
     private void Update()
     {
-        if (_controls != null && _controls.Exploration.InventoryOpen.WasPressedThisFrame())
+        if (_controls != null && _controls.Combat.InventoryOpen.WasPressedThisFrame())
             Toggle();
     }
 

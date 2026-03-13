@@ -42,14 +42,14 @@ public class PlayerController : MonoBehaviour
 
     private void OnEnable()
     {
-        _controls.Exploration.Enable();
+        _controls.Combat.Enable();
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
     }
 
     private void OnDisable()
     {
-        _controls.Exploration.Disable();
+        _controls.Combat.Disable();
     }
 
     private void Update()
@@ -75,7 +75,7 @@ public class PlayerController : MonoBehaviour
 
     private void Look()
     {
-        Vector2 look = _controls.Exploration.Look.ReadValue<Vector2>();
+        Vector2 look = _controls.Combat.Look.ReadValue<Vector2>();
 
         float yaw = look.x * _mouseSensitivity;
         _pitch -= look.y * _mouseSensitivity;
@@ -87,8 +87,8 @@ public class PlayerController : MonoBehaviour
 
     private void Move()
     {
-        Vector2 input = _controls.Exploration.Move.ReadValue<Vector2>();
-        bool sprinting = _controls.Exploration.Sprint.IsPressed();
+        Vector2 input = _controls.Combat.Move.ReadValue<Vector2>();
+        bool sprinting = _controls.Combat.Sprint.IsPressed();
         float speed = sprinting ? _sprintSpeed : _walkSpeed;
 
         Vector3 direction = transform.right * input.x + transform.forward * input.y;
@@ -109,7 +109,7 @@ public class PlayerController : MonoBehaviour
 
     private void CheckJump()
     {
-        if (_isGrounded && _controls.Exploration.Jump.WasPressedThisFrame())
+        if (_isGrounded && _controls.Combat.Jump.WasPressedThisFrame())
         {
             PlaytestLogger.Log($"input: Jump | grounded={_isGrounded} pos=({transform.position.x:F1},{transform.position.y:F1},{transform.position.z:F1})");
             _rb.linearVelocity = new Vector3(_rb.linearVelocity.x, _jumpForce, _rb.linearVelocity.z);
@@ -152,7 +152,7 @@ public class PlayerController : MonoBehaviour
             _currentInteractable = null;
         }
 
-        if (_currentInteractable != null && _controls.Exploration.Interact.WasPressedThisFrame())
+        if (_currentInteractable != null && _controls.Combat.Interact.WasPressedThisFrame())
         {
             PlaytestLogger.Log($"input: key E | interactable={(_currentInteractable as MonoBehaviour)?.gameObject.name}");
             _currentInteractable.Interact(gameObject);
