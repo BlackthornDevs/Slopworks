@@ -1294,6 +1294,16 @@ public class NetworkBuildController : NetworkBehaviour
             }
             else if (_beltRoutingMode == BeltRoutingMode.Default)
             {
+                // Default mode rejects U-turns -- Hermite curves can't reverse cleanly.
+                // Use Straight or Curved mode for U-turns.
+                var startFlat = BeltRouteBuilder.SnapToCardinal(startDir);
+                var endFlat = BeltRouteBuilder.SnapToCardinal(endDir);
+                if (Vector3.Dot(startFlat, endFlat) < -0.5f)
+                {
+                    isValid = false;
+                }
+                else
+                {
                 // Default mode: build the actual route and validate the real geometry.
                 // No duplicate math -- the route IS the source of truth.
                 var validation = BeltRouteBuilder.Validate(
@@ -1304,7 +1314,8 @@ public class NetworkBuildController : NetworkBehaviour
                 {
                     var testWaypoints = BeltRouteBuilder.Build(
                         _beltStartPos, startDir, endPos, endDir, BeltRoutingMode.Default);
-                    isValid = BeltRouteBuilder.ValidateRoute(testWaypoints);
+                    isValid = BeltRouteBuilder.ValidateRoute(testWaypoints, startDir, endDir);
+                }
                 }
             }
             else
@@ -1595,7 +1606,6 @@ public class NetworkBuildController : NetworkBehaviour
 
         if (log) Debug.Log($"belt resolve {endpoint}: -> ground fallback at {hit.point}");
         pos = hit.point;
-        pos.y += GridManager.Instance.SupportAnchorHeight;
         if (isStart)
         {
             // Use R-key rotation for cardinal start direction
@@ -1762,8 +1772,17 @@ public class NetworkBuildController : NetworkBehaviour
             {
                 if (TryResolveBeltEndpoint(ray, false, out var endPos, out var endDir, out var endFromPort))
                 {
-                    Debug.Log($"  END resolved: pos={endPos} dir={endDir} fromPort={endFromPort}");
-                    Debug.Log($"  END endFromPort={endFromPort} -> DeriveEndDirection SKIPPED={endFromPort}");
+                    Debug.Log($"  END raw: pos={endPos} dir={endDir} fromPort={endFromPort}");
+
+                    // Apply same corrections as HandleBeltDragging so diagnostic matches real placement
+                    if (!endFromPort)
+                    {
+                        endPos.x = Mathf.Round(endPos.x);
+                        endPos.z = Mathf.Round(endPos.z);
+                        endPos.y += GridManager.Instance.SupportAnchorHeight;
+                        endDir = BeltRouteBuilder.DeriveEndDirection(_beltStartPos, _beltStartDir, endPos);
+                    }
+                    Debug.Log($"  END adjusted: pos={endPos} dir={endDir} fromPort={endFromPort}");
 
                     // Identify what type of endpoint this resolved to
                     var endBeltPort = hit.collider.GetComponentInParent<BeltPort>();
@@ -1784,52 +1803,44 @@ public class NetworkBuildController : NetworkBehaviour
                         Debug.Log($"  END port type: {(endAnchor != null ? "ANCHOR" : "GROUND")}");
                     }
 
-                    // Show what DeriveEndDirection would give for comparison
-                    var derived = BeltRouteBuilder.DeriveEndDirection(_beltStartPos, _beltStartDir, endPos);
-                    Debug.Log($"  DeriveEndDirection (for comparison): {derived}");
-                    Debug.Log($"  DIRECTION MISMATCH: {(Vector3.Distance(endDir.normalized, derived.normalized) > 0.1f ? "YES" : "no")}");
+                    // Build route and validate (matches HandleBeltDragging logic)
+                    var startDir = _beltStartDir;
+                    Debug.Log($"  START: pos={_beltStartPos} dir={startDir}");
 
-                    // Build routes with BOTH directions and compare
-                    var waypointsCurrent = BeltRouteBuilder.Build(_beltStartPos, _beltStartDir, endPos, endDir, _beltRoutingMode);
-                    var waypointsDerived = BeltRouteBuilder.Build(_beltStartPos, _beltStartDir, endPos, derived, _beltRoutingMode);
-                    float lenCurrent = BeltRouteBuilder.ComputeRouteLength(waypointsCurrent);
-                    float lenDerived = BeltRouteBuilder.ComputeRouteLength(waypointsDerived);
-                    Debug.Log($"  ROUTE (current endDir):  {waypointsCurrent.Count} waypoints, length={lenCurrent:F2}m");
-                    Debug.Log($"  ROUTE (derived endDir):  {waypointsDerived.Count} waypoints, length={lenDerived:F2}m");
-                    Debug.Log($"    current first wp: pos={waypointsCurrent[0].Position} tanOut={waypointsCurrent[0].TangentOut}");
-                    Debug.Log($"    current last wp:  pos={waypointsCurrent[waypointsCurrent.Count - 1].Position} tanIn={waypointsCurrent[waypointsCurrent.Count - 1].TangentIn}");
-                    Debug.Log($"    derived first wp: pos={waypointsDerived[0].Position} tanOut={waypointsDerived[0].TangentOut}");
-                    Debug.Log($"    derived last wp:  pos={waypointsDerived[waypointsDerived.Count - 1].Position} tanIn={waypointsDerived[waypointsDerived.Count - 1].TangentIn}");
+                    var waypoints = BeltRouteBuilder.Build(_beltStartPos, startDir, endPos, endDir, _beltRoutingMode);
+                    float routeLen = BeltRouteBuilder.ComputeRouteLength(waypoints);
+                    Debug.Log($"  ROUTE: {waypoints.Count} waypoints, length={routeLen:F2}m");
+                    Debug.Log($"    first wp: pos={waypoints[0].Position} tanOut={waypoints[0].TangentOut}");
+                    Debug.Log($"    last wp:  pos={waypoints[waypoints.Count - 1].Position} tanIn={waypoints[waypoints.Count - 1].TangentIn}");
 
-                    // Check if current route passes through either machine
-                    var startMachinePos = new Vector3(_beltStartPos.x, _beltStartPos.y, _beltStartPos.z);
-                    float closestToEndMachine = float.MaxValue;
+                    // Check if route passes through end machine
                     if (endBeltPort != null && endBeltPort.transform.parent != null)
                     {
                         var endMachineCenter = endBeltPort.transform.parent.position;
-                        for (int i = 0; i < waypointsCurrent.Count; i++)
+                        float closestToEndMachine = float.MaxValue;
+                        for (int i = 0; i < waypoints.Count; i++)
                         {
-                            var wpFlat = new Vector2(waypointsCurrent[i].Position.x, waypointsCurrent[i].Position.z);
+                            var wpFlat = new Vector2(waypoints[i].Position.x, waypoints[i].Position.z);
                             var mcFlat = new Vector2(endMachineCenter.x, endMachineCenter.z);
                             float d = Vector2.Distance(wpFlat, mcFlat);
                             if (d < closestToEndMachine) closestToEndMachine = d;
                         }
-                        Debug.Log($"  ROUTE closest to end machine center: {closestToEndMachine:F2}m (passes through if < 1.0)");
+                        Debug.Log($"  ROUTE closest to end machine center: {closestToEndMachine:F2}m");
                     }
 
-                    // Validation results for both
-                    var valCurrent = BeltRouteBuilder.Validate(_beltStartPos, _beltStartDir, endPos, endDir);
-                    var valDerived = BeltRouteBuilder.Validate(_beltStartPos, _beltStartDir, endPos, derived);
-                    Debug.Log($"  Validation (current): valid={valCurrent.IsValid} error={valCurrent.Error}");
-                    Debug.Log($"  Validation (derived): valid={valDerived.IsValid} error={valDerived.Error}");
+                    var validation = BeltRouteBuilder.Validate(_beltStartPos, startDir, endPos, endDir);
+                    Debug.Log($"  Validate: valid={validation.IsValid} error={validation.Error}");
 
-                    // Default mode extra: ValidateRoute
                     if (_beltRoutingMode == BeltRoutingMode.Default)
                     {
-                        var routeValCurrent = BeltRouteBuilder.ValidateRoute(waypointsCurrent);
-                        var routeValDerived = BeltRouteBuilder.ValidateRoute(waypointsDerived);
-                        Debug.Log($"  ValidateRoute (current): {routeValCurrent}");
-                        Debug.Log($"  ValidateRoute (derived): {routeValDerived}");
+                        // U-turn check (same as HandleBeltDragging)
+                        var dStartFlat = BeltRouteBuilder.SnapToCardinal(startDir);
+                        var dEndFlat = BeltRouteBuilder.SnapToCardinal(endDir);
+                        bool isUturn = Vector3.Dot(dStartFlat, dEndFlat) < -0.5f;
+                        Debug.Log($"  Default U-turn check: dot={Vector3.Dot(dStartFlat, dEndFlat):F2} isUturn={isUturn}");
+
+                        var routeVal = BeltRouteBuilder.ValidateRoute(waypoints, startDir, endDir);
+                        Debug.Log($"  ValidateRoute: {routeVal}");
                     }
                 }
                 else

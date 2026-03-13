@@ -138,9 +138,24 @@ public static class BeltRouteBuilder
         if (distance < 0.001f)
             return BuildStraightLine(startPos, endPos);
 
-        float tangentMag = Mathf.Clamp(distance * 0.75f, MinFreeformTangent, MaxFreeformTangent);
-        var t0 = startDir.normalized * tangentMag;
-        var t1 = endDir.normalized * tangentMag;
+        // Insert mandatory straight segments at connectors before the curve begins.
+        // The Hermite curve runs between the inset points; straight waypoints are
+        // prepended/appended so the belt leaves each connector on-axis.
+        var sDir = startDir.normalized;
+        var eDir = endDir.normalized;
+        float straight = MinStraight;
+
+        // Don't consume more than half the distance for straights
+        if (straight * 2f > distance - 0.1f)
+            straight = Mathf.Max((distance - 0.1f) * 0.5f, 0f);
+
+        var curveStart = startPos + sDir * straight;
+        var curveEnd = endPos - eDir * straight;
+
+        float curveDist = Vector3.Distance(curveStart, curveEnd);
+        float tangentMag = Mathf.Clamp(curveDist * 0.75f, MinFreeformTangent, MaxFreeformTangent);
+        var t0 = sDir * tangentMag;
+        var t1 = eDir * tangentMag;
 
         // Sample Hermite curve into positions
         var positions = new Vector3[FreeformSamples + 1];
@@ -153,13 +168,19 @@ public static class BeltRouteBuilder
             float h10 = t3 - 2f * t2 + t;
             float h01 = -2f * t3 + 3f * t2;
             float h11 = t3 - t2;
-            positions[i] = h00 * startPos + h10 * t0 + h01 * endPos + h11 * t1;
+            positions[i] = h00 * curveStart + h10 * t0 + h01 * curveEnd + h11 * t1;
         }
 
         // Build waypoints with Catmull-Rom tangents (smooth, no overshoot).
-        // Chord-based d/3 tangents caused Bezier overshoot between knots,
-        // producing visible ripple on ramps.
-        var waypoints = new List<Waypoint>(FreeformSamples + 1);
+        var waypoints = new List<Waypoint>(FreeformSamples + 3);
+
+        // Prepend straight segment from connector to curve start
+        if (straight > 0.01f)
+        {
+            var straightTan = sDir * (straight / 3f);
+            waypoints.Add(new Waypoint { Position = startPos, TangentIn = Vector3.zero, TangentOut = straightTan });
+        }
+
         for (int i = 0; i <= FreeformSamples; i++)
         {
             Vector3 tanOut, tanIn;
@@ -167,13 +188,13 @@ public static class BeltRouteBuilder
             {
                 var chord = positions[1] - positions[0];
                 tanOut = chord / 3f;
-                tanIn = Vector3.zero;
+                tanIn = straight > 0.01f ? -sDir * (straight / 3f) : Vector3.zero;
             }
             else if (i == FreeformSamples)
             {
                 var chord = positions[i] - positions[i - 1];
                 tanIn = -chord / 3f;
-                tanOut = Vector3.zero;
+                tanOut = straight > 0.01f ? eDir * (straight / 3f) : Vector3.zero;
             }
             else
             {
@@ -184,6 +205,13 @@ public static class BeltRouteBuilder
             }
 
             waypoints.Add(new Waypoint { Position = positions[i], TangentIn = tanIn, TangentOut = tanOut });
+        }
+
+        // Append straight segment from curve end to connector
+        if (straight > 0.01f)
+        {
+            var straightTan = -eDir * (straight / 3f);
+            waypoints.Add(new Waypoint { Position = endPos, TangentIn = straightTan, TangentOut = Vector3.zero });
         }
 
         return waypoints;
@@ -242,7 +270,8 @@ public static class BeltRouteBuilder
     /// Checks the actual waypoint-to-waypoint segments, not endpoint-to-endpoint.
     /// Uses the runtime-tunable MaxRampAngle and MaxLength values.
     /// </summary>
-    public static bool ValidateRoute(List<Waypoint> waypoints)
+    public static bool ValidateRoute(List<Waypoint> waypoints,
+        Vector3 startDir = default, Vector3 endDir = default)
     {
         float totalLength = 0f;
         for (int i = 1; i < waypoints.Count; i++)
@@ -264,9 +293,63 @@ public static class BeltRouteBuilder
             {
                 return false; // vertical segment
             }
+
+            // Check bend angle between consecutive segments
+            if (i >= 2)
+            {
+                var dirA = (a - waypoints[i - 2].Position).normalized;
+                var dirB = (b - a).normalized;
+                if (dirA.sqrMagnitude > 0.001f && dirB.sqrMagnitude > 0.001f)
+                {
+                    float bend = Vector3.Angle(dirA, dirB);
+                    if (bend > 180f - MinTurnAngle)
+                        return false;
+                }
+            }
         }
 
-        return totalLength <= MaxLength;
+        if (totalLength > MaxLength)
+            return false;
+
+        // Enforce minimum straight at connectors: the route must follow the
+        // connector direction for at least MinStraight before any deviation.
+        if (startDir.sqrMagnitude > 0.001f && waypoints.Count >= 2)
+        {
+            var flatStart = new Vector3(startDir.x, 0, startDir.z).normalized;
+            float walked = 0f;
+            for (int i = 1; i < waypoints.Count && walked < MinStraight; i++)
+            {
+                var seg = waypoints[i].Position - waypoints[i - 1].Position;
+                var flatSeg = new Vector3(seg.x, 0, seg.z);
+                if (flatSeg.sqrMagnitude > 0.001f)
+                {
+                    float deviation = Vector3.Angle(flatStart, flatSeg.normalized);
+                    if (deviation > MinTurnAngle)
+                        return false;
+                }
+                walked += seg.magnitude;
+            }
+        }
+
+        if (endDir.sqrMagnitude > 0.001f && waypoints.Count >= 2)
+        {
+            var flatEnd = new Vector3(endDir.x, 0, endDir.z).normalized;
+            float walked = 0f;
+            for (int i = waypoints.Count - 2; i >= 0 && walked < MinStraight; i--)
+            {
+                var seg = waypoints[i + 1].Position - waypoints[i].Position;
+                var flatSeg = new Vector3(seg.x, 0, seg.z);
+                if (flatSeg.sqrMagnitude > 0.001f)
+                {
+                    float deviation = Vector3.Angle(flatEnd, flatSeg.normalized);
+                    if (deviation > MinTurnAngle)
+                        return false;
+                }
+                walked += seg.magnitude;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>
