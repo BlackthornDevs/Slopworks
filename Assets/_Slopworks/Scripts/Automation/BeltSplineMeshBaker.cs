@@ -39,6 +39,8 @@ public static class BeltSplineMeshBaker
             // Forward direction for knot rotation: prefer outgoing, fall back to -incoming.
             // Use actual 3D tangent so cross-section stays perpendicular to the
             // belt path on ramps and curves with elevation. World-up prevents roll.
+            // Connector knots (first/last 2) are projected to horizontal to prevent
+            // cross-section twist at the straight-to-curve junction.
             float3 forward;
             if (math.lengthsq(localTanOut) > 0.001f)
                 forward = localTanOut;
@@ -46,6 +48,11 @@ public static class BeltSplineMeshBaker
                 forward = -localTanIn;
             else
                 forward = new float3(0, 0, 1);
+
+            // Project to horizontal at connector regions
+            bool isConnectorKnot = i <= 1 || i >= waypoints.Count - 2;
+            if (isConnectorKnot)
+                forward = new float3(forward.x, 0, forward.z);
 
             if (math.lengthsq(forward) < 0.001f)
                 forward = new float3(0, 0, 1);

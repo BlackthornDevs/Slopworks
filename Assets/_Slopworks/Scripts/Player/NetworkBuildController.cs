@@ -1810,8 +1810,11 @@ public class NetworkBuildController : NetworkBehaviour
                     var waypoints = BeltRouteBuilder.Build(_beltStartPos, startDir, endPos, endDir, _beltRoutingMode);
                     float routeLen = BeltRouteBuilder.ComputeRouteLength(waypoints);
                     Debug.Log($"  ROUTE: {waypoints.Count} waypoints, length={routeLen:F2}m");
-                    Debug.Log($"    first wp: pos={waypoints[0].Position} tanOut={waypoints[0].TangentOut}");
-                    Debug.Log($"    last wp:  pos={waypoints[waypoints.Count - 1].Position} tanIn={waypoints[waypoints.Count - 1].TangentIn}");
+                    for (int w = 0; w < waypoints.Count; w++)
+                    {
+                        var wp = waypoints[w];
+                        Debug.Log($"    wp[{w}]: pos={wp.Position} tanIn={wp.TangentIn} tanOut={wp.TangentOut}");
+                    }
 
                     // Check if route passes through end machine
                     if (endBeltPort != null && endBeltPort.transform.parent != null)

@@ -186,14 +186,18 @@ public static class BeltRouteBuilder
             Vector3 tanOut, tanIn;
             if (i == 0)
             {
-                var chord = positions[1] - positions[0];
-                tanOut = chord / 3f;
+                // Use sDir (horizontal) as tangent direction at the curve-to-connector
+                // junction. The Hermite derivative at t=0 is analytically horizontal
+                // (sDir * tangentMag). Using the discrete chord introduces Y from
+                // elevation, causing a direction mismatch with the connector straight.
+                float chordDist = Vector3.Distance(positions[0], positions[1]);
+                tanOut = sDir * (chordDist / 3f);
                 tanIn = straight > 0.01f ? -sDir * (straight / 3f) : Vector3.zero;
             }
             else if (i == FreeformSamples)
             {
-                var chord = positions[i] - positions[i - 1];
-                tanIn = -chord / 3f;
+                float chordDist = Vector3.Distance(positions[i - 1], positions[i]);
+                tanIn = -eDir * (chordDist / 3f);
                 tanOut = straight > 0.01f ? eDir * (straight / 3f) : Vector3.zero;
             }
             else
