@@ -46,14 +46,18 @@ public class NetworkBuildController : NetworkBehaviour
     // Belt spline placement
     private enum BeltPlacementState { Idle, PickingStart, Dragging }
     private BeltPlacementState _beltState = BeltPlacementState.Idle;
-    private Vector3 _beltStartPos;
+    private Vector3 _beltStartPos;       // preview position (at anchor height for free endpoints)
+    private Vector3 _beltStartGroundPos; // raw ground position sent to server
     private Vector3 _beltStartDir;
     private bool _beltStartFromPort;
-    private float _beltEndYawOffset;
     private bool _beltEndFromPort;
-    private BeltRoutingMode _beltRoutingMode = BeltRoutingMode.Curved;
+    private BeltRoutingMode _beltRoutingMode = BeltRoutingMode.Default;
     private GameObject _beltPreviewLine;
     private LineRenderer _beltLineRenderer;
+
+    // Belt support ghosts
+    private GameObject _beltStartSupportGhost;
+    private GameObject _beltEndSupportGhost;
 
     // Single ghost for simple tools
     private GameObject _ghost;
@@ -144,6 +148,10 @@ public class NetworkBuildController : NetworkBehaviour
 
         if (!_buildMode) return;
 
+        // Debug diagnostic dump (press 0)
+        if (kb.digit0Key.wasPressedThisFrame)
+            DumpBeltDiagnostics();
+
         // Tool switching: 1-6
         if (kb.digit1Key.wasPressedThisFrame) SwitchTool(BuildTool.Foundation);
         if (kb.digit2Key.wasPressedThisFrame) SwitchTool(BuildTool.Wall);
@@ -175,9 +183,12 @@ public class NetworkBuildController : NetworkBehaviour
         {
             if (_currentTool == BuildTool.Belt)
             {
-                _beltRoutingMode = _beltRoutingMode == BeltRoutingMode.Curved
-                    ? BeltRoutingMode.Straight
-                    : BeltRoutingMode.Curved;
+                _beltRoutingMode = _beltRoutingMode switch
+                {
+                    BeltRoutingMode.Default => BeltRoutingMode.Straight,
+                    BeltRoutingMode.Straight => BeltRoutingMode.Curved,
+                    _ => BeltRoutingMode.Default
+                };
                 Debug.Log($"belt: routing mode = {_beltRoutingMode}");
             }
             else
@@ -416,17 +427,59 @@ public class NetworkBuildController : NetworkBehaviour
         if (mouse.leftButton.wasPressedThisFrame)
         {
             ClearDeleteHighlight();
-            if (placement.Category == BuildingCategory.Belt)
+            if (placement.Category == BuildingCategory.Belt || placement.Category == BuildingCategory.Support)
             {
                 var nob = placement.GetComponent<NetworkObject>();
                 if (nob != null)
-                    GridManager.Instance.CmdDeleteByNetworkObject(nob);
+                    CmdDeleteBelt(nob);
             }
             else if (placement.Category == BuildingCategory.Wall || placement.Category == BuildingCategory.Ramp)
                 GridManager.Instance.CmdDeleteDirectional(placement.Cell, placement.SurfaceY, placement.EdgeDirection);
             else
                 GridManager.Instance.CmdDelete(placement.Cell, placement.SurfaceY);
             Debug.Log($"build: deleted {placement.Category} at ({placement.Cell.x},{placement.Cell.y}) y={placement.SurfaceY:F1}");
+        }
+    }
+
+    [ServerRpc]
+    private void CmdDeleteBelt(NetworkObject nob)
+    {
+        if (NetworkObject != null && !IsServerInitialized) return;
+        if (nob == null || !nob.IsSpawned) return;
+
+        // Disconnect from any snap anchors before despawning
+        var netBelt = nob.GetComponent<NetworkBeltSegment>();
+        if (netBelt != null)
+        {
+            DisconnectBeltFromAnchors(nob.gameObject, netBelt.StartPos, netBelt.EndPos);
+        }
+
+        ServerManager.Despawn(nob);
+    }
+
+    /// <summary>
+    /// Unregister a belt from snap anchors and neighboring belt ports at its endpoints.
+    /// </summary>
+    private static void DisconnectBeltFromAnchors(GameObject belt, Vector3 startPos, Vector3 endPos)
+    {
+        DisconnectBeltAtPosition(belt, startPos, 0.6f);
+        DisconnectBeltAtPosition(belt, endPos, 0.6f);
+    }
+
+    private static void DisconnectBeltAtPosition(GameObject belt, Vector3 position, float radius)
+    {
+        var anchor = GridManager.FindNearbyAnchor(position, radius);
+        if (anchor != null)
+            anchor.Disconnect(belt);
+
+        // Disconnect from neighboring belt ports (other belts, machines, storage)
+        var colliders = Physics.OverlapSphere(position, radius, 1 << PhysicsLayers.BeltPorts);
+        foreach (var col in colliders)
+        {
+            var port = col.GetComponentInParent<BeltPort>();
+            if (port == null) continue;
+            if (port.transform.IsChildOf(belt.transform)) continue;
+            port.Disconnect(belt);
         }
     }
 
@@ -591,6 +644,8 @@ public class NetworkBuildController : NetworkBehaviour
         DestroyGhost();
         DestroyGhostPool(_ghostPool);
         DestroyGhostPool(_zoopGhosts);
+        if (_beltStartSupportGhost != null) { Destroy(_beltStartSupportGhost); _beltStartSupportGhost = null; }
+        if (_beltEndSupportGhost != null) { Destroy(_beltEndSupportGhost); _beltEndSupportGhost = null; }
     }
 
     private static void DestroyGhostPool(List<GameObject> pool)
@@ -1090,20 +1145,90 @@ public class NetworkBuildController : NetworkBehaviour
 
     private void HandleBeltPickStart(Mouse mouse, Ray ray)
     {
+        // Preview ghost support at cursor before clicking
+        if (TryResolveBeltEndpoint(ray, true, out var previewPos, out var previewDir, out var previewFromPort))
+        {
+            if (!previewFromPort)
+            {
+                previewPos.x = Mathf.Round(previewPos.x);
+                previewPos.z = Mathf.Round(previewPos.z);
+
+                _beltStartSupportGhost = EnsureSupportGhost(_beltStartSupportGhost);
+                if (_beltStartSupportGhost != null)
+                {
+                    _beltStartSupportGhost.transform.position = previewPos;
+                    _beltStartSupportGhost.transform.rotation = Quaternion.LookRotation(previewDir);
+                    _beltStartSupportGhost.SetActive(true);
+                    ApplyGhostColor(_beltStartSupportGhost, ValidColor);
+                }
+
+                // Show direction line from ghost support
+                if (_beltPreviewLine == null)
+                {
+                    _beltPreviewLine = new GameObject("BeltPreview");
+                    _beltLineRenderer = _beltPreviewLine.AddComponent<LineRenderer>();
+                    _beltLineRenderer.startWidth = 0.15f;
+                    _beltLineRenderer.endWidth = 0.15f;
+                    _beltLineRenderer.useWorldSpace = true;
+                    var shader = Shader.Find("Sprites/Default");
+                    var mat = new Material(shader);
+                    mat.color = Color.white;
+                    _beltLineRenderer.material = mat;
+                }
+                _beltLineRenderer.positionCount = 2;
+                var anchorPos = new Vector3(previewPos.x,
+                    previewPos.y + GridManager.Instance.SupportAnchorHeight,
+                    previewPos.z);
+                _beltLineRenderer.SetPosition(0, anchorPos);
+                _beltLineRenderer.SetPosition(1, anchorPos + previewDir * 1f);
+                _beltLineRenderer.startColor = ValidColor;
+                _beltLineRenderer.endColor = ValidColor;
+                _beltPreviewLine.SetActive(true);
+            }
+            else
+            {
+                // Over a port -- hide support ghost and direction line
+                if (_beltStartSupportGhost != null)
+                    _beltStartSupportGhost.SetActive(false);
+                if (_beltPreviewLine != null)
+                    _beltPreviewLine.SetActive(false);
+            }
+        }
+        else
+        {
+            if (_beltStartSupportGhost != null)
+                _beltStartSupportGhost.SetActive(false);
+            if (_beltPreviewLine != null)
+                _beltPreviewLine.SetActive(false);
+        }
+
         if (!mouse.leftButton.wasPressedThisFrame) return;
 
-        if (TryResolveBeltEndpoint(ray, true, out var pos, out var dir, out var fromPort))
+        if (TryResolveBeltEndpoint(ray, true, out var pos, out var dir, out var fromPort, log: true))
         {
-            // Grid-snap free start position in straight mode
             if (!fromPort)
             {
                 pos.x = Mathf.Round(pos.x);
                 pos.z = Mathf.Round(pos.z);
             }
-            _beltStartPos = pos;
+            _beltStartGroundPos = pos;
+            _beltStartPos = fromPort ? pos : new Vector3(pos.x, pos.y + GridManager.Instance.SupportAnchorHeight, pos.z);
             _beltStartDir = dir;
             _beltStartFromPort = fromPort;
             _beltState = BeltPlacementState.Dragging;
+
+            // Show ghost support at start if placing on ground
+            if (!fromPort)
+            {
+                _beltStartSupportGhost = EnsureSupportGhost(_beltStartSupportGhost);
+                if (_beltStartSupportGhost != null)
+                {
+                    _beltStartSupportGhost.transform.position = pos;
+                    _beltStartSupportGhost.transform.rotation = Quaternion.LookRotation(dir);
+                    _beltStartSupportGhost.SetActive(true);
+                    ApplyGhostColor(_beltStartSupportGhost, ValidColor);
+                }
+            }
 
             if (_beltPreviewLine == null)
             {
@@ -1111,147 +1236,177 @@ public class NetworkBuildController : NetworkBehaviour
                 _beltLineRenderer = _beltPreviewLine.AddComponent<LineRenderer>();
                 _beltLineRenderer.startWidth = 0.15f;
                 _beltLineRenderer.endWidth = 0.15f;
-                _beltLineRenderer.positionCount = 30;
                 _beltLineRenderer.useWorldSpace = true;
                 var shader = Shader.Find("Sprites/Default");
                 var mat = new Material(shader);
                 mat.color = Color.white;
                 _beltLineRenderer.material = mat;
             }
+            _beltLineRenderer.positionCount = 30;
             _beltPreviewLine.SetActive(true);
         }
     }
 
     private void HandleBeltDragging(Mouse mouse, Ray ray)
     {
-        // Scroll wheel rotates end tangent for shaping curves (curved mode only)
-        if (_beltRoutingMode == BeltRoutingMode.Curved)
+        if (!TryResolveBeltEndpoint(ray, false, out var endPos, out var endDir, out var endFromPort))
         {
-            var scroll = mouse.scroll.ReadValue().y;
-            if (Mathf.Abs(scroll) > 0.01f)
-                _beltEndYawOffset += scroll > 0 ? 15f : -15f;
-        }
+            // Endpoint rejected (port full, invalid surface, etc.) -- show red
+            _beltLineRenderer.startColor = Color.red;
+            _beltLineRenderer.endColor = Color.red;
+            if (_beltStartSupportGhost != null && _beltStartSupportGhost.activeSelf)
+                ApplyGhostColor(_beltStartSupportGhost, Color.red);
+            if (_beltEndSupportGhost != null)
+                _beltEndSupportGhost.SetActive(false);
 
-        if (TryResolveBeltEndpoint(ray, false, out var endPos, out var endDir, out var endFromPort))
+            if (mouse.rightButton.wasPressedThisFrame)
+            {
+                _beltState = BeltPlacementState.Idle;
+                if (_beltPreviewLine != null)
+                    _beltPreviewLine.SetActive(false);
+                HideSupportGhosts();
+            }
+            return;
+        }
         {
-            var startDir = _beltStartDir;
+            var startDir = _beltStartDir;  // R-key direction, never overridden
             bool isValid;
 
-            if (_beltRoutingMode == BeltRoutingMode.Straight)
+            // Grid snap free endpoints
+            if (!endFromPort)
             {
-                // Grid-snap free endpoints to the 1x1 grid
-                if (!endFromPort)
-                {
-                    endPos.x = Mathf.Round(endPos.x);
-                    endPos.z = Mathf.Round(endPos.z);
-                }
+                endPos.x = Mathf.Round(endPos.x);
+                endPos.z = Mathf.Round(endPos.z);
+            }
 
-                // Snap start direction to cardinal
-                if (!_beltStartFromPort)
-                {
-                    var toEnd = endPos - _beltStartPos;
-                    toEnd.y = 0;
-                    if (toEnd.sqrMagnitude > 0.001f)
-                        startDir = BeltRouteBuilder.SnapToCardinal(toEnd);
-                }
+            var endGroundPos = endPos;
+            if (!endFromPort)
+                endPos.y += GridManager.Instance.SupportAnchorHeight;
 
-                // Free endpoints: max 1 turn (straight or L-shape)
-                // Port endpoints: allow multi-turn (Z/U shapes)
-                if (!endFromPort)
+            // Derive end direction from spatial relationship (all modes)
+            if (!endFromPort)
+                endDir = BeltRouteBuilder.DeriveEndDirection(_beltStartPos, startDir, endPos);
+
+            // Zero endDir = straight backward placement, always invalid
+            if (!endFromPort && endDir.sqrMagnitude < 0.001f)
+            {
+                isValid = false;
+            }
+            else if (_beltRoutingMode == BeltRoutingMode.Default)
+            {
+                // Default mode: build the actual route and validate the real geometry.
+                // No duplicate math -- the route IS the source of truth.
+                var validation = BeltPlacementValidator.Validate(
+                    _beltStartPos, startDir, endPos, endDir);
+                isValid = validation.IsValid;
+
+                if (isValid)
+                {
+                    var testWaypoints = BeltRouteBuilder.Build(
+                        _beltStartPos, startDir, endPos, endDir, BeltRoutingMode.Default);
+                    isValid = BeltRouteBuilder.ValidateRoute(testWaypoints,
+                        BeltRouteBuilder.MaxRampAngle, BeltPlacementValidator.MaxLength);
+                }
+            }
+            else
+            {
+                // Straight/Curved: endpoint validation, then turn geometry checks
+                var validation = BeltPlacementValidator.Validate(
+                    _beltStartPos, startDir, endPos, endDir);
+                isValid = validation.IsValid;
+
+                // Additional validation for turn geometry and elevation
+                if (isValid && !endFromPort)
                 {
                     var axis = BeltRouteBuilder.SnapToCardinal(startDir);
                     var delta = new Vector3(endPos.x - _beltStartPos.x, 0, endPos.z - _beltStartPos.z);
-                    float alongDist = Mathf.Abs(Vector3.Dot(delta, axis));
-                    var cross = delta - Vector3.Dot(delta, axis) * axis;
+                    float signedAlong = Vector3.Dot(delta, axis);
+                    float alongDist = Mathf.Abs(signedAlong);
+                    var cross = delta - signedAlong * axis;
                     float crossDistVal = cross.magnitude;
 
-                    if (crossDistVal < 0.1f)
+                    // Detect U-turn: endDir opposes startDir
+                    bool isUturn = Vector3.Dot(BeltRouteBuilder.SnapToCardinal(endDir), axis) < -0.5f;
+
+                    if (isUturn)
                     {
-                        // Aligned: straight belt
-                        endDir = startDir;
+                        float minCross = BeltRouteBuilder.MinSegLength * 2;
+                        float endpointDist = Vector3.Distance(_beltStartPos, endPos);
+                        isValid = crossDistVal >= minCross
+                               && endpointDist <= BeltPlacementValidator.MaxLength;
+                    }
+                    else if (crossDistVal < 0.1f)
+                    {
                         isValid = alongDist >= BeltRouteBuilder.MinSegLength * 2;
                     }
                     else
                     {
-                        // Offset: L-shape (single turn near the end)
-                        endDir = BeltRouteBuilder.SnapToCardinal(cross);
-                        isValid = alongDist >= BeltRouteBuilder.TurnRadius + BeltRouteBuilder.MinSegLength
-                               && crossDistVal >= BeltRouteBuilder.TurnRadius + BeltRouteBuilder.MinSegLength;
+                        if (_beltRoutingMode == BeltRoutingMode.Curved)
+                        {
+                            isValid = alongDist >= BeltRouteBuilder.MinSegLength * 2
+                                   && crossDistVal >= BeltRouteBuilder.MinSegLength * 2;
+                        }
+                        else
+                        {
+                            float minLeg = Mathf.Min(BeltRouteBuilder.TurnRadius,
+                                               alongDist - BeltRouteBuilder.MinSegLength)
+                                         + BeltRouteBuilder.MinSegLength;
+                            isValid = alongDist >= minLeg && crossDistVal >= minLeg;
+                        }
                     }
 
-                    // Elevation validation: ramp must fit on the first leg
-                    // Aligned: just needs ramp distance. L-shape: also needs post-ramp flat before the turn.
-                    float heightDiff = Mathf.Abs(endPos.y - _beltStartPos.y);
-                    if (isValid && heightDiff > 0.01f)
+                    if (isValid)
                     {
-                        float idealRamp = 1.5f * heightDiff / Mathf.Tan(BeltRouteBuilder.MaxRampAngle * Mathf.Deg2Rad);
-                        float minAlongForElevation = idealRamp;
-                        if (crossDistVal >= 0.1f) // L-shape needs flat before turn
-                            minAlongForElevation += BeltRouteBuilder.MinPostRampLength;
-                        if (alongDist < minAlongForElevation)
-                            isValid = false;
-                    }
-                }
-                else
-                {
-                    // Port endpoint: allow multi-turn, use standard validation
-                    var validation = BeltPlacementValidator.Validate(
-                        _beltStartPos, startDir, endPos, endDir);
-                    isValid = validation.IsValid || validation.Error == BeltValidationError.TurnTooSharp;
-
-                    // Elevation validation for port endpoints too
-                    float portHeightDiff = Mathf.Abs(endPos.y - _beltStartPos.y);
-                    if (isValid && portHeightDiff > 0.01f)
-                    {
-                        var portAxis = BeltRouteBuilder.SnapToCardinal(startDir);
-                        var portDelta = new Vector3(endPos.x - _beltStartPos.x, 0, endPos.z - _beltStartPos.z);
-                        float portAlongDist = Mathf.Abs(Vector3.Dot(portDelta, portAxis));
-                        float idealRamp = portHeightDiff / Mathf.Tan(BeltRouteBuilder.MaxRampAngle * Mathf.Deg2Rad);
-                        float minAlong = idealRamp + BeltRouteBuilder.MinPostRampLength;
-                        if (portAlongDist < minAlong)
-                            isValid = false;
+                        float heightDiff = Mathf.Abs(endPos.y - _beltStartPos.y);
+                        if (heightDiff > 0.01f)
+                        {
+                            float idealRamp = 1.5f * heightDiff / Mathf.Tan(BeltRouteBuilder.MaxRampAngle * Mathf.Deg2Rad);
+                            float actualRadius = crossDistVal >= 0.1f
+                                ? Mathf.Min(BeltRouteBuilder.TurnRadius,
+                                    alongDist - BeltRouteBuilder.MinSegLength,
+                                    crossDistVal - BeltRouteBuilder.MinSegLength)
+                                : 0f;
+                            if (_beltRoutingMode == BeltRoutingMode.Curved)
+                                actualRadius = 0f;
+                            float availableForRamp = alongDist - actualRadius;
+                            float minAlongForElevation = idealRamp;
+                            if (crossDistVal >= 0.1f && _beltRoutingMode != BeltRoutingMode.Curved)
+                                minAlongForElevation += BeltRouteBuilder.MinPostRampLength;
+                            if (availableForRamp < minAlongForElevation)
+                                isValid = false;
+                        }
                     }
                 }
             }
-            else // Curved mode
+
+            // Ghost support at end position
+            if (!endFromPort)
             {
-                // Grid-snap free endpoints to the 1x1 grid
-                if (!endFromPort)
+                _beltEndSupportGhost = EnsureSupportGhost(_beltEndSupportGhost);
+                if (_beltEndSupportGhost != null)
                 {
-                    endPos.x = Mathf.Round(endPos.x);
-                    endPos.z = Mathf.Round(endPos.z);
+                    _beltEndSupportGhost.transform.position = endGroundPos;
+                    _beltEndSupportGhost.transform.rotation = Quaternion.LookRotation(endDir);
+                    _beltEndSupportGhost.SetActive(true);
                 }
-
-                if (!_beltStartFromPort)
-                {
-                    var toEnd = endPos - _beltStartPos;
-                    toEnd.y = 0;
-                    if (toEnd.sqrMagnitude > 0.001f)
-                        startDir = toEnd.normalized;
-                }
-
-                if (Mathf.Abs(_beltEndYawOffset) > 0.01f)
-                {
-                    float halfYaw = _beltEndYawOffset * 0.5f;
-                    if (!_beltStartFromPort)
-                        startDir = Quaternion.Euler(0f, halfYaw, 0f) * startDir;
-                    if (!endFromPort)
-                        endDir = Quaternion.Euler(0f, -halfYaw, 0f) * endDir;
-                }
-
-                var validation = BeltPlacementValidator.Validate(
-                    _beltStartPos, startDir, endPos, endDir);
-                isValid = validation.IsValid;
+            }
+            else if (_beltEndSupportGhost != null)
+            {
+                _beltEndSupportGhost.SetActive(false);
             }
 
+            // Tint ghosts and line renderer based on validity
             var color = isValid ? Color.green : Color.red;
             _beltLineRenderer.startColor = color;
             _beltLineRenderer.endColor = color;
+            if (_beltStartSupportGhost != null && _beltStartSupportGhost.activeSelf)
+                ApplyGhostColor(_beltStartSupportGhost, color);
+            if (_beltEndSupportGhost != null && _beltEndSupportGhost.activeSelf)
+                ApplyGhostColor(_beltEndSupportGhost, color);
 
-            // Preview line
-            if (_beltRoutingMode == BeltRoutingMode.Straight)
+            // Preview line (at anchor height) -- all modes use waypoints
             {
-                var waypoints = BeltRouteBuilder.Build(_beltStartPos, startDir, endPos, endDir);
+                var waypoints = BeltRouteBuilder.Build(_beltStartPos, startDir, endPos, endDir, _beltRoutingMode);
                 float routeLen = BeltRouteBuilder.ComputeRouteLength(waypoints);
                 for (int i = 0; i < 30; i++)
                 {
@@ -1260,29 +1415,24 @@ public class NetworkBuildController : NetworkBehaviour
                         BeltRouteBuilder.EvaluateRoute(waypoints, routeLen, t));
                 }
             }
-            else
-            {
-                var splineData = BeltSplineBuilder.Build(_beltStartPos, startDir, endPos, endDir);
-                for (int i = 0; i < 30; i++)
-                {
-                    float t = (float)i / 29;
-                    _beltLineRenderer.SetPosition(i, splineData.Evaluate(t));
-                }
-            }
 
             if (mouse.leftButton.wasPressedThisFrame && isValid)
             {
-                Debug.Log($"belt: placing {_beltRoutingMode} from {_beltStartPos} to {endPos}");
+                // Re-resolve with logging on the actual click
+                TryResolveBeltEndpoint(ray, false, out _, out _, out _, log: true);
+                Debug.Log($"belt: placing {_beltRoutingMode} from {_beltStartGroundPos} to {endGroundPos}");
                 GridManager.Instance.CmdPlaceBelt(
-                    _beltStartPos, startDir,
-                    endPos, endDir,
+                    _beltStartFromPort ? _beltStartPos : _beltStartGroundPos,
+                    startDir,
+                    endFromPort ? endPos : endGroundPos,
+                    endDir,
                     routingMode: (byte)_beltRoutingMode,
                     startFromPort: _beltStartFromPort,
                     endFromPort: endFromPort);
 
                 _beltState = BeltPlacementState.Idle;
                 _beltPreviewLine.SetActive(false);
-                _beltEndYawOffset = 0f;
+                HideSupportGhosts();
             }
 
             if (!isValid && mouse.leftButton.wasPressedThisFrame)
@@ -1292,10 +1442,35 @@ public class NetworkBuildController : NetworkBehaviour
         if (mouse.rightButton.wasPressedThisFrame)
         {
             _beltState = BeltPlacementState.Idle;
-            _beltEndYawOffset = 0f;
             if (_beltPreviewLine != null)
                 _beltPreviewLine.SetActive(false);
+            HideSupportGhosts();
         }
+    }
+
+    /// <summary>Max raycast range for belt endpoint detection.</summary>
+    private const float BeltRaycastRange = 50f;
+
+    /// <summary>
+    /// Layers valid for support placement (terrain and foundations only).
+    /// Belts, walls, ramps, machines are NOT valid support surfaces.
+    /// </summary>
+    private static bool IsValidSupportSurface(RaycastHit hit)
+    {
+        int layer = hit.collider.gameObject.layer;
+
+        // Terrain and grid plane are always valid
+        if (layer == PhysicsLayers.Terrain || layer == PhysicsLayers.GridPlane || layer == PhysicsLayers.BIM_Static)
+            return true;
+
+        // Structures layer: only foundations are valid
+        if (layer == PhysicsLayers.Structures)
+        {
+            var info = hit.collider.GetComponentInParent<PlacementInfo>();
+            return info != null && (info.Category == BuildingCategory.Foundation || info.Category == BuildingCategory.Ramp);
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -1303,23 +1478,59 @@ public class NetworkBuildController : NetworkBehaviour
     /// start of the belt (needs Output port), isStart=false means end (needs Input port).
     /// Direction always points in the belt's flow direction at that endpoint.
     /// </summary>
-    private bool TryResolveBeltEndpoint(Ray ray, bool isStart, out Vector3 pos, out Vector3 dir, out bool fromPort)
+    private bool TryResolveBeltEndpoint(Ray ray, bool isStart, out Vector3 pos, out Vector3 dir, out bool fromPort, bool log = false)
     {
         pos = Vector3.zero;
         dir = Vector3.forward;
         fromPort = false;
 
-        if (!Physics.Raycast(ray, out var hit, 200f,
+        if (!Physics.Raycast(ray, out var hit, BeltRaycastRange,
             PhysicsLayers.StructuralPlacementMask |
             (1 << PhysicsLayers.BeltPorts)))
             return false;
+
+        var endpoint = isStart ? "START" : "END";
+        if (log)
+        {
+            var hitObj = hit.collider.gameObject;
+            var parentName = hitObj.transform.parent != null ? hitObj.transform.parent.name : "(root)";
+            Debug.Log($"belt resolve {endpoint}: hit '{hitObj.name}' layer={hitObj.layer} parent='{parentName}' pos={hit.point}");
+        }
 
         // Direct hit on a BeltPort
         var beltPort = hit.collider.GetComponentInParent<BeltPort>();
         if (beltPort != null)
         {
+            if (log)
+            {
+                var portParent = beltPort.transform.parent;
+                var ownerType = portParent != null && portParent.GetComponent<NetworkBeltSegment>() != null ? "belt" : "machine/storage";
+                Debug.Log($"belt resolve {endpoint}: -> BeltPort {beltPort.Direction} on {ownerType} '{portParent?.name}' dir={GetPortFlowDirection(beltPort, isStart)}");
+            }
+
+            // Check port capacity and nearby anchor capacity
+            if (beltPort.IsFull)
+            {
+                if (log) Debug.Log($"belt resolve {endpoint}: -> REJECTED, port full ({beltPort.ConnectionCount} connections)");
+                return false;
+            }
+            var nearAnchor = GridManager.FindNearbyAnchor(beltPort.WorldPosition, 0.6f);
+            if (nearAnchor != null && nearAnchor.IsFull)
+            {
+                if (log) Debug.Log($"belt resolve {endpoint}: -> REJECTED, support anchor full ({nearAnchor.ConnectionCount} connections)");
+                return false;
+            }
+
             pos = beltPort.WorldPosition;
-            dir = GetPortFlowDirection(beltPort, isStart);
+            // Machine/storage end ports: derive direction from spatial relationship.
+            // GetPortFlowDirection(isStart=false) gives -awayFromMachine which ignores
+            // where the belt is coming from. Belt end ports keep tangent continuity.
+            bool bpOnBelt = beltPort.transform.parent != null
+                         && beltPort.transform.parent.GetComponent<NetworkBeltSegment>() != null;
+            if (!isStart && !bpOnBelt)
+                dir = BeltRouteBuilder.DeriveEndDirection(_beltStartPos, _beltStartDir, pos);
+            else
+                dir = GetPortFlowDirection(beltPort, isStart);
             fromPort = true;
             return true;
         }
@@ -1328,31 +1539,68 @@ public class NetworkBuildController : NetworkBehaviour
         var nearbyPort = FindNearbyPort(hit.point, isStart, 0.6f);
         if (nearbyPort != null)
         {
+            if (log)
+            {
+                var portParent = nearbyPort.transform.parent;
+                var ownerType = portParent != null && portParent.GetComponent<NetworkBeltSegment>() != null ? "belt" : "machine/storage";
+                Debug.Log($"belt resolve {endpoint}: -> nearby BeltPort {nearbyPort.Direction} on {ownerType} '{portParent?.name}' dir={GetPortFlowDirection(nearbyPort, isStart)}");
+            }
+
+            // Check port capacity and nearby anchor capacity
+            if (nearbyPort.IsFull)
+            {
+                if (log) Debug.Log($"belt resolve {endpoint}: -> REJECTED, port full ({nearbyPort.ConnectionCount} connections)");
+                return false;
+            }
+            var nearAnchorForPort = GridManager.FindNearbyAnchor(nearbyPort.WorldPosition, 0.6f);
+            if (nearAnchorForPort != null && nearAnchorForPort.IsFull)
+            {
+                if (log) Debug.Log($"belt resolve {endpoint}: -> REJECTED, support anchor full ({nearAnchorForPort.ConnectionCount} connections)");
+                return false;
+            }
+
             pos = nearbyPort.WorldPosition;
-            dir = GetPortFlowDirection(nearbyPort, isStart);
+            // Same machine/storage end port override as direct hit path
+            bool npOnBelt = nearbyPort.transform.parent != null
+                         && nearbyPort.transform.parent.GetComponent<NetworkBeltSegment>() != null;
+            if (!isStart && !npOnBelt)
+                dir = BeltRouteBuilder.DeriveEndDirection(_beltStartPos, _beltStartDir, pos);
+            else
+                dir = GetPortFlowDirection(nearbyPort, isStart);
             fromPort = true;
             return true;
         }
 
+        // Snap anchor on existing support
         var snapAnchor = hit.collider.GetComponentInParent<BeltSnapAnchor>();
         if (snapAnchor != null)
         {
+            // If anchor already has max belt connections, it's full -- reject
+            if (log) Debug.Log($"belt resolve {endpoint}: -> BeltSnapAnchor full={snapAnchor.IsFull} connections={snapAnchor.ConnectionCount} pos={snapAnchor.WorldPosition}");
+            if (snapAnchor.IsFull)
+                return false;
+
             pos = snapAnchor.WorldPosition;
             dir = snapAnchor.WorldDirection;
             fromPort = true;
             return true;
         }
 
-        // Ground/structure fallback -- support will be placed here.
-        // Raise belt endpoint to where the support's snap anchor will be.
+        // Ground/structure fallback -- server will spawn support here.
+        // Only allow on terrain and foundations, not on belts or other structures.
+        if (!IsValidSupportSurface(hit))
+        {
+            if (log) Debug.Log($"belt resolve {endpoint}: -> ground REJECTED (not valid support surface)");
+            return false;
+        }
+
+        if (log) Debug.Log($"belt resolve {endpoint}: -> ground fallback at {hit.point}");
         pos = hit.point;
         pos.y += GridManager.Instance.SupportAnchorHeight;
         if (isStart)
         {
-            var camForward = Camera.main.transform.forward;
-            camForward.y = 0;
-            dir = camForward.normalized;
-            if (dir.sqrMagnitude < 0.001f) dir = Vector3.forward;
+            // Use R-key rotation for cardinal start direction
+            dir = Quaternion.Euler(0, _placeRotation, 0) * Vector3.forward;
         }
         else
         {
@@ -1396,20 +1644,207 @@ public class NetworkBuildController : NetworkBehaviour
     {
         var colliders = Physics.OverlapSphere(position, radius, 1 << PhysicsLayers.BeltPorts);
 
-        BeltPort closest = null;
-        float closestDist = float.MaxValue;
+        // Prefer direction-compatible port: start needs Output, end needs Input
+        var wantDir = isStart ? BeltPortDirection.Output : BeltPortDirection.Input;
+
+        BeltPort compatible = null;
+        float compatibleDist = float.MaxValue;
+        BeltPort any = null;
+        float anyDist = float.MaxValue;
+
         foreach (var col in colliders)
         {
             var port = col.GetComponentInParent<BeltPort>();
             if (port == null) continue;
             float dist = Vector3.Distance(position, port.WorldPosition);
-            if (dist < closestDist)
+
+            if (port.Direction == wantDir && dist < compatibleDist)
             {
-                closestDist = dist;
-                closest = port;
+                compatibleDist = dist;
+                compatible = port;
+            }
+            if (dist < anyDist)
+            {
+                anyDist = dist;
+                any = port;
             }
         }
-        return closest;
+
+        // Return compatible port if found, otherwise any port (caller handles direction)
+        return compatible ?? any;
+    }
+
+    /// <summary>
+    /// One-shot diagnostic dump. Press 0 in build mode to log everything
+    /// about the current belt state and what the crosshair is pointing at.
+    /// </summary>
+    private void DumpBeltDiagnostics()
+    {
+        var ray = new Ray(_camera.transform.position, _camera.transform.forward);
+        Debug.Log("=== BELT DIAGNOSTIC DUMP ===");
+        Debug.Log($"  belt state: {_beltState}");
+        Debug.Log($"  belt tool: {_currentTool}");
+        Debug.Log($"  routing mode: {_beltRoutingMode}");
+        Debug.Log($"  placeRotation: {_placeRotation}");
+
+        if (_beltState == BeltPlacementState.Dragging)
+        {
+            Debug.Log($"  START pos: {_beltStartPos}");
+            Debug.Log($"  START groundPos: {_beltStartGroundPos}");
+            Debug.Log($"  START dir: {_beltStartDir}");
+            Debug.Log($"  START fromPort: {_beltStartFromPort}");
+
+            // Try to identify the start port by searching near the start position
+            var startPortColliders = Physics.OverlapSphere(_beltStartPos, 0.6f, 1 << PhysicsLayers.BeltPorts);
+            foreach (var col in startPortColliders)
+            {
+                var sp = col.GetComponentInParent<BeltPort>();
+                if (sp == null) continue;
+                var spParent = sp.transform.parent;
+                bool spIsBelt = spParent != null && spParent.GetComponent<NetworkBeltSegment>() != null;
+                Debug.Log($"  START nearby port: {sp.Direction} on {(spIsBelt ? "BELT" : "MACHINE/STORAGE")} '{spParent?.name}' at {sp.WorldPosition} fwd={sp.WorldDirection}");
+            }
+            var startAnchor = GridManager.FindNearbyAnchor(_beltStartPos, 0.6f);
+            if (startAnchor != null)
+                Debug.Log($"  START nearby anchor: pos={startAnchor.WorldPosition} dir={startAnchor.WorldDirection} full={startAnchor.IsFull}");
+        }
+
+        // Raycast what the crosshair is pointing at
+        int beltMask = PhysicsLayers.StructuralPlacementMask | (1 << PhysicsLayers.BeltPorts);
+        if (Physics.Raycast(ray, out var hit, BeltRaycastRange, beltMask))
+        {
+            var hitObj = hit.collider.gameObject;
+            var parentObj = hitObj.transform.parent;
+            Debug.Log($"  RAYCAST hit: '{hitObj.name}' layer={hitObj.layer} pos={hit.point}");
+            Debug.Log($"    parent: '{(parentObj != null ? parentObj.name : "(root)")}'");
+            Debug.Log($"    grandparent: '{(parentObj?.parent != null ? parentObj.parent.name : "(none)")}'");
+
+            // Check BeltPort
+            var beltPort = hit.collider.GetComponentInParent<BeltPort>();
+            if (beltPort != null)
+            {
+                var portParent = beltPort.transform.parent;
+                bool isBelt = portParent != null && portParent.GetComponent<NetworkBeltSegment>() != null;
+                string ownerType = isBelt ? "belt" : "machine/storage";
+                var awayVec = beltPort.WorldPosition - (portParent != null ? portParent.position : beltPort.transform.position);
+                awayVec.y = 0;
+
+                Debug.Log($"    BELTPORT found: {beltPort.Direction} on {ownerType} '{portParent?.name}'");
+                Debug.Log($"      port.WorldPosition: {beltPort.WorldPosition}");
+                Debug.Log($"      port.WorldDirection (transform.forward): {beltPort.WorldDirection}");
+                Debug.Log($"      parent.position (center): {(portParent != null ? portParent.position.ToString() : "null")}");
+                Debug.Log($"      awayFromMachine (raw): {awayVec}");
+                Debug.Log($"      awayFromMachine (normalized): {(awayVec.sqrMagnitude > 0.001f ? awayVec.normalized.ToString() : "ZERO - fallback to forward")}");
+                Debug.Log($"      GetPortFlowDirection(isStart=true):  {GetPortFlowDirection(beltPort, true)}");
+                Debug.Log($"      GetPortFlowDirection(isStart=false): {GetPortFlowDirection(beltPort, false)}");
+                Debug.Log($"      port.IsFull: {beltPort.IsFull} ({beltPort.ConnectionCount} connections)");
+            }
+
+            // Check BeltSnapAnchor
+            var anchor = hit.collider.GetComponentInParent<BeltSnapAnchor>();
+            if (anchor != null)
+            {
+                Debug.Log($"    ANCHOR found: pos={anchor.WorldPosition} dir={anchor.WorldDirection}");
+                Debug.Log($"      IsFull: {anchor.IsFull} ({anchor.ConnectionCount} connections)");
+            }
+
+            // Check FindNearbyPort results
+            var nearStart = FindNearbyPort(hit.point, true, 0.6f);
+            var nearEnd = FindNearbyPort(hit.point, false, 0.6f);
+            Debug.Log($"    FindNearbyPort(isStart=true):  {(nearStart != null ? $"{nearStart.Direction} at {nearStart.WorldPosition}" : "null")}");
+            Debug.Log($"    FindNearbyPort(isStart=false): {(nearEnd != null ? $"{nearEnd.Direction} at {nearEnd.WorldPosition}" : "null")}");
+
+            // Check nearby anchor
+            var nearAnchor = GridManager.FindNearbyAnchor(hit.point, 0.6f);
+            Debug.Log($"    FindNearbyAnchor: {(nearAnchor != null ? $"pos={nearAnchor.WorldPosition} full={nearAnchor.IsFull}" : "null")}");
+
+            // If dragging, show what the end direction would be
+            if (_beltState == BeltPlacementState.Dragging)
+            {
+                if (TryResolveBeltEndpoint(ray, false, out var endPos, out var endDir, out var endFromPort))
+                {
+                    Debug.Log($"  END resolved: pos={endPos} dir={endDir} fromPort={endFromPort}");
+                    Debug.Log($"  END endFromPort={endFromPort} -> DeriveEndDirection SKIPPED={endFromPort}");
+
+                    // Identify what type of endpoint this resolved to
+                    var endBeltPort = hit.collider.GetComponentInParent<BeltPort>();
+                    if (endBeltPort == null)
+                    {
+                        var nearPort = FindNearbyPort(hit.point, false, 0.6f);
+                        if (nearPort != null) endBeltPort = nearPort;
+                    }
+                    if (endBeltPort != null)
+                    {
+                        var epParent = endBeltPort.transform.parent;
+                        bool epIsBelt = epParent != null && epParent.GetComponent<NetworkBeltSegment>() != null;
+                        Debug.Log($"  END port type: {endBeltPort.Direction} on {(epIsBelt ? "BELT" : "MACHINE/STORAGE")}");
+                    }
+                    else
+                    {
+                        var endAnchor = hit.collider.GetComponentInParent<BeltSnapAnchor>();
+                        Debug.Log($"  END port type: {(endAnchor != null ? "ANCHOR" : "GROUND")}");
+                    }
+
+                    // Show what DeriveEndDirection would give for comparison
+                    var derived = BeltRouteBuilder.DeriveEndDirection(_beltStartPos, _beltStartDir, endPos);
+                    Debug.Log($"  DeriveEndDirection (for comparison): {derived}");
+                    Debug.Log($"  DIRECTION MISMATCH: {(Vector3.Distance(endDir.normalized, derived.normalized) > 0.1f ? "YES" : "no")}");
+
+                    // Build routes with BOTH directions and compare
+                    var waypointsCurrent = BeltRouteBuilder.Build(_beltStartPos, _beltStartDir, endPos, endDir, _beltRoutingMode);
+                    var waypointsDerived = BeltRouteBuilder.Build(_beltStartPos, _beltStartDir, endPos, derived, _beltRoutingMode);
+                    float lenCurrent = BeltRouteBuilder.ComputeRouteLength(waypointsCurrent);
+                    float lenDerived = BeltRouteBuilder.ComputeRouteLength(waypointsDerived);
+                    Debug.Log($"  ROUTE (current endDir):  {waypointsCurrent.Count} waypoints, length={lenCurrent:F2}m");
+                    Debug.Log($"  ROUTE (derived endDir):  {waypointsDerived.Count} waypoints, length={lenDerived:F2}m");
+                    Debug.Log($"    current first wp: pos={waypointsCurrent[0].Position} tanOut={waypointsCurrent[0].TangentOut}");
+                    Debug.Log($"    current last wp:  pos={waypointsCurrent[waypointsCurrent.Count - 1].Position} tanIn={waypointsCurrent[waypointsCurrent.Count - 1].TangentIn}");
+                    Debug.Log($"    derived first wp: pos={waypointsDerived[0].Position} tanOut={waypointsDerived[0].TangentOut}");
+                    Debug.Log($"    derived last wp:  pos={waypointsDerived[waypointsDerived.Count - 1].Position} tanIn={waypointsDerived[waypointsDerived.Count - 1].TangentIn}");
+
+                    // Check if current route passes through either machine
+                    var startMachinePos = new Vector3(_beltStartPos.x, _beltStartPos.y, _beltStartPos.z);
+                    float closestToEndMachine = float.MaxValue;
+                    if (endBeltPort != null && endBeltPort.transform.parent != null)
+                    {
+                        var endMachineCenter = endBeltPort.transform.parent.position;
+                        for (int i = 0; i < waypointsCurrent.Count; i++)
+                        {
+                            var wpFlat = new Vector2(waypointsCurrent[i].Position.x, waypointsCurrent[i].Position.z);
+                            var mcFlat = new Vector2(endMachineCenter.x, endMachineCenter.z);
+                            float d = Vector2.Distance(wpFlat, mcFlat);
+                            if (d < closestToEndMachine) closestToEndMachine = d;
+                        }
+                        Debug.Log($"  ROUTE closest to end machine center: {closestToEndMachine:F2}m (passes through if < 1.0)");
+                    }
+
+                    // Validation results for both
+                    var valCurrent = BeltPlacementValidator.Validate(_beltStartPos, _beltStartDir, endPos, endDir);
+                    var valDerived = BeltPlacementValidator.Validate(_beltStartPos, _beltStartDir, endPos, derived);
+                    Debug.Log($"  Validation (current): valid={valCurrent.IsValid} error={valCurrent.Error}");
+                    Debug.Log($"  Validation (derived): valid={valDerived.IsValid} error={valDerived.Error}");
+
+                    // Default mode extra: ValidateRoute
+                    if (_beltRoutingMode == BeltRoutingMode.Default)
+                    {
+                        var routeValCurrent = BeltRouteBuilder.ValidateRoute(waypointsCurrent, BeltRouteBuilder.MaxRampAngle, 56f);
+                        var routeValDerived = BeltRouteBuilder.ValidateRoute(waypointsDerived, BeltRouteBuilder.MaxRampAngle, 56f);
+                        Debug.Log($"  ValidateRoute (current): {routeValCurrent}");
+                        Debug.Log($"  ValidateRoute (derived): {routeValDerived}");
+                    }
+                }
+                else
+                {
+                    Debug.Log($"  END resolved: FAILED (TryResolveBeltEndpoint returned false)");
+                }
+            }
+        }
+        else
+        {
+            Debug.Log($"  RAYCAST: nothing hit within {BeltRaycastRange}m");
+        }
+
+        Debug.Log("=== END DIAGNOSTIC DUMP ===");
     }
 
     private void CancelBeltPlacement()
@@ -1417,6 +1852,8 @@ public class NetworkBuildController : NetworkBehaviour
         _beltState = BeltPlacementState.Idle;
         if (_beltPreviewLine != null)
             _beltPreviewLine.SetActive(false);
+        if (_beltStartSupportGhost != null) _beltStartSupportGhost.SetActive(false);
+        if (_beltEndSupportGhost != null) _beltEndSupportGhost.SetActive(false);
         DestroyGhost();
     }
 
@@ -1511,6 +1948,20 @@ public class NetworkBuildController : NetworkBehaviour
         }
     }
 
+    private GameObject EnsureSupportGhost(GameObject existing)
+    {
+        if (existing != null) return existing;
+        var supportPrefab = GridManager.Instance.GetPrefab(BuildingCategory.Support, 0);
+        if (supportPrefab == null) return null;
+        return CreateGhostFromPrefab(supportPrefab);
+    }
+
+    private void HideSupportGhosts()
+    {
+        if (_beltStartSupportGhost != null) _beltStartSupportGhost.SetActive(false);
+        if (_beltEndSupportGhost != null) _beltEndSupportGhost.SetActive(false);
+    }
+
     // -- OnGUI --
 
     private void OnGUI()
@@ -1576,7 +2027,7 @@ public class NetworkBuildController : NetworkBehaviour
         }
 
         if (_currentTool == BuildTool.Belt)
-            GUILayout.Label($"Belt mode: {_beltRoutingMode}  |  [Tab] Toggle curved/straight");
+            GUILayout.Label($"Belt mode: {_beltRoutingMode}  |  [Tab] Cycle Default/Straight/Curved");
 
         if (_beltState == BeltPlacementState.Dragging)
             GUILayout.Label($"Belt start: {_beltStartPos} -- click end point");

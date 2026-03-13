@@ -387,116 +387,72 @@ public class GridManager : NetworkBehaviour
 
         var mode = (BeltRoutingMode)routingMode;
 
-        // Validate belt placement. Straight mode skips turn angle check
-        // because the route builder handles all turns as 90-degree corners.
-        var validation = BeltPlacementValidator.Validate(startPos, startDir, endPos, endDir);
+        // For free endpoints, startPos/endPos are raw ground positions.
+        // Spawn supports first and use their actual anchor positions for the belt.
+        var beltStartPos = startPos;
+        var beltEndPos = endPos;
+
+        if (!startFromPort)
+            beltStartPos = SpawnSupportAt(startPos, Quaternion.LookRotation(startDir), sender);
+        if (!endFromPort)
+            beltEndPos = SpawnSupportAt(endPos, Quaternion.LookRotation(endDir), sender);
+
+        // Server is final authority -- validate without bypasses
+        var validation = BeltPlacementValidator.Validate(beltStartPos, startDir, beltEndPos, endDir);
         if (!validation.IsValid)
         {
-            // Allow TurnTooSharp in straight mode -- route builder creates valid 90-degree turns
-            if (!(mode == BeltRoutingMode.Straight && validation.Error == BeltValidationError.TurnTooSharp))
-            {
-                Debug.Log($"grid: belt placement rejected: {validation.Error} by {sender?.ClientId}");
-                return;
-            }
+            Debug.Log($"grid: belt placement rejected: {validation.Error} by {sender?.ClientId}");
+            return;
         }
-
-        // Auto-spawn supports at free endpoints (not connected to a port or snap anchor)
-        if (!startFromPort)
-            SpawnSupportAt(startPos, Quaternion.LookRotation(startDir), sender);
-        if (!endFromPort)
-            SpawnSupportAt(endPos, Quaternion.LookRotation(endDir), sender);
 
         var prefab = GetPrefab(BuildingCategory.Belt, variant);
         if (prefab == null) return;
 
-        float arcLength;
-        Vector3 midpoint;
+        var waypoints = BeltRouteBuilder.Build(beltStartPos, startDir, beltEndPos, endDir, mode);
+        var arcLength = BeltRouteBuilder.ComputeRouteLength(waypoints);
+        var segment = BeltSegment.FromArcLength(arcLength);
 
-        if (mode == BeltRoutingMode.Straight)
-        {
-            var waypoints = BeltRouteBuilder.Build(startPos, startDir, endPos, endDir);
-            arcLength = BeltRouteBuilder.ComputeRouteLength(waypoints);
-            var segment = BeltSegment.FromArcLength(arcLength);
+        var midpoint = BeltRouteBuilder.EvaluateRoute(waypoints, arcLength, 0.5f);
+        var go = Instantiate(prefab, midpoint, Quaternion.identity);
+        go.transform.localScale = Vector3.one;
+        go.layer = PhysicsLayers.Structures;
 
-            // Place object at route midpoint
-            midpoint = BeltRouteBuilder.EvaluateRoute(waypoints, arcLength, 0.5f);
-            var go = Instantiate(prefab, midpoint, Quaternion.identity);
-            go.transform.localScale = Vector3.one;
-            go.layer = PhysicsLayers.Structures;
+        var prefabCollider = go.GetComponent<Collider>();
+        if (prefabCollider != null)
+            DestroyImmediate(prefabCollider);
 
-            var prefabCollider = go.GetComponent<Collider>();
-            if (prefabCollider != null)
-                DestroyImmediate(prefabCollider);
+        var info = go.AddComponent<PlacementInfo>();
+        info.Category = BuildingCategory.Belt;
+        info.SurfaceY = beltStartPos.y;
 
-            var info = go.AddComponent<PlacementInfo>();
-            info.Category = BuildingCategory.Belt;
-            info.SurfaceY = startPos.y;
+        var netBelt = go.GetComponent<NetworkBeltSegment>();
+        if (netBelt != null)
+            netBelt.ServerInit(segment, beltStartPos, startDir, beltEndPos, endDir, waypoints, tier, mode);
 
-            var netBelt = go.GetComponent<NetworkBeltSegment>();
-            if (netBelt != null)
-                netBelt.ServerInitStraight(segment, startPos, startDir, endPos, endDir, waypoints, tier);
+        ServerManager.Spawn(go);
 
-            ServerManager.Spawn(go);
+        var material = go.GetComponent<MeshRenderer>()?.sharedMaterial;
+        BeltSplineMeshBaker.BakeMesh(go, waypoints, material);
 
-            var material = go.GetComponent<MeshRenderer>()?.sharedMaterial;
-            BeltSplineMeshBaker.BakeMesh(go, waypoints, material);
+        var meshCollider = go.AddComponent<MeshCollider>();
+        meshCollider.sharedMesh = go.GetComponent<MeshFilter>()?.sharedMesh;
 
-            var meshCollider = go.AddComponent<MeshCollider>();
-            meshCollider.sharedMesh = go.GetComponent<MeshFilter>()?.sharedMesh;
+        var visualizer = go.AddComponent<BeltItemVisualizer>();
+        visualizer.Init(netBelt);
 
-            var visualizer = go.AddComponent<BeltItemVisualizer>();
-            visualizer.Init(netBelt);
+        if (netBelt != null && _factorySimulation != null)
+            _factorySimulation.RegisterBelt(netBelt);
 
-            if (netBelt != null && _factorySimulation != null)
-                _factorySimulation.RegisterBelt(netBelt);
+        AddBeltPort(go, beltStartPos, -startDir, BeltPortDirection.Input, 0);
+        AddBeltPort(go, beltEndPos, endDir, BeltPortDirection.Output, 0);
 
-            AddBeltPort(go, startPos, -startDir, BeltPortDirection.Input, 0);
-            AddBeltPort(go, endPos, endDir, BeltPortDirection.Output, 0);
+        // Register belt connections on nearby snap anchors and existing belt ports
+        RegisterBeltOnNearbyAnchor(go, beltStartPos, 0.6f);
+        RegisterBeltOnNearbyAnchor(go, beltEndPos, 0.6f);
+        if (startFromPort) RegisterBeltOnNearbyPorts(go, beltStartPos, 0.6f);
+        if (endFromPort) RegisterBeltOnNearbyPorts(go, beltEndPos, 0.6f);
 
-            Debug.Log($"grid: straight belt placed from {startPos} to {endPos} route={arcLength:F1}m by {sender?.ClientId}");
-        }
-        else
-        {
-            var splineData = BeltSplineBuilder.Build(startPos, startDir, endPos, endDir);
-            var segment = BeltSegment.FromArcLength(splineData.ArcLength);
-            arcLength = splineData.ArcLength;
-
-            midpoint = splineData.Evaluate(0.5f);
-            var go = Instantiate(prefab, midpoint, Quaternion.identity);
-            go.transform.localScale = Vector3.one;
-            go.layer = PhysicsLayers.Structures;
-
-            var prefabCollider = go.GetComponent<Collider>();
-            if (prefabCollider != null)
-                DestroyImmediate(prefabCollider);
-
-            var info = go.AddComponent<PlacementInfo>();
-            info.Category = BuildingCategory.Belt;
-            info.SurfaceY = startPos.y;
-
-            var netBelt = go.GetComponent<NetworkBeltSegment>();
-            if (netBelt != null)
-                netBelt.ServerInit(segment, splineData, tier);
-
-            ServerManager.Spawn(go);
-
-            var material = go.GetComponent<MeshRenderer>()?.sharedMaterial;
-            BeltSplineMeshBaker.BakeMesh(go, splineData, material);
-
-            var meshCollider = go.AddComponent<MeshCollider>();
-            meshCollider.sharedMesh = go.GetComponent<MeshFilter>()?.sharedMesh;
-
-            var visualizer = go.AddComponent<BeltItemVisualizer>();
-            visualizer.Init(netBelt);
-
-            if (netBelt != null && _factorySimulation != null)
-                _factorySimulation.RegisterBelt(netBelt);
-
-            AddBeltPort(go, startPos, -startDir, BeltPortDirection.Input, 0);
-            AddBeltPort(go, endPos, endDir, BeltPortDirection.Output, 0);
-
-            Debug.Log($"grid: curved belt placed from {startPos} to {endPos} arc={arcLength:F1}m by {sender?.ClientId}");
-        }
+        Debug.Log($"grid: {mode} belt placed from {beltStartPos} to {beltEndPos} route={arcLength:F1}m by {sender?.ClientId}");
     }
 
     private static void AddBeltPort(GameObject parent, Vector3 worldPos, Vector3 worldDir, BeltPortDirection direction, int slotIndex)
@@ -517,6 +473,56 @@ public class GridManager : NetworkBehaviour
         col.isTrigger = true;
     }
 
+    /// <summary>
+    /// Find the nearest BeltSnapAnchor within radius and register the belt on it.
+    /// </summary>
+    private static void RegisterBeltOnNearbyAnchor(GameObject belt, Vector3 position, float radius)
+    {
+        var anchor = FindNearbyAnchor(position, radius);
+        if (anchor != null)
+            anchor.Connect(belt);
+    }
+
+    /// <summary>
+    /// Register the belt on all existing BeltPorts near the position (from other belts/machines/storage).
+    /// Skips ports that belong to the belt itself.
+    /// </summary>
+    private static void RegisterBeltOnNearbyPorts(GameObject belt, Vector3 position, float radius)
+    {
+        var colliders = Physics.OverlapSphere(position, radius, 1 << PhysicsLayers.BeltPorts);
+        foreach (var col in colliders)
+        {
+            var port = col.GetComponentInParent<BeltPort>();
+            if (port == null) continue;
+            // Skip ports that belong to this belt
+            if (port.transform.IsChildOf(belt.transform)) continue;
+            port.Connect(belt);
+        }
+    }
+
+    /// <summary>
+    /// Find the nearest BeltSnapAnchor within radius of a position.
+    /// Searches BeltPorts layer (21) where anchor colliders live.
+    /// </summary>
+    public static BeltSnapAnchor FindNearbyAnchor(Vector3 position, float radius)
+    {
+        var colliders = Physics.OverlapSphere(position, radius, 1 << PhysicsLayers.BeltPorts);
+        BeltSnapAnchor closest = null;
+        float closestDist = float.MaxValue;
+        foreach (var col in colliders)
+        {
+            var anchor = col.GetComponentInParent<BeltSnapAnchor>();
+            if (anchor == null) continue;
+            float dist = Vector3.Distance(position, anchor.WorldPosition);
+            if (dist < closestDist)
+            {
+                closestDist = dist;
+                closest = anchor;
+            }
+        }
+        return closest;
+    }
+
     [ServerRpc(RequireOwnership = false)]
     public void CmdPlaceSupport(Vector3 position, Quaternion rotation,
         int variant = 0, NetworkConnection sender = null)
@@ -525,22 +531,28 @@ public class GridManager : NetworkBehaviour
         SpawnSupportAt(position, rotation, sender);
     }
 
-    private void SpawnSupportAt(Vector3 position, Quaternion rotation, NetworkConnection sender = null)
+    private Vector3 SpawnSupportAt(Vector3 groundPos, Quaternion rotation, NetworkConnection sender = null)
     {
         var prefab = GetPrefab(BuildingCategory.Support, 0);
         if (prefab == null)
         {
-            Debug.LogWarning($"grid: no support prefab found, skipping support at {position}");
-            return;
+            Debug.LogWarning($"grid: no support prefab found at {groundPos}");
+            return groundPos;
         }
 
-        // Position is the belt endpoint (at anchor height). Drop to ground for the support origin.
-        var groundPos = position;
-        groundPos.y -= SupportAnchorHeight;
-
         var instance = Instantiate(prefab, groundPos, rotation);
+
+        var info = instance.AddComponent<PlacementInfo>();
+        info.Category = BuildingCategory.Support;
+        info.SurfaceY = groundPos.y;
+
         ServerManager.Spawn(instance);
-        Debug.Log($"grid: support placed at {groundPos} (anchor at {position.y:F2}) by {sender?.ClientId}");
+
+        var anchor = instance.GetComponentInChildren<BeltSnapAnchor>();
+        var anchorPos = anchor != null ? anchor.WorldPosition : groundPos;
+
+        Debug.Log($"grid: support at {groundPos}, anchor at {anchorPos} by {sender?.ClientId}");
+        return anchorPos;
     }
 
     // ------------------------------------------------------------------
