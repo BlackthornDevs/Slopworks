@@ -49,8 +49,10 @@ public static class BeltSplineMeshBaker
             else
                 forward = new float3(0, 0, 1);
 
-            // Project to horizontal at connector regions
-            bool isConnectorKnot = i <= 1 || i >= waypoints.Count - 2;
+            // Project to horizontal at connector endpoints only (first and last knot).
+            // Using first/last 2 would cover arc knots on short routes (4 waypoints),
+            // forcing all cross-sections horizontal on a descending path = stairstepping.
+            bool isConnectorKnot = i == 0 || i == waypoints.Count - 1;
             if (isConnectorKnot)
                 forward = new float3(forward.x, 0, forward.z);
 
