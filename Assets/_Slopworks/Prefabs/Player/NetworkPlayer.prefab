@@ -16,7 +16,6 @@ GameObject:
   - component: {fileID: 8251439179353808696}
   - component: {fileID: 2734749880648621232}
   - component: {fileID: -803279512443065909}
-  - component: {fileID: -8161977590570690139}
   m_Layer: 8
   m_Name: NetworkPlayer
   m_TagString: Untagged
@@ -113,6 +112,7 @@ MonoBehaviour:
   - {fileID: 3327283262866992543}
   - {fileID: 8251439179353808696}
   - {fileID: 2734749880648621232}
+  - {fileID: -803279512443065909}
   InitializedParentNetworkBehaviour: {fileID: 0}
   InitializedNestedNetworkObjects: []
   RuntimeParentNetworkBehaviour: {fileID: 0}
@@ -123,7 +123,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
-  _initializedTimestamp: -8584288378339821137
+  _initializedTimestamp: -8584280923812197783
   NetworkObserver: {fileID: 0}
   _enablePrediction: 0
   _predictionType: 0
@@ -139,7 +139,7 @@ MonoBehaviour:
   _spectatorInterpolation: 2
   _enableTeleport: 0
   _teleportThreshold: 1
-  <PrefabId>k__BackingField: 12
+  <PrefabId>k__BackingField: 19
   <SpawnableCollectionId>k__BackingField: 0
   <AssetPathHash>k__BackingField: 15268719314615469774
   SceneId: 0
@@ -231,6 +231,7 @@ MonoBehaviour:
   _addedNetworkObject: {fileID: 4071129095658771539}
   _networkObjectCache: {fileID: 4071129095658771539}
   _placementRange: 25
+  _showDebugGUI: 0
 --- !u!114 &-803279512443065909
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -243,24 +244,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 138193a2ce1680b44b63763c72138073, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Slopworks.Runtime::NetworkInventory
-  _componentIndexCache: 255
+  _componentIndexCache: 3
   _addedNetworkObject: {fileID: 4071129095658771539}
-  _networkObjectCache: {fileID: 0}
---- !u!114 &-8161977590570690139
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 4315693519742176051}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: c27a787b91e5ebe4db79c28d27139bbd, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Slopworks.Runtime::NetworkHotbarHUD
-  _componentIndexCache: 255
-  _addedNetworkObject: {fileID: 4071129095658771539}
-  _networkObjectCache: {fileID: 0}
+  _networkObjectCache: {fileID: 4071129095658771539}
 --- !u!1 &5829677295695553793
 GameObject:
   m_ObjectHideFlags: 0
