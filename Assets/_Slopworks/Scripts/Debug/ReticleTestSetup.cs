@@ -43,29 +43,10 @@ public class ReticleTestSetup : MonoBehaviour
 
     private void Start()
     {
-        // hide old crosshair and build mode text if PlayerHUD exists
+        // disable entire old PlayerHUD when visor HUD takes over
         var oldHud = FindObjectOfType<PlayerHUD>();
         if (oldHud != null)
-        {
-            // the old crosshair is a child named "Crosshair"
-            var oldCrosshair = oldHud.transform.Find("Crosshair");
-            if (oldCrosshair != null) oldCrosshair.gameObject.SetActive(false);
-
-            var oldBuildText = oldHud.transform.Find("BuildModeIndicator");
-            if (oldBuildText != null) oldBuildText.gameObject.SetActive(false);
-
-            // also check the Canvas children recursively
-            foreach (var img in oldHud.GetComponentsInChildren<UnityEngine.UI.Image>(true))
-            {
-                if (img.gameObject.name == "Crosshair")
-                    img.gameObject.SetActive(false);
-            }
-            foreach (var tmp in oldHud.GetComponentsInChildren<TMPro.TextMeshProUGUI>(true))
-            {
-                if (tmp.gameObject.name == "BuildModeIndicator")
-                    tmp.gameObject.SetActive(false);
-            }
-        }
+            oldHud.gameObject.SetActive(false);
 
         // create overlay canvas
         var canvasObj = new GameObject("ReticleCanvas");
