@@ -1,57 +1,82 @@
 # Joe's session handoff
 
-Updated by Joe's Claude at the end of each session.
+Updated by Kevin's Claude on 2026-03-13.
 
 ---
 
 ## Last updated: 2026-03-13
 
-### What was completed
+### What changed since your last session
 
-- **Visor HUD system** (`VisorHUD.cs`): full persistent gameplay overlay — top badges, compass strip, status frame with sci-fi accents, gradient health/shield bars, ammo indicator, 10-slot hotbar with tool selector, 5x2 loadout grid, gear button. All runtime-generated uGUI, zero prefab deps. Commit `304a97c`.
-- **Reticle system**: `ReticleStyle.cs` (pure data struct, 6 styles with characters/colors), `ReticleController.cs` (TMP crosshair with mode label + fade animation), `BuildTooltipUI.cs` (keycap row R/X/G/Z/Tab + action stack LMB/RMB/B). Commit `304a97c`.
-- **Test harness**: `ReticleTestSetup.cs` wires visor + reticle + tooltip into a single test setup. `VisorAutoBootstrap.cs` auto-spawns on Play in any scene (editor-only `RuntimeInitializeOnLoadMethod`). B toggles build mode, F/T/Z/C/V switch reticle sub-modes.
-- **9 EditMode tests** (`ReticleStyleTests.cs`): cover all 6 styles, color/character verification, label content.
-- **Naming glossary** (`docs/reference/naming-glossary.md`): single source of truth for both Claude agents — class suffixes, ID conventions, asset naming, enum catalog, UI element taxonomy (hud_*/modal_*/widget_*), reticle styles, tower system IDs, physics layers, placement method naming, file/folder conventions.
-- **PR #65** created against master.
+**Your PR #65 (visor HUD) has been merged to master.** Along with it, a new input system migration (PR #66) landed. Here's what's new on master:
 
-### Shared file changes (CRITICAL)
+1. **Action maps renamed**: `Exploration` -> `Combat`, `Factory` -> `Command`. If you have any code referencing `.Exploration.` or `.Factory.`, change to `.Combat.` / `.Command.`.
 
-- `.claude/CLAUDE.md` — added `naming-glossary.md` row to reference docs table
-- No asmdef changes, no ProjectSettings changes, no Core/ changes, no new packages
+2. **New Build action map** added to `SlopworksInput.inputactions` with 20 actions (tool select, rotate, delete, zoop, place, remove, snap filter, nudge, debug dump, etc.). `SlopworksInput.cs` regenerated.
 
-### What needs attention
+3. **UI contract created** -- two new files in `Scripts/Core/`:
+   - `BuildStateSnapshot.cs` -- plain data struct Kevin's `NetworkBuildController` pushes on every state change
+   - `IBuildStateReceiver.cs` -- 3-method interface (`OnBuildStateChanged`, `OnBuildModeEntered`, `OnBuildModeExited`)
 
-- **VisorAutoBootstrap auto-spawns in every scene**: This is editor-only (`#if UNITY_EDITOR`) and checks for existing ReticleTestSetup before spawning. If Kevin doesn't want it auto-spawning in his scenes, he can delete `VisorAutoBootstrap.cs`.
-- **Old PlayerHUD crosshair suppression**: `ReticleTestSetup.Start()` searches for `PlayerHUD` and disables its "Crosshair" and "BuildModeIndicator" children. This only fires when the test setup is active.
-- **Naming glossary should be kept in sync**: Both agents should check `docs/reference/naming-glossary.md` before creating or renaming anything. If Kevin adds new enums, suffixes, or ID patterns, the glossary needs updating.
+4. **`hotkeys.md`** added to `docs/reference/` -- human-readable keybinding reference mirroring the `.inputactions` asset. Update this when you add/change bindings.
 
-### Next task
+5. **`input-system.md`** updated to reflect the three action maps.
 
-All formal tasks in tasks-joe.md are complete. C-010 (redefine Joe's scope to art/world-building) is still open — waiting for Kevin to resolve.
+6. **Consumer files updated** for the rename: NetworkPlayerController, PlayerController, InventoryUI, InteractionController, WeaponBehaviour, CameraModeController all now use `.Combat.` / `.Command.` instead of `.Exploration.` / `.Factory.`.
 
-Likely next work:
-- Terrain refinement (greener grass textures)
-- Tower floor layouts and art
-- Overworld terrain
-- Check tasks-joe.md for new tasks Kevin may have added
+### New tasks assigned to you
+
+**Check `docs/coordination/tasks-joe.md`** -- two new tasks added:
+
+- **J-030 (High)**: Create `VisorBuildAdapter.cs` -- implements `IBuildStateReceiver`, translates `BuildStateSnapshot` into calls to your ReticleController, BuildTooltipUI, and VisorHUD components. This is the bridge between Kevin's build controller and your visor UI. Attach as child of player prefab.
+
+- **J-031 (Medium)**: Update `VisorAutoBootstrap` to skip auto-spawn when `NetworkBuildController` exists in the scene. One-line guard.
+
+### How it all fits together
+
+```
+NetworkBuildController (Kevin)
+    |
+    | calls PushState() at 9 transition points
+    v
+IBuildStateReceiver (shared interface)
+    |
+    | GetComponentInChildren<IBuildStateReceiver>()
+    v
+VisorBuildAdapter (Joe) -- YOUR new file
+    |
+    | translates snapshot fields to UI calls
+    v
+ReticleController / BuildTooltipUI / VisorHUD (Joe)
+```
+
+Kevin's controller already calls `_buildUI?.OnBuildStateChanged(snapshot)` etc. If no adapter is attached, all calls are no-ops. Once you create VisorBuildAdapter and attach it to the player hierarchy, it starts receiving state.
+
+### ToolName values Kevin sends
+
+`"Foundation"`, `"Wall"`, `"Ramp"`, `"Belt"`, `"Machine"`, `"Storage"`, `"Delete"`
+
+### Other snapshot fields
+
+- `BeltRoutingMode`: `"Default"`, `"Straight"`, `"Curved"`
+- `SnapFilter`: `"CENTER"`, `"EDGE"`, `"FOUNDATION"`, `"MACHINE/STORAGE"`
+- `ValidationError`: null when valid, error string when placement blocked
+- `KeycapLabels`: string array from Input Action display names (supports rebinding)
+- `RotationDegrees`: current rotation offset (0, 90, 180, 270)
+- `ZoopMode`, `ZoopStartSet`, `DeleteMode`: booleans
+
+### What to do first
+
+1. `git fetch origin master && git merge origin/master` -- pick up all the new stuff
+2. Read `docs/coordination/tasks-joe.md` for J-030 and J-031 details
+3. Start J-030 (VisorBuildAdapter)
 
 ### Blockers
 
-None
-
-### Test status
-
-- MCP Unity not available this session — could not recompile or run tests
-- 9 new EditMode tests added (ReticleStyleTests.cs)
-- No simulation code changed — only new UI scripts and docs
-- Expected: all existing tests + 9 new tests pass
+None. J-030 and J-031 are fully unblocked -- all dependencies are on master.
 
 ### Key context
 
-- **Branch**: `joe/main`, commit `304a97c`
-- **PR**: #65 (visor HUD + reticle + naming glossary)
-- **Build mode test keys**: F (default), T (straight), Z (zoop), C (curved), V (vertical). Not WASD.
-- **Keycap UI**: R (Rotate), X (Delete), G (Grid), Z (Zoop), Tab (Variant). These are the build mode tool labels shown in BuildTooltipUI, separate from the test harness mode-switching keys.
-- **VisorHUD architecture**: runtime uGUI composition with no prefab dependencies. Gradient textures (health, shield, raid bars) created as Texture2D at runtime. Helper methods: `Img()`, `Txt()`, `TxtSized()`, `CompassBar()`, `PlaceBar()`, `MakeGradient()`.
-- **ReticleStyle is pure data**: static readonly fields, no MonoBehaviour. ReticleController is the MonoBehaviour wrapper. Follows D-004 pattern.
+- **Branch**: merge master into `joe/main` before starting
+- **Kevin's parallel work**: `kevin/input-system-migration` has the NetworkBuildController rewrite (hardcoded keys -> input actions + IBuildStateReceiver calls). Not on master yet but the contract it calls against (BuildStateSnapshot, IBuildStateReceiver) IS on master.
+- **Your existing test harness still works**: ReticleTestSetup keys (F/T/Z/C/V) are independent of the Input Action system. Once VisorBuildAdapter is wired, the real build controller will drive the same UI components.
