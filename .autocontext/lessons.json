@@ -1,0 +1,182 @@
+[
+  {
+    "id": "6a2a5c2909a0",
+    "text": "Prefer GameObject-oriented data over computed values. If information can be baked into child objects, components, or transform positions on a prefab, do that instead of computing from mesh bounds or offsets at runtime.",
+    "source": ".claude/CLAUDE.md#Engineering principles",
+    "confidence": 0.8,
+    "created": "2026-03-13T22:43:00",
+    "author": "Joe",
+    "tags": ["engineering-principles", "unity"],
+    "status": "active"
+  },
+  {
+    "id": "cef0eadf1018",
+    "text": "Kevin's Claude is the lead developer. Joe's Claude is the junior developer. Architectural decisions are made by the lead.",
+    "source": ".claude/CLAUDE.md#Agent hierarchy",
+    "confidence": 0.8,
+    "created": "2026-03-13T22:43:00",
+    "author": "Joe",
+    "tags": ["agent-hierarchy", "workflow"],
+    "status": "active"
+  },
+  {
+    "id": "25e7edf4ed4a",
+    "text": "Never mutate ScriptableObjects at runtime. SOs are read-only static definitions shared across all instances. Write per-instance state to ItemInstance/ItemSlot structs.",
+    "source": ".claude/CLAUDE.md#Hard rules",
+    "confidence": 0.9,
+    "created": "2026-03-13T22:43:00",
+    "author": "Joe",
+    "tags": ["hard-rules", "scriptable-objects"],
+    "status": "active"
+  },
+  {
+    "id": "3005e12108df",
+    "text": "Never spawn a NetworkObject per belt item. Belt contents are a SyncList<BeltItem> on the segment entity. One NetworkObject per belt segment.",
+    "source": ".claude/CLAUDE.md#Hard rules",
+    "confidence": 0.9,
+    "created": "2026-03-13T22:43:00",
+    "author": "Joe",
+    "tags": ["hard-rules", "networking", "performance"],
+    "status": "active"
+  },
+  {
+    "id": "804c18b02903",
+    "text": "Factory simulation runs server-side only. Belt tick, machine tick, power calculation, crafting progress run under if (!IsServerInitialized) return. Clients display synced state only.",
+    "source": ".claude/CLAUDE.md#Hard rules",
+    "confidence": 0.9,
+    "created": "2026-03-13T22:43:00",
+    "author": "Joe",
+    "tags": ["hard-rules", "networking", "server-authority"],
+    "status": "active"
+  },
+  {
+    "id": "36708300b04f",
+    "text": "Never use direct cross-scene references. All cross-scene communication goes through the GameEventSO ScriptableObject event bus.",
+    "source": ".claude/CLAUDE.md#Hard rules",
+    "confidence": 0.9,
+    "created": "2026-03-13T22:43:00",
+    "author": "Joe",
+    "tags": ["hard-rules", "scene-management"],
+    "status": "active"
+  },
+  {
+    "id": "d7cd1cd37d24",
+    "text": "Never use RPCs for persistent state. Late-joining players miss prior RPCs. Use SyncVar or SyncList for anything a new client needs on join.",
+    "source": ".claude/CLAUDE.md#Hard rules",
+    "confidence": 0.9,
+    "created": "2026-03-13T22:43:00",
+    "author": "Joe",
+    "tags": ["hard-rules", "networking", "fishnet"],
+    "status": "active"
+  },
+  {
+    "id": "6ce4d4e01572",
+    "text": "No direct LLM API calls in this repo. Use claude -p or gemini -p via subprocess for all tooling and automation code.",
+    "source": ".claude/CLAUDE.md#Hard rules",
+    "confidence": 0.9,
+    "created": "2026-03-13T22:43:00",
+    "author": "Joe",
+    "tags": ["hard-rules", "tooling"],
+    "status": "active"
+  },
+  {
+    "id": "5739fa14e820",
+    "text": "Never push directly to master. All changes go through a PR. Push to your branch (kevin/main or joe/main), then gh pr create.",
+    "source": ".claude/CLAUDE.md#Hard rules",
+    "confidence": 0.9,
+    "created": "2026-03-13T22:43:00",
+    "author": "Joe",
+    "tags": ["hard-rules", "git-workflow"],
+    "status": "active"
+  },
+  {
+    "id": "fc50b5134677",
+    "text": "Never cache GetComponent, FindObjectOfType, or FindObjectsOfType results inside Update or FixedUpdate. Cache in Awake or Start.",
+    "source": ".claude/CLAUDE.md#Hard rules",
+    "confidence": 0.9,
+    "created": "2026-03-13T22:43:00",
+    "author": "Joe",
+    "tags": ["hard-rules", "performance", "unity"],
+    "status": "active"
+  },
+  {
+    "id": "75ee1e172be9",
+    "text": "When adding a new PortOwnerType, update ConnectionResolver. CreateSource and CreateDestination have switch statements that must include the new type. Unit tests do not catch this.",
+    "source": ".claude/CLAUDE.md#Hard rules",
+    "confidence": 0.9,
+    "created": "2026-03-13T22:43:00",
+    "author": "Joe",
+    "tags": ["hard-rules", "integration-seam", "automation"],
+    "status": "active"
+  },
+  {
+    "id": "66f7b7afb6ce",
+    "text": "Never duplicate placement math or derived values. Every building type's world position, rotation, scale comes from GridManager's universal placement methods. Ghost previews and server spawns call the same method.",
+    "source": ".claude/CLAUDE.md#Hard rules",
+    "confidence": 0.9,
+    "created": "2026-03-13T22:43:00",
+    "author": "Joe",
+    "tags": ["hard-rules", "placement", "dry"],
+    "status": "active"
+  },
+  {
+    "id": "50660585984c",
+    "text": "Snap placement is snap-to-snap, not computed. GetSnapPlacementPosition positions the ghost so two snap points meet. No extents, no halfHeight math. Fix snap point positions on the prefab, not in code.",
+    "source": ".claude/CLAUDE.md#Hard rules",
+    "confidence": 0.9,
+    "created": "2026-03-13T22:43:00",
+    "author": "Joe",
+    "tags": ["hard-rules", "placement", "snap-points"],
+    "status": "active"
+  },
+  {
+    "id": "f375bc298a69",
+    "text": "A phase is not done until it is playable. Every phase must produce a self-contained playtest scene for end-to-end human verification.",
+    "source": ".claude/CLAUDE.md#Phase completion standard",
+    "confidence": 0.8,
+    "created": "2026-03-13T22:43:00",
+    "author": "Joe",
+    "tags": ["phase-completion", "playtest"],
+    "status": "active"
+  },
+  {
+    "id": "8fef7768a8e0",
+    "text": "Playtest scenes must log extensively. Every user action, placement, removal, validation failure, and state change must produce a Debug.Log message. Short and factual.",
+    "source": ".claude/CLAUDE.md#Phase completion standard",
+    "confidence": 0.8,
+    "created": "2026-03-13T22:43:00",
+    "author": "Joe",
+    "tags": ["phase-completion", "logging", "playtest"],
+    "status": "active"
+  },
+  {
+    "id": "50032c4f1d0c",
+    "text": "Pre-seed factory (P key or _preSeedFactory checkbox) lays a foundation slab and places a storage->belt->smelter->belt->storage chain plus an ammo->belt->turret defense chain for quick testing.",
+    "source": ".claude/CLAUDE.md#Phase completion standard",
+    "confidence": 0.7,
+    "created": "2026-03-13T22:43:00",
+    "author": "Joe",
+    "tags": ["playtest", "testing"],
+    "status": "active"
+  },
+  {
+    "id": "1dfc9798ea0e",
+    "text": "Unit tests are necessary but not sufficient. Phase 5 shipped 675 passing tests and still had 5 bugs at integration seams (component ordering, Unity lifecycle timing, UI hierarchy, input wiring).",
+    "source": ".claude/CLAUDE.md#Testing requirements",
+    "confidence": 0.9,
+    "created": "2026-03-13T22:43:00",
+    "author": "Joe",
+    "tags": ["testing", "integration-seam"],
+    "status": "active"
+  },
+  {
+    "id": "9bad480de58a",
+    "text": "Do not mark a phase complete based on passing unit tests alone. If playtest reveals bugs, write the missing integration test before fixing the bug.",
+    "source": ".claude/CLAUDE.md#Testing requirements",
+    "confidence": 0.9,
+    "created": "2026-03-13T22:43:00",
+    "author": "Joe",
+    "tags": ["testing", "phase-completion"],
+    "status": "active"
+  }
+]
