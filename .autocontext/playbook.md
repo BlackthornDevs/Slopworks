@@ -1,5 +1,5 @@
 # Project playbook (auto-generated)
-Last updated: 2026-03-14T02:46:52Z | 18 active lessons
+18 active lessons
 
 ## Uncategorized (18 lessons)
 - **[0.9]** Never mutate ScriptableObjects at runtime. SOs are read-only static definitions shared across all instances. Write per-instance state to ItemInstance/ItemSlot structs. (hard-rules, scriptable-objects)

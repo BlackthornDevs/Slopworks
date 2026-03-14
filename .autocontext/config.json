@@ -13,8 +13,7 @@
     "machines": ["legion2025", "houseofjawn", "officejawn", "landofjawn"]
   },
   "baseline_commands": [
-    "pytest", "npm test", "npm run test", "npm run build",
-    "cargo test", "go test", "vitest", "jest", "make test"
+    "unity -runTests -testPlatform EditMode"
   ],
   "baselines": {},
   "builtin_rules": {
