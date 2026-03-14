@@ -18,14 +18,14 @@ public class InteractionController : MonoBehaviour
 
     private void OnEnable()
     {
-        _controls.Exploration.Enable();
-        _controls.Exploration.Interact.performed += OnInteract;
+        _controls.Combat.Enable();
+        _controls.Combat.Interact.performed += OnInteract;
     }
 
     private void OnDisable()
     {
-        _controls.Exploration.Interact.performed -= OnInteract;
-        _controls.Exploration.Disable();
+        _controls.Combat.Interact.performed -= OnInteract;
+        _controls.Combat.Disable();
         ClearTarget();
     }
 

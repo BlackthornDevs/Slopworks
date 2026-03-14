@@ -3,8 +3,8 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 
 /// <summary>
-/// Playtest bootstrapper for curved belt system. Drop on empty GameObject, hit Play.
-/// Tests: spline construction, mesh baking, item flow, visual positioning.
+/// Playtest bootstrapper for belt system. Drop on empty GameObject, hit Play.
+/// Tests: route building, mesh baking, item flow, visual positioning.
 ///
 /// Controls:
 /// - Left click: set belt start / confirm belt end
@@ -20,7 +20,8 @@ public class BeltPlaytestSetup : MonoBehaviour
 
     private BeltNetwork _beltNetwork;
     private List<BeltSegment> _segments = new();
-    private List<BeltSplineData> _splines = new();
+    private List<List<BeltRouteBuilder.Waypoint>> _routes = new();
+    private List<float> _routeLengths = new();
     private List<GameObject> _beltObjects = new();
 
     private bool _pickingStart = true;
@@ -77,23 +78,26 @@ public class BeltPlaytestSetup : MonoBehaviour
 
     private void PlaceBelt(Vector3 startPos, Vector3 startDir, Vector3 endPos, Vector3 endDir)
     {
-        var validation = BeltPlacementValidator.Validate(startPos, startDir, endPos, endDir);
+        var validation = BeltRouteBuilder.Validate(startPos, startDir, endPos, endDir);
         if (!validation.IsValid)
         {
             Debug.Log($"belt playtest: placement rejected: {validation.Error}");
             return;
         }
 
-        var splineData = BeltSplineBuilder.Build(startPos, startDir, endPos, endDir);
-        var segment = BeltSegment.FromArcLength(splineData.ArcLength);
+        var waypoints = BeltRouteBuilder.Build(startPos, startDir, endPos, endDir, BeltRoutingMode.Default);
+        float routeLength = BeltRouteBuilder.ComputeRouteLength(waypoints);
+        var segment = BeltSegment.FromArcLength(routeLength);
 
+        var midpoint = BeltRouteBuilder.EvaluateRoute(waypoints, routeLength, 0.5f);
         var go = new GameObject($"Belt_{_segments.Count}");
-        go.transform.position = splineData.Evaluate(0.5f);
+        go.transform.position = midpoint;
 
-        BeltSplineMeshBaker.BakeMesh(go, splineData, _beltMaterial);
+        BeltSplineMeshBaker.BakeMesh(go, waypoints, _beltMaterial);
 
         _segments.Add(segment);
-        _splines.Add(splineData);
+        _routes.Add(waypoints);
+        _routeLengths.Add(routeLength);
         _beltObjects.Add(go);
 
         if (_segments.Count > 1)
@@ -102,7 +106,7 @@ public class BeltPlaytestSetup : MonoBehaviour
             Debug.Log($"belt playtest: wired belt {_segments.Count - 2} -> {_segments.Count - 1}");
         }
 
-        Debug.Log($"belt playtest: placed belt {_segments.Count - 1}, arc={splineData.ArcLength:F1}m, subs={segment.TotalLength}");
+        Debug.Log($"belt playtest: placed belt {_segments.Count - 1}, route={routeLength:F1}m, subs={segment.TotalLength}");
     }
 
     private void Update()
@@ -159,8 +163,9 @@ public class BeltPlaytestSetup : MonoBehaviour
             endDir.y = 0;
             endDir = endDir.sqrMagnitude > 0.001f ? endDir.normalized : _startDir;
 
-            var splineData = BeltSplineBuilder.Build(_startPos, _startDir, hit.point, endDir);
-            var validation = BeltPlacementValidator.Validate(_startPos, _startDir, hit.point, endDir);
+            var waypoints = BeltRouteBuilder.Build(_startPos, _startDir, hit.point, endDir, BeltRoutingMode.Default);
+            float routeLen = BeltRouteBuilder.ComputeRouteLength(waypoints);
+            var validation = BeltRouteBuilder.Validate(_startPos, _startDir, hit.point, endDir);
 
             var color = validation.IsValid ? Color.green : Color.red;
             _previewLine.startColor = color;
@@ -169,7 +174,7 @@ public class BeltPlaytestSetup : MonoBehaviour
             for (int i = 0; i < 30; i++)
             {
                 float t = (float)i / 29;
-                _previewLine.SetPosition(i, splineData.Evaluate(t));
+                _previewLine.SetPosition(i, BeltRouteBuilder.EvaluateRoute(waypoints, routeLen, t));
             }
 
             if (mouse.leftButton.wasPressedThisFrame && validation.IsValid)
@@ -203,7 +208,7 @@ public class BeltPlaytestSetup : MonoBehaviour
             for (int i = 0; i < _positionBuffer.Count; i++)
             {
                 float t = _positionBuffer[i];
-                var worldPos = _splines[s].Evaluate(t);
+                var worldPos = BeltRouteBuilder.EvaluateRoute(_routes[s], _routeLengths[s], t);
 
                 var sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
                 sphere.transform.position = worldPos;
