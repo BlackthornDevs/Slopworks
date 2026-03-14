@@ -275,13 +275,13 @@ EditMode tests passing is necessary but not sufficient. The MasterPlaytest scene
 2. **Split HomeBase into additive subscenes.** Each developer owns separate scene files loaded additively via `SceneLoaderBehaviour.TransitionTo("HomeBase")`. The "HomeBase" scene group in `SceneGroupDefinition[]` maps to all HomeBase subscenes. Scene ownership:
    - `HomeBase.unity` (Kevin) -- grid, machines, belts, network objects, spawn points
    - `HomeBase_Terrain.unity` (Joe) -- terrain, lighting, atmosphere, environment art
-   - `HomeBase_UI.unity` (Joe) -- visor HUD canvas, build tooltips, reticle. Created at runtime on the player prefab, but the scene provides any world-space UI anchors.
+   - `HomeBase_UI.unity` (Joe) -- world-space UI anchors only (e.g., machine status panels, interaction prompts). Screen-space HUD (VisorHUD, ReticleController, BuildTooltipUI) lives on the NetworkPlayer prefab, not in this scene.
 
 3. **Hard rule: never edit a scene file you do not own.** Both agents check `ownership.md` before touching any `.unity` file. If you need something changed in a scene you don't own, document it in `contradictions.md` and let the owner handle it. Prefabs and scripts are fine -- scene files are the conflict boundary.
 
 **Rationale:** Unity `.unity` files are YAML blobs that don't merge cleanly even with UnityYAMLMerge. Teams of 20+ handle this by splitting into additive subscenes with single owners. Two developers editing the same scene will produce corrupted merges. The playtest bootstrapper is no longer needed because the multiplayer scene structure (FishNet host mode, NetworkPlayer prefab, server-authoritative grid) is the development target.
 
-**Supersedes:** D-009 (one playtest scene per developer), D-012 (IPlaytestFeatureProvider), D-014 (MasterPlaytest merge gate). These decisions governed the playtest system which is now retired. The new merge gate is: the HomeBase subscene group loads without errors and the feature works in multiplayer host mode.
+**Supersedes:** D-009 (one playtest scene per developer), D-012 (IPlaytestFeatureProvider), D-014 (MasterPlaytest merge gate). These decisions governed the playtest system which is now retired. The new merge gate is: the HomeBase subscene group loads without errors and the feature works in multiplayer host mode (hit Play, click "Host" in ConnectionUI).
 
 **Impact:**
 - Kevin deletes the playtest bootstrapper files and PlayerHUD system

@@ -119,7 +119,7 @@ Don't skip step 1. Server-side factory simulation logic is pure C# with no MonoB
 
 1. **Simulation layer** — pure C# classes with EditMode tests (D-004 pattern). All tests must pass.
 2. **MonoBehaviour wrappers** — thin wrappers that own the simulation objects and spawn placeholder visuals.
-3. **Multiplayer verification** — open HomeBase, hit Play (FishNet boots as host), exercise every feature the phase adds. The feature must work in multiplayer host mode.
+3. **Multiplayer verification** — open HomeBase, hit Play, click "Host" in ConnectionUI to start as host+client. Exercise every feature the phase adds. The feature must work in multiplayer host mode.
 4. **Human verification** — the developer plays the scene and confirms behavior matches intent before the phase is marked complete.
 
 **Log extensively.** Every user action, placement, removal, validation failure, and state change must produce a `Debug.Log` message. These logs are the primary verification tool -- if something goes wrong, the console should make it obvious what happened and why. Log messages should be short and factual: `"foundation placed at (5,3) level 0"`, `"ramp blocked: cell (5,7) occupied by non-structural building"`, `"wall removed at (5,5) edge north"`.
@@ -209,7 +209,7 @@ Scenes/
 
 `Core_Network.unity` is always loaded first and never unloaded. The NetworkManager lives there. `ItemRegistry` and `RecipeRegistry` live in Core -- loaded once at startup.
 
-Scene loading is host-initiated: `NetworkManager.SceneManager.LoadScene` loads the same scene for all connected clients simultaneously.
+Scene loading uses `SceneLoaderBehaviour.TransitionTo()` which calls `SceneManager.LoadSceneAsync` additively for each scene in the group. FishNet scene sync is a future step.
 
 **Playtest scenes (`Scenes/Playtest/`) are retired (D-019).** Do not use or reference them.
 

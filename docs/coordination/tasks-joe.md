@@ -731,7 +731,7 @@ Turrets should have configurable range and targeting priority (closest, lowest h
 The multiplayer HomeBase scene currently uses a flat checkerboard Plane as terrain. Create a real Unity Terrain with sculpted topology and painted textures that gives the game a post-apocalyptic feel.
 
 **Implementation:**
-1. Create a new scene: `Assets/_Slopworks/Scenes/Multiplayer/HomeBaseTerrain.unity`
+1. Create a new scene: `Assets/_Slopworks/Scenes/Multiplayer/HomeBase_Terrain.unity`
 2. Add a Unity Terrain (GameObject > 3D Object > Terrain)
 3. Set the Terrain object to layer 12 (Terrain) -- required for player ground check
 4. Terrain size: 200x200, height 50-100m
@@ -756,7 +756,7 @@ The multiplayer HomeBase scene currently uses a flat checkerboard Plane as terra
 
 The playtest bootstrapper system is retired. All development and testing now happens in the multiplayer HomeBase scene structure. HomeBase is split into additive subscenes -- each developer owns their scene files and never edits another developer's `.unity` files.
 
-**How to test:** Open `HomeBase.unity` (or your owned subscene), hit Play. FishNet boots as host. Test in multiplayer host mode.
+**How to test:** Open `HomeBase.unity` (or your owned subscene), hit Play, then click "Host" in the ConnectionUI to start as host+client. Test in multiplayer host mode.
 
 **Scene group:** "HomeBase" maps to `["HomeBase", "HomeBase_Terrain", "HomeBase_UI"]` in `SceneLoaderBehaviour._sceneGroups`. All load additively.
 
@@ -826,7 +826,7 @@ The terrain scene created in J-029 needs to work as an additive subscene in the 
 
 Create the adapter that translates `BuildStateSnapshot` into calls to your visor UI components. This is the ONLY file that knows about both the snapshot and Joe's UI components. Kevin never touches it.
 
-**Testing context (D-019):** Test this in the multiplayer HomeBase scene, not a playtest bootstrapper. Hit Play, FishNet boots as host, NetworkBuildController finds your adapter via `GetComponentInChildren<IBuildStateReceiver>()` on the player.
+**Testing context (D-019):** Test this in the multiplayer HomeBase scene, not a playtest bootstrapper. Hit Play, click "Host" in ConnectionUI, then NetworkBuildController finds your adapter via `GetComponentInChildren<IBuildStateReceiver>()` on the spawned player.
 
 **Files to create:**
 - `Scripts/UI/VisorBuildAdapter.cs` -- implements `IBuildStateReceiver`
