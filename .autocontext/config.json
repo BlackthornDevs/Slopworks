@@ -1,0 +1,27 @@
+{
+  "project_name": "slopworks",
+  "max_session_lessons": 15,
+  "confidence_threshold": 0.3,
+  "staleness_days": 60,
+  "performance_baselines": true,
+  "pretooluse_hook": "enabled",
+  "persistence_mode": "auto_curated",
+  "correction_sensitivity": "medium",
+  "playbook_generation": "auto",
+  "multi_machine": {
+    "enabled": true,
+    "machines": ["legion2025", "houseofjawn", "officejawn", "landofjawn"]
+  },
+  "baseline_commands": [
+    "pytest", "npm test", "npm run test", "npm run build",
+    "cargo test", "go test", "vitest", "jest", "make test"
+  ],
+  "baselines": {},
+  "builtin_rules": {
+    "tautological_test_check": true,
+    "no_mock_everything": true,
+    "no_happy_path_only": true,
+    "no_bare_assertions": true,
+    "test_independence": true
+  }
+}
