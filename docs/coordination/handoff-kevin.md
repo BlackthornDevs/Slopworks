@@ -1,43 +1,49 @@
 # Kevin's Claude -- Session Handoff
 
-Last updated: 2026-03-14 session
-Branch: kevin/belts
-Last commit: 0bff421 Per-endpoint belt port direction validation
+Last updated: 2026-03-14
+Branch: kevin/belt-simulation-tick
+Last commit: a1561a8 Update prefabs, scenes, and belt docs from prior work
 
 ## What was completed this session
 
-- **Belt port flow inheritance** (`GridManager.cs`): `CmdPlaceBelt` now accepts `flipBeltPorts` parameter. When true, belt start becomes Output and end becomes Input (reversed from default). Flip determined client-side based on whether user started from an Input port. Commit `bddea55`.
-- **Per-endpoint port direction validation** (`NetworkBuildController.cs`): replaced old machine-to-machine `portDirectionRejected` check with per-endpoint validation. Each belt endpoint checks that its port direction is opposite to the port it connects to. Covers belt-to-machine, belt-to-belt, belt-to-storage uniformly. Commit `0bff421`.
-- **Removed old portDirectionRejected** that only checked start-vs-end machine ports. The new check validates at the belt port level instead.
+### Belt port flow inheritance (kevin/belts, merged to master via PR #72)
+- `CmdPlaceBelt` accepts `flipBeltPorts` parameter (`GridManager.cs`)
+- When starting from an Input port, belt start becomes Output and end becomes Input
+- Per-endpoint port direction validation: each belt end must be opposite to the port it connects to (`NetworkBuildController.cs`)
+
+### Belt simulation tick (kevin/belt-simulation-tick)
+- **Generalized BeltNetwork** (`BeltNetwork.cs`): `BeltConnection` now stores `IItemSource`/`IItemDestination` instead of `BeltSegment`. All connection types (belt-to-machine, belt-to-storage, belt-to-belt) tick uniformly.
+- **Belt property on adapters** (`BeltOutputAdapter.cs`, `BeltInputAdapter.cs`): exposed for disconnect/identity matching
+- **Machine.ForceOutput** (`Machine.cs`): test-only method for placing items in output buffer
+- **6 new EditMode tests** (`BeltNetworkTests.cs`): belt-to-machine, machine-to-belt, belt-to-storage, storage-to-belt, hold-on-reject
+- **WireBeltSimulationConnection** (`GridManager.cs`): creates simulation connections at belt placement time via proximity lookup on BeltPort components
+- **TestItemSpawner** (`TestItemSpawner.cs`): T key fills all storage with iron_scrap, sets machines to smelt_iron
+- **Prefabs updated**: CONSTRUCTOR, STORAGE CONTAINER, BELT SUPPORT prefabs committed with scene changes
+- **User verified**: items flow from storage through belt into machine in multiplayer host mode
 
 ## What's in progress (not yet committed)
-
-- Unity asset changes (terrain, materials, scene, prefabs) -- unstaged, not part of code commits
-- `docs/reference/belt-interactions.md` and `BeltPortEditor.cs` have uncommitted changes from prior work
+- Terrain data and water material changes are unstaged (user said don't commit)
 
 ## Next task to pick up
-
-1. **Playtest belt port validation** -- verify all 5 test cases from the plan work correctly:
-   - Machine Output to Machine Input (no flip, normal flow)
-   - Machine Input to ground (flip, Output at machine end)
-   - Machine Input to Machine Input (should be rejected -- belt Input meets Machine Input)
-   - Chain through support (belt Input at support -> second belt starts from Input -> flip)
-   - Machine Output to ground (no flip)
-2. **Ghost preview mesh** during belt placement (currently just line renderer)
-3. **Belt simulation tick** and item transport on placed belts
+1. **PR for kevin/belt-simulation-tick** -- create PR to master, wait for checks, merge
+2. **Add NetworkMachine and NetworkStorage to prefabs** -- user added them manually this session but the prefabs need to be committed with those components permanently. Verify they survived the session.
+3. **Ghost preview mesh** -- replace line renderer with actual belt mesh during placement
+4. **Belt item visuals** -- items render as orange cubes, should eventually use item-specific meshes/colors
+5. **Machine UI** -- recipe selection and status display for multiplayer (currently F cycles recipes with no visual feedback)
+6. **Storage UI** -- inventory view for storage containers in multiplayer
 
 ## Blockers or decisions needed
-
-None
+- None
 
 ## Test status
-
-- Tests not run this session (MCP run_tests corrupts FishNet DefaultPrefabObjects)
+- Tests not run via MCP (corrupts FishNet DefaultPrefabObjects)
+- 6 new tests added for generalized BeltNetwork
 - Run manually: Window > General > Test Runner > EditMode > Run All
 
 ## Key context the next session needs
-
-- **Branch:** `kevin/belts` (off multiplayer-step1)
-- **`_beltFlipPorts`** is set in `HandleBeltPickStart` (line ~1318) based on whether the starting port is Input. Already existed before this session.
-- **Per-endpoint validation** checks each end independently: belt's port dir at that end must differ from the existing port's dir. Same direction = rejected.
-- **FindNearbyPort preference** (lines 1845-1877) already prefers Output for start, Input for end. This cooperates with the flip -- after flip, belt Output at start matches the preference for finding Output ports.
+- **Branch:** `kevin/belt-simulation-tick` (not yet merged to master)
+- **Belt simulation is verified working** -- user confirmed items flow in multiplayer host mode
+- **Inserter class is dead code in multiplayer** -- BeltNetwork handles all transfers directly (Satisfactory-style, no swing timer). Don't use Inserter, ConnectionResolver, PortNodeRegistry, or PortNode in multiplayer code.
+- **TestItemSpawner T key** is a debug tool -- press T to fill all storage and set recipes. Delete the script when real UI exists.
+- **NetworkMachine/NetworkStorage must be on prefabs** -- without them, simulation objects don't exist and belt connections have nothing to wire to. User added them manually this session.
+- **Per-endpoint port validation** -- each belt end checks its direction is opposite to the port it connects to. Validated at belt-to-machine, belt-to-belt, belt-to-storage level.

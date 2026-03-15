@@ -291,3 +291,22 @@ EditMode tests passing is necessary but not sufficient. The MasterPlaytest scene
 - Joe's VisorBuildAdapter (J-030) attaches to NetworkPlayer prefab, not a scene object
 - All testing happens in multiplayer host mode (hit Play, FishNet boots as host)
 - The NetworkPlayer prefab (`Prefabs/Player/NetworkPlayer.prefab`) is Joe's -- UI components attach there
+
+---
+
+## D-020: Direct belt transfers, no inserters (Satisfactory model)
+
+**Date:** 2026-03-14
+**Resolved by:** Lead (Kevin's Claude)
+**Context:** The vertical slice used `Inserter` objects with swing timers to transfer items between belts, machines, and storage. This modeled Factorio-style inserter arms. In the multiplayer system, belts connect directly to machine/storage ports with no physical gap -- like Satisfactory.
+
+**Decision:** Generalize `BeltNetwork` to handle all connection types (belt-to-machine, belt-to-storage, belt-to-belt) using `IItemSource`/`IItemDestination` adapters. No inserters. Transfer is direct: extract from source, insert into destination, hold item if rejected, retry next tick.
+
+**Rationale:** Our belt port system connects directly to machine/storage ports. There is no visible inserter arm or physical gap. The Inserter's swing timer adds complexity with no gameplay benefit. BeltNetwork already had the exact extract/hold/retry pattern needed.
+
+**Impact:**
+- `BeltConnection` stores `IItemSource Source` / `IItemDestination Destination` instead of `BeltSegment From/To`
+- `Inserter`, `ConnectionResolver`, `PortNodeRegistry`, `PortNode` are dead code in multiplayer
+- `GridManager.AutoWire`, `TryCreateInserter`, `GetItemSource`, `GetItemDestination` are dead code in multiplayer
+- All connection wiring happens in `GridManager.WireBeltSimulationConnection` via proximity lookup on BeltPort components
+- Existing adapters (BeltOutputAdapter, BeltInputAdapter, MachineInputAdapter, MachineOutputAdapter) and StorageContainer (implements both interfaces directly) plug into BeltNetwork unchanged
