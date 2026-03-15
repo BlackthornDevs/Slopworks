@@ -1,59 +1,43 @@
 # Kevin's Claude -- Session Handoff
 
-Last updated: 2026-03-10 23:30
-Branch: kevin/belts-supports
-Last commit: 359c648 PR review fixes, camera jitter fix, belt validation overhaul
+Last updated: 2026-03-14 session
+Branch: kevin/belts
+Last commit: 0bff421 Per-endpoint belt port direction validation
 
 ## What was completed this session
 
-### PR #58 review fixes (from Joe's review)
-- Resolved git conflict markers in `Assets/FBX Raw.meta` and `Assets/_Slopworks/Resources/Prefabs/Buildings/Supports.meta`
-- Removed `Assets/_Recovery/` crash artifacts from tracking, added to `.gitignore`
-- Removed server-side TurnTooSharp bypass in `GridManager.cs:402` -- validator now allows U-turns directly
-
-### Camera jitter fix (NetworkPlayerController.cs)
-- Replaced `transform.Rotate()` with `rb.MoveRotation()` in `Look()` so yaw goes through Rigidbody interpolation alongside position
-- `Look()` runs in `LateUpdate()`, `CheckJump()` stays in `Update()`
-
-### Belt validation overhaul
-- **Default mode** now builds actual route waypoints and validates per-segment slope via new `BeltRouteBuilder.ValidateRoute()` instead of skipping all extended checks
-- **MaxSlopeAngle** lowered from 45 to 30 degrees (now references `BeltRouteBuilder.MaxRampAngle` directly)
-- **TurnTooSharp bypass removed** from both client (`NetworkBuildController`) and server (`GridManager`). Validator handles U-turns: zero endDir rejected, all other angles including 180-degree U-turns pass. Turn geometry handled by per-mode validation.
-- **Validation paths separated**: Default mode validates actual route geometry. Straight/Curved keeps existing along/cross/turn math.
-
-### Host mode double-bake optimization (NetworkBeltSegment.cs)
-- `OnStartClient()` skips route rebuild + mesh bake when `IsServerInitialized` (host already baked in GridManager)
-
-### Belt sync research (docs/research/belts/)
-- `waypoint-sync-approach.md` -- SyncList<Waypoint> analysis: bandwidth, FishNet behavior, implementation plan
-- `mesh-serialization-approach.md` -- raw mesh serialization analysis: size estimates, transport limits, industry precedent
-- Both saved for review next session
+- **Belt port flow inheritance** (`GridManager.cs`): `CmdPlaceBelt` now accepts `flipBeltPorts` parameter. When true, belt start becomes Output and end becomes Input (reversed from default). Flip determined client-side based on whether user started from an Input port. Commit `bddea55`.
+- **Per-endpoint port direction validation** (`NetworkBuildController.cs`): replaced old machine-to-machine `portDirectionRejected` check with per-endpoint validation. Each belt endpoint checks that its port direction is opposite to the port it connects to. Covers belt-to-machine, belt-to-belt, belt-to-storage uniformly. Commit `0bff421`.
+- **Removed old portDirectionRejected** that only checked start-vs-end machine ports. The new check validates at the belt port level instead.
 
 ## What's in progress (not yet committed)
-- Two research docs in docs/research/belts/ (not yet committed)
-- Unity asset changes (terrain data, materials, scene, prefab, DefaultPrefabObjects) -- unstaged, not part of code commits
+
+- Unity asset changes (terrain, materials, scene, prefabs) -- unstaged, not part of code commits
+- `docs/reference/belt-interactions.md` and `BeltPortEditor.cs` have uncommitted changes from prior work
 
 ## Next task to pick up
-1. **Bug: Supports allow double belt connections** -- a support with an existing belt still allows another belt to attach to it
-2. **Bug: Wrong path direction on port-to-port belts** -- belt routes go opposite direction from source, through buildings. See screenshot in PR #58 review comments. DeriveEndDirection picks wrong direction when connecting between machine/storage ports.
-3. **Feature: R key to change endpoint direction** -- cycle end direction during belt drag so player can force horizontal offset or sideways turn instead of auto-derived direction
-4. **Review belt sync research** -- read waypoint-sync-approach.md and mesh-serialization-approach.md, make architectural decision
-5. **Ghost preview mesh** during belt placement (currently just line renderer)
-6. **Belt simulation tick** and item transport on placed belts
+
+1. **Playtest belt port validation** -- verify all 5 test cases from the plan work correctly:
+   - Machine Output to Machine Input (no flip, normal flow)
+   - Machine Input to ground (flip, Output at machine end)
+   - Machine Input to Machine Input (should be rejected -- belt Input meets Machine Input)
+   - Chain through support (belt Input at support -> second belt starts from Input -> flip)
+   - Machine Output to ground (no flip)
+2. **Ghost preview mesh** during belt placement (currently just line renderer)
+3. **Belt simulation tick** and item transport on placed belts
 
 ## Blockers or decisions needed
-- PR #58 updated with fixes, awaiting re-review from Joe
-- PR #59 (Joe's terrain work) has merge conflicts with us on terrain assets. Whichever merges first, the other rebases.
-- Belt sync architecture decision pending (waypoint SyncList vs current endpoint SyncVars)
+
+None
 
 ## Test status
+
 - Tests not run this session (MCP run_tests corrupts FishNet DefaultPrefabObjects)
 - Run manually: Window > General > Test Runner > EditMode > Run All
 
 ## Key context the next session needs
-- **Branch:** `kevin/belts-supports` (PR #58 open to master)
-- **Validation is now mode-aware:** Default mode uses `ValidateRoute()` on actual waypoints. Straight/Curved uses along/cross geometry math. Don't mix them.
-- **No TurnTooSharp bypass anywhere.** The validator allows U-turns directly. If U-turn behavior breaks, fix the validator, don't add bypasses back to callers.
-- **Camera jitter fixed** with `rb.MoveRotation()`. If jitter returns, the issue is Rigidbody interpolation timing, not Update/LateUpdate placement.
-- **FBX RAW/ (uppercase)** folder at repo root is untracked duplicate of Assets/FBX Raw/. Can be deleted.
-- **DefaultPrefabObjects.asset** is modified locally -- if FishNet acts up, restore with `git checkout HEAD -- Assets/DefaultPrefabObjects.asset` and reopen Unity.
+
+- **Branch:** `kevin/belts` (off multiplayer-step1)
+- **`_beltFlipPorts`** is set in `HandleBeltPickStart` (line ~1318) based on whether the starting port is Input. Already existed before this session.
+- **Per-endpoint validation** checks each end independently: belt's port dir at that end must differ from the existing port's dir. Same direction = rejected.
+- **FindNearbyPort preference** (lines 1845-1877) already prefers Output for start, Input for end. This cooperates with the flip -- after flip, belt Output at start matches the preference for finding Output ports.

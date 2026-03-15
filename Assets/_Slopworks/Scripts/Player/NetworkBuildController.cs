@@ -53,6 +53,7 @@ public class NetworkBuildController : NetworkBehaviour
     private Vector3 _beltStartDir;
     private bool _beltStartFromPort;
     private bool _beltEndFromPort;
+    private bool _beltFlipPorts;         // true when starting from an Input port (swap belt Input/Output ends)
     private BeltRoutingMode _beltRoutingMode = BeltRoutingMode.Default;
     private GameObject _beltPreviewLine;
     private LineRenderer _beltLineRenderer;
@@ -1313,6 +1314,16 @@ public class NetworkBuildController : NetworkBehaviour
             _beltStartPos = fromPort ? pos : new Vector3(pos.x, pos.y + GridManager.Instance.SupportAnchorHeight, pos.z);
             _beltStartDir = dir;
             _beltStartFromPort = fromPort;
+
+            // Determine port flip: if starting from an Input port, swap belt Input/Output ends
+            _beltFlipPorts = false;
+            if (fromPort)
+            {
+                var startPort = FindNearbyPort(pos, true, 0.6f);
+                if (startPort != null && startPort.Direction == BeltPortDirection.Input)
+                    _beltFlipPorts = true;
+            }
+
             _beltState = BeltPlacementState.Dragging;
 
             // Show ghost support at start if placing on ground
@@ -1369,6 +1380,26 @@ public class NetworkBuildController : NetworkBehaviour
         {
             var startDir = _beltStartDir;  // R-key direction, never overridden
             bool isValid;
+
+            // Per-endpoint port compatibility: belt port must be opposite to the port it connects to
+            bool portDirectionRejected = false;
+            {
+                var beltStartPortDir = _beltFlipPorts ? BeltPortDirection.Output : BeltPortDirection.Input;
+                var beltEndPortDir = _beltFlipPorts ? BeltPortDirection.Input : BeltPortDirection.Output;
+
+                if (_beltStartFromPort)
+                {
+                    var startPort = FindNearbyPort(_beltStartPos, true, 0.6f);
+                    if (startPort != null && startPort.Direction == beltStartPortDir)
+                        portDirectionRejected = true;
+                }
+                if (endFromPort)
+                {
+                    var endPort = FindNearbyPort(endPos, false, 0.6f);
+                    if (endPort != null && endPort.Direction == beltEndPortDir)
+                        portDirectionRejected = true;
+                }
+            }
 
             // Grid snap free endpoints
             if (!endFromPort)
@@ -1485,7 +1516,18 @@ public class NetworkBuildController : NetworkBehaviour
                         }
                     }
                 }
+
+                // Validate the actual built route geometry against start/end directions
+                if (isValid)
+                {
+                    var testWaypoints = BeltRouteBuilder.Build(
+                        _beltStartPos, startDir, endPos, endDir, _beltRoutingMode);
+                    isValid = BeltRouteBuilder.ValidateRoute(testWaypoints, startDir, endDir);
+                }
             }
+
+            if (portDirectionRejected)
+                isValid = false;
 
             // Ghost support at end position
             if (!endFromPort)
@@ -1536,7 +1578,8 @@ public class NetworkBuildController : NetworkBehaviour
                     endDir,
                     routingMode: (byte)_beltRoutingMode,
                     startFromPort: _beltStartFromPort,
-                    endFromPort: endFromPort);
+                    endFromPort: endFromPort,
+                    flipBeltPorts: _beltFlipPorts);
 
                 _beltState = BeltPlacementState.Idle;
                 _beltPreviewLine.SetActive(false);
@@ -1639,6 +1682,37 @@ public class NetworkBuildController : NetworkBehaviour
                 dir = BeltRouteBuilder.DeriveEndDirection(_beltStartPos, _beltStartDir, pos);
             else
                 dir = GetPortFlowDirection(beltPort, isStart);
+
+            // Reject if route direction doesn't approach port correctly.
+            // awayFromMachine = outward from port face.
+            // Start: route must leave outward (dot > 0). End: route must arrive inward (dot < 0).
+            var bpParent = beltPort.transform.parent;
+            if (bpParent != null && dir.sqrMagnitude > 0.001f)
+            {
+                bool bpIsBelt = bpParent.GetComponent<NetworkBeltSegment>() != null;
+                if (!bpIsBelt)
+                {
+                    var away = beltPort.WorldPosition - bpParent.position;
+                    away.y = 0;
+                    if (away.sqrMagnitude > 0.001f)
+                    {
+                        var flatDir = BeltRouteBuilder.SnapToCardinal(dir);
+                        var flatAway = BeltRouteBuilder.SnapToCardinal(away.normalized);
+                        float dot = Vector3.Dot(flatDir, flatAway);
+                        if (isStart && dot < 0.5f)
+                        {
+                            if (log) Debug.Log($"belt resolve {endpoint}: -> REJECTED, start route {flatDir} doesn't leave port face {flatAway}");
+                            return false;
+                        }
+                        if (!isStart && dot > -0.5f)
+                        {
+                            if (log) Debug.Log($"belt resolve {endpoint}: -> REJECTED, end route {flatDir} doesn't approach port face {flatAway}");
+                            return false;
+                        }
+                    }
+                }
+            }
+
             fromPort = true;
             return true;
         }
@@ -1675,6 +1749,35 @@ public class NetworkBuildController : NetworkBehaviour
                 dir = BeltRouteBuilder.DeriveEndDirection(_beltStartPos, _beltStartDir, pos);
             else
                 dir = GetPortFlowDirection(nearbyPort, isStart);
+
+            // Reject if route direction doesn't approach port correctly.
+            var npParent = nearbyPort.transform.parent;
+            if (npParent != null && dir.sqrMagnitude > 0.001f)
+            {
+                bool npIsBelt = npParent.GetComponent<NetworkBeltSegment>() != null;
+                if (!npIsBelt)
+                {
+                    var away = nearbyPort.WorldPosition - npParent.position;
+                    away.y = 0;
+                    if (away.sqrMagnitude > 0.001f)
+                    {
+                        var flatDir = BeltRouteBuilder.SnapToCardinal(dir);
+                        var flatAway = BeltRouteBuilder.SnapToCardinal(away.normalized);
+                        float dot = Vector3.Dot(flatDir, flatAway);
+                        if (isStart && dot < 0.5f)
+                        {
+                            if (log) Debug.Log($"belt resolve {endpoint}: -> REJECTED, start route {flatDir} doesn't leave port face {flatAway}");
+                            return false;
+                        }
+                        if (!isStart && dot > -0.5f)
+                        {
+                            if (log) Debug.Log($"belt resolve {endpoint}: -> REJECTED, end route {flatDir} doesn't approach port face {flatAway}");
+                            return false;
+                        }
+                    }
+                }
+            }
+
             fromPort = true;
             return true;
         }
