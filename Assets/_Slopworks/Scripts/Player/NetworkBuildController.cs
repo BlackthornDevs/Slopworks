@@ -1278,6 +1278,7 @@ public class NetworkBuildController : NetworkBehaviour
                     _beltStartSupportGhost.transform.rotation = Quaternion.LookRotation(previewDir);
                     _beltStartSupportGhost.SetActive(true);
                     ApplyGhostColor(_beltStartSupportGhost, ValidColor);
+                    ApplySupportHeightOffset(_beltStartSupportGhost, _beltSupportHeightOffset);
                 }
 
                 // Show direction line from ghost support
@@ -1355,6 +1356,7 @@ public class NetworkBuildController : NetworkBehaviour
                     _beltStartSupportGhost.transform.rotation = Quaternion.LookRotation(dir);
                     _beltStartSupportGhost.SetActive(true);
                     ApplyGhostColor(_beltStartSupportGhost, ValidColor);
+                    ApplySupportHeightOffset(_beltStartSupportGhost, _beltSupportHeightOffset);
                 }
             }
 
@@ -1558,6 +1560,7 @@ public class NetworkBuildController : NetworkBehaviour
                     _beltEndSupportGhost.transform.position = endGroundPos;
                     _beltEndSupportGhost.transform.rotation = Quaternion.LookRotation(endDir);
                     _beltEndSupportGhost.SetActive(true);
+                    ApplySupportHeightOffset(_beltEndSupportGhost, _beltSupportHeightOffset);
                 }
             }
             else if (_beltEndSupportGhost != null)
@@ -2191,6 +2194,32 @@ public class NetworkBuildController : NetworkBehaviour
         var supportPrefab = GridManager.Instance.GetPrefab(BuildingCategory.Support, 0);
         if (supportPrefab == null) return null;
         return CreateGhostFromPrefab(supportPrefab);
+    }
+
+    private void ApplySupportHeightOffset(GameObject supportGhost, float heightOffset)
+    {
+        if (supportGhost == null) return;
+
+        foreach (Transform child in supportGhost.transform)
+        {
+            var meshFilter = child.GetComponent<MeshFilter>();
+            if (meshFilter == null) continue;
+            string meshName = meshFilter.sharedMesh != null ? meshFilter.sharedMesh.name : "";
+
+            if (meshName.Contains("3155")) // Cylinder pole
+            {
+                float defaultHeight = GridManager.Instance.SupportAnchorHeight;
+                child.localScale = new Vector3(1f, 1f + (heightOffset / defaultHeight), 1f);
+            }
+            else if (meshName.Contains("3029")) // Top piece
+            {
+                child.localPosition = new Vector3(child.localPosition.x, -0.075f + heightOffset, child.localPosition.z);
+            }
+        }
+
+        var anchor = supportGhost.GetComponentInChildren<BeltSnapAnchor>();
+        if (anchor != null)
+            anchor.transform.localPosition = new Vector3(anchor.transform.localPosition.x, 1f + heightOffset, anchor.transform.localPosition.z);
     }
 
     private void HideSupportGhosts()
