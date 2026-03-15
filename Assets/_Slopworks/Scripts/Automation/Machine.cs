@@ -101,6 +101,18 @@ public class Machine
     }
 
     /// <summary>
+    /// Directly sets the contents of an output buffer slot.
+    /// Used by tests and debug tooling to force items into a machine's output.
+    /// </summary>
+    public void ForceOutput(int slotIndex, ItemInstance item, int count)
+    {
+        if (slotIndex < 0 || slotIndex >= _outputBuffer.Length)
+            return;
+
+        _outputBuffer[slotIndex] = new ItemSlot { item = item, count = count };
+    }
+
+    /// <summary>
     /// Removes up to the specified count from an output buffer slot.
     /// Returns the items actually extracted.
     /// </summary>
