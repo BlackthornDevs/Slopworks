@@ -49,7 +49,7 @@ public static class BeltPortEditor
         port.SlotIndex = slotIndex;
 
         var collider = child.AddComponent<SphereCollider>();
-        collider.radius = 0.15f;
+        collider.radius = 0.4f;
         collider.isTrigger = true;
 
         Selection.activeGameObject = child;

@@ -170,206 +170,516 @@ Every way a belt endpoint can connect, what direction it should produce, and how
 
 
 
+=== BELT DIAGNOSTIC DUMP ===
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1876)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+  belt state: Dragging
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1877)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+  belt tool: Belt
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1878)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+  routing mode: Curved
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1879)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+  placeRotation: 0
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1880)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+  START pos: (53.00, 22.43, 32.00)
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1884)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+  START groundPos: (53.00, 22.43, 32.00)
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1885)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+  START dir: (-1.00, 0.00, 0.00)
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1886)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+  START fromPort: True
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1887)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+  START nearby port: Input on MACHINE/STORAGE 'CONSTRUCTOR(Clone) (3)' at (53.00, 22.43, 32.00) fwd=(-1.00, 0.00, 0.00)
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1897)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+  RAYCAST hit: 'BeltPort_Input_0' layer=21 pos=(50.94, 22.52, 38.01)
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1910)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+    parent: 'STORAGE CONTAINER(Clone)'
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1911)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+    grandparent: '(none)'
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1912)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+    BELTPORT found: Input on machine/storage 'STORAGE CONTAINER(Clone)'
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1924)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+      port.WorldPosition: (51.00, 22.43, 38.50)
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1925)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+      port.WorldDirection (transform.forward): (0.00, 0.00, -1.00)
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1926)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+      parent.position (center): (51.00, 21.43, 42.00)
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1927)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+      awayFromMachine (raw): (0.00, 0.00, -3.50)
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1928)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+      awayFromMachine (normalized): (0.00, 0.00, -1.00)
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1929)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+      GetPortFlowDirection(isStart=true):  (0.00, 0.00, -1.00)
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1930)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+      GetPortFlowDirection(isStart=false): (0.00, 0.00, 1.00)
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1931)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+      port.IsFull: False (0 connections)
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1932)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+    FindNearbyPort(isStart=true):  Input at (51.00, 22.43, 38.50)
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1946)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+    FindNearbyPort(isStart=false): Input at (51.00, 22.43, 38.50)
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1947)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+    FindNearbyAnchor: null
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1951)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+  END raw: pos=(51.00, 22.43, 38.50) dir=(0.00, 0.00, 1.00) fromPort=True
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1958)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+  END adjusted: pos=(51.00, 22.43, 38.50) dir=(0.00, 0.00, 1.00) fromPort=True
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1968)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+  END port type: Input on MACHINE/STORAGE
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1981)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+  START: pos=(53.00, 22.43, 32.00) dir=(-1.00, 0.00, 0.00)
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1991)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+  ROUTE: 4 waypoints, length=7.45m
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1995)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+    wp[0]: pos=(53.00, 22.43, 32.00) tanIn=(0.00, 0.00, 0.00) tanOut=(-0.07, 0.00, 0.00)
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1999)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+    wp[1]: pos=(52.80, 22.43, 32.00) tanIn=(0.07, 0.00, 0.00) tanOut=(-0.99, 0.00, 0.00)
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1999)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+    wp[2]: pos=(51.00, 22.43, 33.80) tanIn=(0.00, 0.00, -0.99) tanOut=(0.00, 0.00, 1.57)
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1999)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+    wp[3]: pos=(51.00, 22.43, 38.50) tanIn=(0.00, 0.00, -1.57) tanOut=(0.00, 0.00, 0.00)
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1999)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+  ROUTE closest to end machine center: 3.50m
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:2014)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+  Validate: valid=True error=None
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:2018)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+=== END DIAGNOSTIC DUMP ===
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:2043)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+
 
 
 === BELT DIAGNOSTIC DUMP ===
 UnityEngine.Debug:Log (object)
-NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1693)
-NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:153)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1876)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
 
   belt state: Dragging
 UnityEngine.Debug:Log (object)
-NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1694)
-NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:153)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1877)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
 
   belt tool: Belt
 UnityEngine.Debug:Log (object)
-NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1695)
-NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:153)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1878)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
 
-  routing mode: Default
+  routing mode: Curved
 UnityEngine.Debug:Log (object)
-NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1696)
-NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:153)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1879)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
 
   placeRotation: 0
 UnityEngine.Debug:Log (object)
-NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1697)
-NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:153)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1880)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
 
-  START pos: (47.00, 26.43, 30.00)
+  START pos: (53.00, 22.43, 32.00)
 UnityEngine.Debug:Log (object)
-NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1701)
-NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:153)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1884)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
 
-  START groundPos: (47.00, 26.43, 30.00)
+  START groundPos: (53.00, 22.43, 32.00)
 UnityEngine.Debug:Log (object)
-NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1702)
-NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:153)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1885)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
 
-  START dir: (0.00, 0.00, 1.00)
+  START dir: (-1.00, 0.00, 0.00)
 UnityEngine.Debug:Log (object)
-NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1703)
-NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:153)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1886)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
 
   START fromPort: True
 UnityEngine.Debug:Log (object)
-NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1704)
-NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:153)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1887)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
 
-  START nearby anchor: pos=(47.00, 26.43, 30.00) dir=(0.00, 0.00, 1.00) full=False
+  START nearby port: Input on MACHINE/STORAGE 'CONSTRUCTOR(Clone) (3)' at (53.00, 22.43, 32.00) fwd=(-1.00, 0.00, 0.00)
 UnityEngine.Debug:Log (object)
-NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1718)
-NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:153)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1897)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
 
-  RAYCAST hit: 'BeltSnapAnchor' layer=21 pos=(46.39, 22.46, 40.08)
+  RAYCAST hit: 'BeltSnapAnchor' layer=21 pos=(50.92, 22.46, 34.88)
 UnityEngine.Debug:Log (object)
-NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1727)
-NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:153)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1910)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
 
     parent: 'BELT SUPPORT(Clone)'
 UnityEngine.Debug:Log (object)
-NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1728)
-NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:153)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1911)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
 
     grandparent: '(none)'
 UnityEngine.Debug:Log (object)
-NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1729)
-NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:153)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1912)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
 
-    ANCHOR found: pos=(46.00, 22.43, 40.00) dir=(-1.00, 0.00, 0.00)
+    ANCHOR found: pos=(51.00, 22.43, 35.00) dir=(0.00, 0.00, 1.00)
 UnityEngine.Debug:Log (object)
-NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1756)
-NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:153)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1939)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
 
       IsFull: False (0 connections)
 UnityEngine.Debug:Log (object)
-NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1757)
-NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:153)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1940)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
 
     FindNearbyPort(isStart=true):  null
 UnityEngine.Debug:Log (object)
-NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1763)
-NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:153)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1946)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
 
     FindNearbyPort(isStart=false): null
 UnityEngine.Debug:Log (object)
-NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1764)
-NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:153)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1947)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
 
-    FindNearbyAnchor: pos=(46.00, 22.43, 40.00) full=False
+    FindNearbyAnchor: pos=(51.00, 22.43, 35.00) full=False
 UnityEngine.Debug:Log (object)
-NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1768)
-NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:153)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1951)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
 
-  END raw: pos=(46.00, 22.43, 40.00) dir=(-1.00, 0.00, 0.00) fromPort=True
+  END raw: pos=(51.00, 22.43, 35.00) dir=(0.00, 0.00, 1.00) fromPort=True
 UnityEngine.Debug:Log (object)
-NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1775)
-NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:153)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1958)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
 
-  END adjusted: pos=(46.00, 22.43, 40.00) dir=(-1.00, 0.00, 0.00) fromPort=True
+  END adjusted: pos=(51.00, 22.43, 35.00) dir=(0.00, 0.00, 1.00) fromPort=True
 UnityEngine.Debug:Log (object)
-NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1785)
-NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:153)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1968)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
 
   END port type: ANCHOR
 UnityEngine.Debug:Log (object)
-NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1803)
-NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:153)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1986)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
 
-  START: pos=(47.00, 26.43, 30.00) dir=(0.00, 0.00, 1.00)
+  START: pos=(53.00, 22.43, 32.00) dir=(-1.00, 0.00, 0.00)
 UnityEngine.Debug:Log (object)
-NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1808)
-NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:153)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1991)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
 
-  ROUTE: 13 waypoints, length=12.80m
+  ROUTE: 4 waypoints, length=3.95m
 UnityEngine.Debug:Log (object)
-NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1812)
-NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:153)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1995)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
 
-    wp[0]: pos=(47.00, 26.43, 30.00) tanIn=(0.00, 0.00, 0.00) tanOut=(0.00, 0.00, 0.06)
+    wp[0]: pos=(53.00, 22.43, 32.00) tanIn=(0.00, 0.00, 0.00) tanOut=(-0.07, 0.00, 0.00)
 UnityEngine.Debug:Log (object)
-NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1816)
-NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:153)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1999)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
 
-    wp[1]: pos=(47.00, 26.43, 30.19) tanIn=(0.00, 0.00, -0.06) tanOut=(0.00, 0.00, 3.63)
+    wp[1]: pos=(52.80, 22.43, 32.00) tanIn=(0.07, 0.00, 0.00) tanOut=(-0.99, 0.00, 0.00)
 UnityEngine.Debug:Log (object)
-NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1816)
-NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:153)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1999)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
 
-    wp[2]: pos=(47.00, 22.43, 40.33) tanIn=(0.00, 0.00, -3.63) tanOut=(0.00, 0.00, 0.06)
+    wp[2]: pos=(51.00, 22.43, 33.80) tanIn=(0.00, 0.00, -0.99) tanOut=(0.00, 0.00, 0.40)
 UnityEngine.Debug:Log (object)
-NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1816)
-NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:153)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1999)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
 
-    wp[3]: pos=(47.00, 22.43, 40.52) tanIn=(0.00, 0.00, -0.06) tanOut=(0.00, 0.00, 0.06)
+    wp[3]: pos=(51.00, 22.43, 35.00) tanIn=(0.00, 0.00, -0.40) tanOut=(0.00, 0.00, 0.00)
 UnityEngine.Debug:Log (object)
-NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1816)
-NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:153)
-
-    wp[4]: pos=(46.99, 22.43, 40.69) tanIn=(0.01, 0.00, -0.03) tanOut=(-0.01, 0.00, 0.03)
-UnityEngine.Debug:Log (object)
-NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1816)
-NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:153)
-
-    wp[5]: pos=(46.97, 22.43, 40.72) tanIn=(0.01, 0.00, 0.01) tanOut=(-0.01, 0.00, -0.01)
-UnityEngine.Debug:Log (object)
-NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1816)
-NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:153)
-
-    wp[6]: pos=(46.92, 22.43, 40.65) tanIn=(0.02, 0.00, 0.04) tanOut=(-0.02, 0.00, -0.04)
-UnityEngine.Debug:Log (object)
-NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1816)
-NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:153)
-
-    wp[7]: pos=(46.85, 22.43, 40.51) tanIn=(0.03, 0.00, 0.05) tanOut=(-0.03, 0.00, -0.05)
-UnityEngine.Debug:Log (object)
-NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1816)
-NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:153)
-
-    wp[8]: pos=(46.75, 22.43, 40.34) tanIn=(0.04, 0.00, 0.06) tanOut=(-0.04, 0.00, -0.06)
-UnityEngine.Debug:Log (object)
-NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1816)
-NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:153)
-
-    wp[9]: pos=(46.61, 22.43, 40.18) tanIn=(0.05, 0.00, 0.05) tanOut=(-0.05, 0.00, -0.05)
-UnityEngine.Debug:Log (object)
-NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1816)
-NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:153)
-
-    wp[10]: pos=(46.43, 22.43, 40.05) tanIn=(0.07, 0.00, 0.03) tanOut=(-0.07, 0.00, -0.03)
-UnityEngine.Debug:Log (object)
-NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1816)
-NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:153)
-
-    wp[11]: pos=(46.20, 22.43, 40.00) tanIn=(0.08, 0.00, 0.00) tanOut=(-0.06, 0.00, 0.00)
-UnityEngine.Debug:Log (object)
-NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1816)
-NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:153)
-
-    wp[12]: pos=(46.00, 22.43, 40.00) tanIn=(0.06, 0.00, 0.00) tanOut=(0.00, 0.00, 0.00)
-UnityEngine.Debug:Log (object)
-NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1816)
-NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:153)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1999)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
 
   Validate: valid=True error=None
 UnityEngine.Debug:Log (object)
-NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1835)
-NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:153)
-
-  Default U-turn check: dot=0.00 isUturn=False
-UnityEngine.Debug:Log (object)
-NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1843)
-NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:153)
-
-  ValidateRoute: True
-UnityEngine.Debug:Log (object)
-NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1846)
-NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:153)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:2018)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
 
 === END DIAGNOSTIC DUMP ===
 UnityEngine.Debug:Log (object)
-NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1860)
-NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:153)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:2043)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
 
+=== BELT DIAGNOSTIC DUMP ===
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1876)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+  belt state: Dragging
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1877)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+  belt tool: Belt
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1878)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+  routing mode: Curved
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1879)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+  placeRotation: 0
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1880)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+  START pos: (51.00, 22.43, 35.00)
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1884)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+  START groundPos: (51.00, 22.43, 35.00)
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1885)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+  START dir: (0.00, 0.00, 1.00)
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1886)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+  START fromPort: True
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1887)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+  START nearby port: Output on BELT 'Belt(Clone)' at (51.00, 22.43, 35.00) fwd=(0.00, 0.00, 1.00)
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1897)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+  START nearby anchor: pos=(51.00, 22.43, 35.00) dir=(0.00, 0.00, 1.00) full=False
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1901)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+  RAYCAST hit: 'BeltPort_Input_0' layer=21 pos=(50.75, 22.60, 38.10)
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1910)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+    parent: 'STORAGE CONTAINER(Clone)'
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1911)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+    grandparent: '(none)'
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1912)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+    BELTPORT found: Input on machine/storage 'STORAGE CONTAINER(Clone)'
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1924)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+      port.WorldPosition: (51.00, 22.43, 38.50)
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1925)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+      port.WorldDirection (transform.forward): (0.00, 0.00, -1.00)
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1926)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+      parent.position (center): (51.00, 21.43, 42.00)
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1927)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+      awayFromMachine (raw): (0.00, 0.00, -3.50)
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1928)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+      awayFromMachine (normalized): (0.00, 0.00, -1.00)
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1929)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+      GetPortFlowDirection(isStart=true):  (0.00, 0.00, -1.00)
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1930)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+      GetPortFlowDirection(isStart=false): (0.00, 0.00, 1.00)
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1931)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+      port.IsFull: False (0 connections)
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1932)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+    FindNearbyPort(isStart=true):  Input at (51.00, 22.43, 38.50)
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1946)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+    FindNearbyPort(isStart=false): Input at (51.00, 22.43, 38.50)
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1947)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+    FindNearbyAnchor: null
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1951)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+  END raw: pos=(51.00, 22.43, 38.50) dir=(0.00, 0.00, 1.00) fromPort=True
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1958)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+  END adjusted: pos=(51.00, 22.43, 38.50) dir=(0.00, 0.00, 1.00) fromPort=True
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1968)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+  END port type: Input on MACHINE/STORAGE
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1981)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+  START: pos=(51.00, 22.43, 35.00) dir=(0.00, 0.00, 1.00)
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1991)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+  ROUTE: 2 waypoints, length=3.50m
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1995)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+    wp[0]: pos=(51.00, 22.43, 35.00) tanIn=(0.00, 0.00, 0.00) tanOut=(0.00, 0.00, 1.17)
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1999)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+    wp[1]: pos=(51.00, 22.43, 38.50) tanIn=(0.00, 0.00, -1.17) tanOut=(0.00, 0.00, 0.00)
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:1999)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+  ROUTE closest to end machine center: 3.50m
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:2014)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+  Validate: valid=True error=None
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:2018)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
+
+=== END DIAGNOSTIC DUMP ===
+UnityEngine.Debug:Log (object)
+NetworkBuildController:DumpBeltDiagnostics () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:2043)
+NetworkBuildController:Update () (at Assets/_Slopworks/Scripts/Player/NetworkBuildController.cs:200)
 
