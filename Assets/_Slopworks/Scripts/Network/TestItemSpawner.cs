@@ -1,5 +1,6 @@
 using FishNet.Object;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 public class TestItemSpawner : NetworkBehaviour
 {
@@ -8,19 +9,23 @@ public class TestItemSpawner : NetworkBehaviour
     [SerializeField] private Vector3 _spawnCenter = new(50f, 0.5f, 50f);
     [SerializeField] private float _spawnRadius = 5f;
 
-    [Header("Auto-fill Storage")]
-    [SerializeField] private bool _autoFillStorage = true;
-    [SerializeField] private string _autoFillItemId = "iron_scrap";
-    [SerializeField] private int _autoFillCount = 20;
-    [SerializeField] private string _defaultRecipeId = "smelt_iron";
+    [Header("TEST: Fill Storage (T key)")]
+    [SerializeField] private string _testFillItemId = "iron_scrap";
+    [SerializeField] private int _testFillCount = 20;
+    [SerializeField] private string _testRecipeId = "smelt_iron";
 
     public override void OnStartServer()
     {
         base.OnStartServer();
         SpawnTestItems();
+    }
 
-        if (_autoFillStorage)
-            Invoke(nameof(AutoFillStorageAndRecipes), 1f);
+    private void Update()
+    {
+        if (!IsServerInitialized) return;
+
+        if (Keyboard.current != null && Keyboard.current.tKey.wasPressedThisFrame)
+            TestFillStorageAndRecipes();
     }
 
     private void SpawnTestItems()
@@ -45,14 +50,17 @@ public class TestItemSpawner : NetworkBehaviour
         }
     }
 
-    private void AutoFillStorageAndRecipes()
+    private void TestFillStorageAndRecipes()
     {
+        int storageCount = 0;
+        int machineCount = 0;
+
         var storages = FindObjectsByType<NetworkStorage>(FindObjectsSortMode.None);
         foreach (var storage in storages)
         {
             if (storage.Container == null) continue;
-            storage.Container.TryInsertStack(_autoFillItemId, _autoFillCount);
-            Debug.Log($"spawner: auto-filled {storage.name} with {_autoFillItemId} x{_autoFillCount}");
+            storage.Container.TryInsertStack(_testFillItemId, _testFillCount);
+            storageCount++;
         }
 
         var machines = FindObjectsByType<NetworkMachine>(FindObjectsSortMode.None);
@@ -60,9 +68,11 @@ public class TestItemSpawner : NetworkBehaviour
         {
             if (string.IsNullOrEmpty(machine.ActiveRecipeId))
             {
-                machine.CmdSetRecipe(_defaultRecipeId);
-                Debug.Log($"spawner: set {machine.name} recipe to {_defaultRecipeId}");
+                machine.CmdSetRecipe(_testRecipeId);
+                machineCount++;
             }
         }
+
+        Debug.Log($"TEST: filled {storageCount} storage with {_testFillItemId} x{_testFillCount}, set recipe on {machineCount} machines to {_testRecipeId}");
     }
 }
