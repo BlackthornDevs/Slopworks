@@ -565,7 +565,7 @@ public class GridManager : NetworkBehaviour
 
             if (source == null || destination == null)
             {
-                Debug.Log($"belt: port at {endpointPos} has no simulation owner, skipping connection");
+                Debug.LogWarning($"belt: port at {endpointPos} has no simulation owner, skipping connection");
                 continue;
             }
 
