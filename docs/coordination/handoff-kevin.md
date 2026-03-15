@@ -42,8 +42,16 @@ Last commit: 31d79eb Fix support height gap -- use actual cylinder mesh height
 4. **Machine/Storage UI** -- recipe selection and status display for multiplayer
 5. **Belt item visuals** -- upgrade from orange cubes to item-specific meshes
 
+## Known bugs (from 2026-03-15 playtesting)
+
+1. **Item flow direction wrong** -- items on belts travel in the direction the belt was drawn, not based on which end is Input vs Output. When flipBeltPorts is true, the BeltSegment still moves items start-to-end regardless of port assignment. Need to check whether adapters or BeltSegment flow direction needs to account for the flip.
+
+2. **Curved belt item visuals go point-to-point** -- items on curved belts travel in straight lines between waypoints instead of following the spline mesh. They float in mid-air on curves. Compare how BeltSplineMeshBaker evaluates the spline vs how GetItemWorldPositions evaluates it -- they should use the same method.
+
+3. **Delete tool doesn't always work** -- sometimes clicking a placed building with the delete tool does nothing. Not yet reproducible consistently. User needs more time to identify the pattern. Could be raycast layer issues, collider gaps, or PlacementInfo lookup failures.
+
 ## Blockers or decisions needed
-- None
+- Three bugs above need investigation before belt system is shippable
 
 ## Test status
 - Tests not run via MCP (corrupts FishNet DefaultPrefabObjects)
