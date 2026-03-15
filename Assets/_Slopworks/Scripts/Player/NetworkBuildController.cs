@@ -1381,6 +1381,26 @@ public class NetworkBuildController : NetworkBehaviour
             var startDir = _beltStartDir;  // R-key direction, never overridden
             bool isValid;
 
+            // Per-endpoint port compatibility: belt port must be opposite to the port it connects to
+            bool portDirectionRejected = false;
+            {
+                var beltStartPortDir = _beltFlipPorts ? BeltPortDirection.Output : BeltPortDirection.Input;
+                var beltEndPortDir = _beltFlipPorts ? BeltPortDirection.Input : BeltPortDirection.Output;
+
+                if (_beltStartFromPort)
+                {
+                    var startPort = FindNearbyPort(_beltStartPos, true, 0.6f);
+                    if (startPort != null && startPort.Direction == beltStartPortDir)
+                        portDirectionRejected = true;
+                }
+                if (endFromPort)
+                {
+                    var endPort = FindNearbyPort(endPos, false, 0.6f);
+                    if (endPort != null && endPort.Direction == beltEndPortDir)
+                        portDirectionRejected = true;
+                }
+            }
+
             // Grid snap free endpoints
             if (!endFromPort)
             {
@@ -1505,6 +1525,9 @@ public class NetworkBuildController : NetworkBehaviour
                     isValid = BeltRouteBuilder.ValidateRoute(testWaypoints, startDir, endDir);
                 }
             }
+
+            if (portDirectionRejected)
+                isValid = false;
 
             // Ghost support at end position
             if (!endFromPort)
