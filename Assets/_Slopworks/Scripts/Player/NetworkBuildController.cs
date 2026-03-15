@@ -55,6 +55,7 @@ public class NetworkBuildController : NetworkBehaviour
     private bool _beltEndFromPort;
     private bool _beltFlipPorts;         // true when starting from an Input port (swap belt Input/Output ends)
     private BeltRoutingMode _beltRoutingMode = BeltRoutingMode.Default;
+    private float _beltSupportHeightOffset; // PgUp/PgDn height adjustment for belt supports
     private GameObject _beltPreviewLine;
     private LineRenderer _beltLineRenderer;
 
@@ -676,6 +677,7 @@ public class NetworkBuildController : NetworkBehaviour
         CancelAllPending();
         _currentTool = tool;
         _nudgeOffset = 0f;
+        _beltSupportHeightOffset = 0f;
         if (tool == BuildTool.Machine || tool == BuildTool.Storage)
             _placeRotation = 0;
         _peerSnapMode = false;
@@ -1230,6 +1232,23 @@ public class NetworkBuildController : NetworkBehaviour
         if (mouse == null) return;
         var ray = cam.ScreenPointToRay(mouse.position.ReadValue());
 
+        // PgUp/PgDn: adjust belt support height offset (only while placing)
+        if (_beltState != BeltPlacementState.Idle)
+        {
+            bool shift = Keyboard.current != null && Keyboard.current.leftShiftKey.isPressed;
+            float step = shift ? 0.25f : 0.5f;
+            if (build.NudgeUp.WasPressedThisFrame())
+            {
+                _beltSupportHeightOffset += step;
+                Debug.Log($"belt: support height offset {_beltSupportHeightOffset:+0.0;-0.0}m");
+            }
+            if (build.NudgeDown.WasPressedThisFrame())
+            {
+                _beltSupportHeightOffset = Mathf.Max(0f, _beltSupportHeightOffset - step);
+                Debug.Log($"belt: support height offset {_beltSupportHeightOffset:+0.0;-0.0}m");
+            }
+        }
+
         switch (_beltState)
         {
             case BeltPlacementState.Idle:
@@ -1276,7 +1295,7 @@ public class NetworkBuildController : NetworkBehaviour
                 }
                 _beltLineRenderer.positionCount = 2;
                 var anchorPos = new Vector3(previewPos.x,
-                    previewPos.y + GridManager.Instance.SupportAnchorHeight,
+                    previewPos.y + GridManager.Instance.SupportAnchorHeight + _beltSupportHeightOffset,
                     previewPos.z);
                 _beltLineRenderer.SetPosition(0, anchorPos);
                 _beltLineRenderer.SetPosition(1, anchorPos + previewDir * 1f);
@@ -1311,7 +1330,7 @@ public class NetworkBuildController : NetworkBehaviour
                 pos.z = Mathf.Round(pos.z);
             }
             _beltStartGroundPos = pos;
-            _beltStartPos = fromPort ? pos : new Vector3(pos.x, pos.y + GridManager.Instance.SupportAnchorHeight, pos.z);
+            _beltStartPos = fromPort ? pos : new Vector3(pos.x, pos.y + GridManager.Instance.SupportAnchorHeight + _beltSupportHeightOffset, pos.z);
             _beltStartDir = dir;
             _beltStartFromPort = fromPort;
 
@@ -1371,6 +1390,7 @@ public class NetworkBuildController : NetworkBehaviour
             if (build.Remove.WasPressedThisFrame())
             {
                 _beltState = BeltPlacementState.Idle;
+                _beltSupportHeightOffset = 0f;
                 if (_beltPreviewLine != null)
                     _beltPreviewLine.SetActive(false);
                 HideSupportGhosts();
@@ -1410,7 +1430,7 @@ public class NetworkBuildController : NetworkBehaviour
 
             var endGroundPos = endPos;
             if (!endFromPort)
-                endPos.y += GridManager.Instance.SupportAnchorHeight;
+                endPos.y += GridManager.Instance.SupportAnchorHeight + _beltSupportHeightOffset;
 
             // Derive end direction from spatial relationship (all modes)
             if (!endFromPort)
@@ -1582,6 +1602,7 @@ public class NetworkBuildController : NetworkBehaviour
                     flipBeltPorts: _beltFlipPorts);
 
                 _beltState = BeltPlacementState.Idle;
+                _beltSupportHeightOffset = 0f;
                 _beltPreviewLine.SetActive(false);
                 HideSupportGhosts();
             }
@@ -1593,6 +1614,7 @@ public class NetworkBuildController : NetworkBehaviour
         if (build.Remove.WasPressedThisFrame())
         {
             _beltState = BeltPlacementState.Idle;
+            _beltSupportHeightOffset = 0f;
             if (_beltPreviewLine != null)
                 _beltPreviewLine.SetActive(false);
             HideSupportGhosts();
@@ -2064,6 +2086,7 @@ public class NetworkBuildController : NetworkBehaviour
     private void CancelBeltPlacement()
     {
         _beltState = BeltPlacementState.Idle;
+        _beltSupportHeightOffset = 0f;
         if (_beltPreviewLine != null)
             _beltPreviewLine.SetActive(false);
         if (_beltStartSupportGhost != null) _beltStartSupportGhost.SetActive(false);
