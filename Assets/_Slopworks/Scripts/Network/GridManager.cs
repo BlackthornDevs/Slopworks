@@ -381,6 +381,7 @@ public class GridManager : NetworkBehaviour
     public void CmdPlaceBelt(Vector3 startPos, Vector3 startDir, Vector3 endPos, Vector3 endDir,
         byte tier = 0, int variant = 0, byte routingMode = 0,
         bool startFromPort = true, bool endFromPort = true,
+        bool flipBeltPorts = false,
         NetworkConnection sender = null)
     {
         if (!IsServerInitialized) return;
@@ -443,8 +444,10 @@ public class GridManager : NetworkBehaviour
         if (netBelt != null && _factorySimulation != null)
             _factorySimulation.RegisterBelt(netBelt);
 
-        AddBeltPort(go, beltStartPos, -startDir, BeltPortDirection.Input, 0);
-        AddBeltPort(go, beltEndPos, endDir, BeltPortDirection.Output, 0);
+        var startPortDir = flipBeltPorts ? BeltPortDirection.Output : BeltPortDirection.Input;
+        var endPortDir = flipBeltPorts ? BeltPortDirection.Input : BeltPortDirection.Output;
+        AddBeltPort(go, beltStartPos, -startDir, startPortDir, 0);
+        AddBeltPort(go, beltEndPos, endDir, endPortDir, 0);
 
         // Register belt connections on nearby snap anchors and existing belt ports
         RegisterBeltOnNearbyAnchor(go, beltStartPos, 0.6f);

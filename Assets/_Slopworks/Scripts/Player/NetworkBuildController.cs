@@ -53,7 +53,7 @@ public class NetworkBuildController : NetworkBehaviour
     private Vector3 _beltStartDir;
     private bool _beltStartFromPort;
     private bool _beltEndFromPort;
-    private Vector3 _beltEndPortFacing;  // actual awayFromMachine direction for end port (zero if no port)
+    private bool _beltFlipPorts;         // true when starting from an Input port (swap belt Input/Output ends)
     private BeltRoutingMode _beltRoutingMode = BeltRoutingMode.Default;
     private GameObject _beltPreviewLine;
     private LineRenderer _beltLineRenderer;
@@ -1314,6 +1314,16 @@ public class NetworkBuildController : NetworkBehaviour
             _beltStartPos = fromPort ? pos : new Vector3(pos.x, pos.y + GridManager.Instance.SupportAnchorHeight, pos.z);
             _beltStartDir = dir;
             _beltStartFromPort = fromPort;
+
+            // Determine port flip: if starting from an Input port, swap belt Input/Output ends
+            _beltFlipPorts = false;
+            if (fromPort)
+            {
+                var startPort = FindNearbyPort(pos, true, 0.6f);
+                if (startPort != null && startPort.Direction == BeltPortDirection.Input)
+                    _beltFlipPorts = true;
+            }
+
             _beltState = BeltPlacementState.Dragging;
 
             // Show ghost support at start if placing on ground
@@ -1545,7 +1555,8 @@ public class NetworkBuildController : NetworkBehaviour
                     endDir,
                     routingMode: (byte)_beltRoutingMode,
                     startFromPort: _beltStartFromPort,
-                    endFromPort: endFromPort);
+                    endFromPort: endFromPort,
+                    flipBeltPorts: _beltFlipPorts);
 
                 _beltState = BeltPlacementState.Idle;
                 _beltPreviewLine.SetActive(false);
