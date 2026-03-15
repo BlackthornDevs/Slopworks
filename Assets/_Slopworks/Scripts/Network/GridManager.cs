@@ -455,6 +455,12 @@ public class GridManager : NetworkBehaviour
         if (startFromPort) RegisterBeltOnNearbyPorts(go, beltStartPos, 0.6f);
         if (endFromPort) RegisterBeltOnNearbyPorts(go, beltEndPos, 0.6f);
 
+        // Wire simulation connections for item flow
+        if (startFromPort)
+            WireBeltSimulationConnection(netBelt, beltStartPos, startPortDir, 0.6f);
+        if (endFromPort)
+            WireBeltSimulationConnection(netBelt, beltEndPos, endPortDir, 0.6f);
+
         Debug.Log($"grid: {mode} belt placed from {beltStartPos} to {beltEndPos} route={arcLength:F1}m by {sender?.ClientId}");
     }
 
@@ -500,6 +506,72 @@ public class GridManager : NetworkBehaviour
             // Skip ports that belong to this belt
             if (port.transform.IsChildOf(belt.transform)) continue;
             port.Connect(belt);
+        }
+    }
+
+    /// <summary>
+    /// Create a simulation connection (IItemSource/IItemDestination) between the belt
+    /// endpoint and the nearest matching port owner (machine, storage, or another belt).
+    /// Called after RegisterBeltOnNearbyPorts to wire up item flow, not just visual links.
+    /// </summary>
+    private void WireBeltSimulationConnection(
+        NetworkBeltSegment netBelt, Vector3 endpointPos, BeltPortDirection beltPortDir, float radius)
+    {
+        if (_factorySimulation?.Simulation?.BeltNetwork == null) return;
+        if (netBelt?.Segment == null) return;
+
+        var colliders = Physics.OverlapSphere(endpointPos, radius, 1 << PhysicsLayers.BeltPorts);
+        foreach (var col in colliders)
+        {
+            var port = col.GetComponentInParent<BeltPort>();
+            if (port == null) continue;
+            if (port.transform.IsChildOf(netBelt.transform)) continue;
+
+            // Belt Output connects to nearby Input, belt Input connects to nearby Output
+            if (beltPortDir == BeltPortDirection.Output && port.Direction != BeltPortDirection.Input)
+                continue;
+            if (beltPortDir == BeltPortDirection.Input && port.Direction != BeltPortDirection.Output)
+                continue;
+
+            IItemSource source = null;
+            IItemDestination destination = null;
+
+            var netMachine = port.GetComponentInParent<NetworkMachine>();
+            var netStorage = port.GetComponentInParent<NetworkStorage>();
+            var otherBelt = port.GetComponentInParent<NetworkBeltSegment>();
+
+            if (beltPortDir == BeltPortDirection.Output)
+            {
+                source = new BeltOutputAdapter(netBelt.Segment);
+
+                if (netMachine?.Machine != null)
+                    destination = new MachineInputAdapter(netMachine.Machine, port.SlotIndex);
+                else if (netStorage?.Container != null)
+                    destination = netStorage.Container;
+                else if (otherBelt?.Segment != null)
+                    destination = new BeltInputAdapter(otherBelt.Segment);
+            }
+            else
+            {
+                destination = new BeltInputAdapter(netBelt.Segment);
+
+                if (netMachine?.Machine != null)
+                    source = new MachineOutputAdapter(netMachine.Machine, port.SlotIndex);
+                else if (netStorage?.Container != null)
+                    source = netStorage.Container;
+                else if (otherBelt?.Segment != null)
+                    source = new BeltOutputAdapter(otherBelt.Segment);
+            }
+
+            if (source == null || destination == null)
+            {
+                Debug.LogWarning($"belt: port at {endpointPos} has no simulation owner, skipping connection");
+                continue;
+            }
+
+            _factorySimulation.Simulation.BeltNetwork.Connect(source, destination);
+            Debug.Log($"belt: wired {beltPortDir} at {endpointPos} to {port.Direction} on {port.transform.parent?.name}");
+            return; // one connection per endpoint
         }
     }
 

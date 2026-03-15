@@ -9,6 +9,8 @@ public class BeltInputAdapter : IItemDestination
     private readonly BeltSegment _belt;
     private readonly ushort _minSpacing;
 
+    public BeltSegment Belt => _belt;
+
     /// <param name="belt">The belt segment to insert into.</param>
     /// <param name="minSpacing">Minimum subdivisions required before the first item on the belt. Defaults to 50.</param>
     public BeltInputAdapter(BeltSegment belt, ushort minSpacing = 50)

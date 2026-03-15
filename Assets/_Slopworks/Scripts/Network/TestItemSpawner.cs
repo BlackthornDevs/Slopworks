@@ -1,5 +1,6 @@
 using FishNet.Object;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 public class TestItemSpawner : NetworkBehaviour
 {
@@ -8,10 +9,23 @@ public class TestItemSpawner : NetworkBehaviour
     [SerializeField] private Vector3 _spawnCenter = new(50f, 0.5f, 50f);
     [SerializeField] private float _spawnRadius = 5f;
 
+    [Header("TEST: Fill Storage (T key)")]
+    [SerializeField] private string _testFillItemId = "iron_scrap";
+    [SerializeField] private int _testFillCount = 20;
+    [SerializeField] private string _testRecipeId = "smelt_iron";
+
     public override void OnStartServer()
     {
         base.OnStartServer();
         SpawnTestItems();
+    }
+
+    private void Update()
+    {
+        if (!IsServerInitialized) return;
+
+        if (Keyboard.current != null && Keyboard.current.tKey.wasPressedThisFrame)
+            TestFillStorageAndRecipes();
     }
 
     private void SpawnTestItems()
@@ -34,5 +48,31 @@ public class TestItemSpawner : NetworkBehaviour
 
             Debug.Log($"spawner: {worldItem.ItemId} x{worldItem.Count} at {pos}");
         }
+    }
+
+    private void TestFillStorageAndRecipes()
+    {
+        int storageCount = 0;
+        int machineCount = 0;
+
+        var storages = FindObjectsByType<NetworkStorage>(FindObjectsSortMode.None);
+        foreach (var storage in storages)
+        {
+            if (storage.Container == null) continue;
+            storage.Container.TryInsertStack(_testFillItemId, _testFillCount);
+            storageCount++;
+        }
+
+        var machines = FindObjectsByType<NetworkMachine>(FindObjectsSortMode.None);
+        foreach (var machine in machines)
+        {
+            if (string.IsNullOrEmpty(machine.ActiveRecipeId))
+            {
+                machine.CmdSetRecipe(_testRecipeId);
+                machineCount++;
+            }
+        }
+
+        Debug.Log($"TEST: filled {storageCount} storage with {_testFillItemId} x{_testFillCount}, set recipe on {machineCount} machines to {_testRecipeId}");
     }
 }

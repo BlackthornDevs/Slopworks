@@ -116,6 +116,7 @@ MonoBehaviour:
   _direction: 1
   _slotIndex: 0
   _slotLabel: 
+  _maxConnections: 1
 --- !u!135 &7722009138817096590
 SphereCollider:
   m_ObjectHideFlags: 0
@@ -321,6 +322,7 @@ MonoBehaviour:
   _direction: 0
   _slotIndex: 0
   _slotLabel: 
+  _maxConnections: 1
 --- !u!135 &2186359308139539830
 SphereCollider:
   m_ObjectHideFlags: 0
@@ -586,6 +588,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 7338081ba5c47b84eb1901ebc9162d28, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1641591714844032696}
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 7338081ba5c47b84eb1901ebc9162d28, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1102645456997732838}
   m_SourcePrefab: {fileID: 100100000, guid: 7338081ba5c47b84eb1901ebc9162d28, type: 3}
 --- !u!4 &7045750514484976655 stripped
 Transform:
@@ -609,9 +614,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8a6a39c46bf52104ba8efe3100bce3f7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: FishNet.Runtime::FishNet.Object.EmptyNetworkBehaviour
-  _componentIndexCache: 255
+  _componentIndexCache: 0
   _addedNetworkObject: {fileID: 1641591714844032696}
-  _networkObjectCache: {fileID: 0}
+  _networkObjectCache: {fileID: 1641591714844032696}
 --- !u!114 &1641591714844032696
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -630,7 +635,8 @@ MonoBehaviour:
   <ComponentIndex>k__BackingField: 0
   <PredictedSpawn>k__BackingField: {fileID: 0}
   <PredictedOwner>k__BackingField: {fileID: 0}
-  NetworkBehaviours: []
+  NetworkBehaviours:
+  - {fileID: 7474118918504515880}
   InitializedParentNetworkBehaviour: {fileID: 0}
   InitializedNestedNetworkObjects: []
   RuntimeParentNetworkBehaviour: {fileID: 0}
@@ -641,7 +647,7 @@ MonoBehaviour:
   _initializeOrder: 0
   _preventDespawnOnDisconnect: 0
   _defaultDespawnType: 0
-  _initializedTimestamp: 0
+  _initializedTimestamp: -8584280625504548510
   NetworkObserver: {fileID: 0}
   _enablePrediction: 0
   _predictionType: 0
@@ -657,12 +663,27 @@ MonoBehaviour:
   _spectatorInterpolation: 2
   _enableTeleport: 0
   _teleportThreshold: 1
-  <PrefabId>k__BackingField: 65535
+  <PrefabId>k__BackingField: 3
   <SpawnableCollectionId>k__BackingField: 0
   <AssetPathHash>k__BackingField: 3749552755259558511
   SceneId: 0
   SerializedTransformProperties:
-    Position: {x: 0, y: 0, z: 0}
-    Rotation: {x: 0, y: 0, z: 0, w: 0}
-    Scale: {x: 0, y: 0, z: 0}
-    IsValid: 0
+    Position: {x: 869.9799, y: 0.00002324276, z: 867.16455}
+    Rotation: {x: 0, y: 0, z: 0, w: 1}
+    Scale: {x: 1, y: 1, z: 1}
+    IsValid: 1
+--- !u!114 &1102645456997732838
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7677608702103733941}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c0406b4ec8e043a4095454389772feb6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Slopworks.Runtime::NetworkMachine
+  _componentIndexCache: 255
+  _addedNetworkObject: {fileID: 1641591714844032696}
+  _networkObjectCache: {fileID: 0}

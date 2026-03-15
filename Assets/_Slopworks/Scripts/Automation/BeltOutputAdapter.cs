@@ -9,6 +9,8 @@ public class BeltOutputAdapter : IItemSource
 {
     private readonly BeltSegment _belt;
 
+    public BeltSegment Belt => _belt;
+
     public BeltOutputAdapter(BeltSegment belt)
     {
         _belt = belt ?? throw new ArgumentNullException(nameof(belt));
