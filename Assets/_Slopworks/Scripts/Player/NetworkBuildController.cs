@@ -1246,7 +1246,7 @@ public class NetworkBuildController : NetworkBehaviour
             float step = shift ? 0.25f : 0.5f;
             if (build.NudgeUp.WasPressedThisFrame())
             {
-                if (_beltState == BeltPlacementState.PickingStart)
+                if (_beltState == BeltPlacementState.Idle)
                 {
                     _beltStartHeightOffset += step;
                     Debug.Log($"belt: start height {_beltStartHeightOffset:+0.0;-0.0}m");
@@ -1259,7 +1259,7 @@ public class NetworkBuildController : NetworkBehaviour
             }
             if (build.NudgeDown.WasPressedThisFrame())
             {
-                if (_beltState == BeltPlacementState.PickingStart)
+                if (_beltState == BeltPlacementState.Idle)
                 {
                     _beltStartHeightOffset = Mathf.Max(0f, _beltStartHeightOffset - step);
                     Debug.Log($"belt: start height {_beltStartHeightOffset:+0.0;-0.0}m");
