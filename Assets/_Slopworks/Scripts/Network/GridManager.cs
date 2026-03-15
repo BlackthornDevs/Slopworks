@@ -382,7 +382,8 @@ public class GridManager : NetworkBehaviour
         byte tier = 0, int variant = 0, byte routingMode = 0,
         bool startFromPort = true, bool endFromPort = true,
         bool flipBeltPorts = false,
-        float supportHeightOffset = 0f,
+        float startHeightOffset = 0f,
+        float endHeightOffset = 0f,
         NetworkConnection sender = null)
     {
         if (!IsServerInitialized) return;
@@ -395,9 +396,9 @@ public class GridManager : NetworkBehaviour
         var beltEndPos = endPos;
 
         if (!startFromPort)
-            beltStartPos = SpawnSupportAt(startPos, Quaternion.LookRotation(startDir), supportHeightOffset, sender);
+            beltStartPos = SpawnSupportAt(startPos, Quaternion.LookRotation(startDir), startHeightOffset, sender);
         if (!endFromPort)
-            beltEndPos = SpawnSupportAt(endPos, Quaternion.LookRotation(endDir), supportHeightOffset, sender);
+            beltEndPos = SpawnSupportAt(endPos, Quaternion.LookRotation(endDir), endHeightOffset, sender);
 
         // Server is final authority -- validate without bypasses
         var validation = BeltRouteBuilder.Validate(beltStartPos, startDir, beltEndPos, endDir);
