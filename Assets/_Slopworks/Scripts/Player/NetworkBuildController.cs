@@ -1602,7 +1602,8 @@ public class NetworkBuildController : NetworkBehaviour
                     routingMode: (byte)_beltRoutingMode,
                     startFromPort: _beltStartFromPort,
                     endFromPort: endFromPort,
-                    flipBeltPorts: _beltFlipPorts);
+                    flipBeltPorts: _beltFlipPorts,
+                    supportHeightOffset: _beltSupportHeightOffset);
 
                 _beltState = BeltPlacementState.Idle;
                 _beltSupportHeightOffset = 0f;
