@@ -18,6 +18,7 @@ public class GridManager : NetworkBehaviour
     /// Belt endpoints on open ground are raised by this amount.
     /// </summary>
     public float SupportAnchorHeight { get; private set; }
+    public float SupportPoleHeight { get; private set; }
 
     private static readonly Vector2Int[] CardinalDirs =
         { Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right };
@@ -107,7 +108,19 @@ public class GridManager : NetworkBehaviour
         {
             var anchor = supportPrefab.GetComponentInChildren<BeltSnapAnchor>();
             SupportAnchorHeight = anchor != null ? anchor.transform.localPosition.y : 1.075f;
-            Debug.Log($"grid: support anchor height = {SupportAnchorHeight:F3}");
+
+            // Read cylinder mesh height for correct scaling
+            SupportPoleHeight = SupportAnchorHeight; // fallback
+            foreach (Transform child in supportPrefab.transform)
+            {
+                var mf = child.GetComponent<MeshFilter>();
+                if (mf != null && mf.sharedMesh != null && mf.sharedMesh.name.Contains("3155"))
+                {
+                    SupportPoleHeight = mf.sharedMesh.bounds.size.y;
+                    break;
+                }
+            }
+            Debug.Log($"grid: support anchor height = {SupportAnchorHeight:F3}, pole mesh height = {SupportPoleHeight:F3}");
         }
     }
 
@@ -628,7 +641,7 @@ public class GridManager : NetworkBehaviour
                 string meshName = meshFilter.sharedMesh != null ? meshFilter.sharedMesh.name : "";
 
                 if (meshName.Contains("3155"))
-                    child.localScale = new Vector3(1f, 1f + (heightOffset / SupportAnchorHeight), 1f);
+                    child.localScale = new Vector3(1f, 1f + (heightOffset / SupportPoleHeight), 1f);
                 else if (meshName.Contains("3029"))
                     child.localPosition = new Vector3(child.localPosition.x, child.localPosition.y + heightOffset, child.localPosition.z);
             }

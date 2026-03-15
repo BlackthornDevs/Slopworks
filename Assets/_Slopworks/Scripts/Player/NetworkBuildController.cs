@@ -2264,8 +2264,8 @@ public class NetworkBuildController : NetworkBehaviour
 
             if (meshName.Contains("3155")) // Cylinder pole
             {
-                float defaultHeight = GridManager.Instance.SupportAnchorHeight;
-                child.localScale = new Vector3(1f, 1f + (heightOffset / defaultHeight), 1f);
+                float poleHeight = GridManager.Instance.SupportPoleHeight;
+                child.localScale = new Vector3(1f, 1f + (heightOffset / poleHeight), 1f);
             }
             else if (meshName.Contains("3029")) // Top piece
             {
