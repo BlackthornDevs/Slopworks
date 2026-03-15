@@ -9,8 +9,6 @@ using System.Collections.Generic;
 /// </summary>
 public class BeltNetwork
 {
-    private const ushort DefaultInsertSpacing = 50;
-
     private struct BeltConnection
     {
         public IItemSource Source;
@@ -73,6 +71,21 @@ public class BeltNetwork
             if (conn.Source is BeltOutputAdapter outputAdapter &&
                 conn.Destination is BeltInputAdapter inputAdapter &&
                 outputAdapter.Belt == from && inputAdapter.Belt == to)
+            {
+                _connections.RemoveAt(i);
+                return;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Remove a connection by source/destination reference.
+    /// </summary>
+    public void Disconnect(IItemSource source, IItemDestination destination)
+    {
+        for (int i = _connections.Count - 1; i >= 0; i--)
+        {
+            if (_connections[i].Source == source && _connections[i].Destination == destination)
             {
                 _connections.RemoveAt(i);
                 return;
