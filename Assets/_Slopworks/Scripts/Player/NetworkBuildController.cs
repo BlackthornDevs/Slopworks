@@ -59,6 +59,10 @@ public class NetworkBuildController : NetworkBehaviour
     private GameObject _beltPreviewLine;
     private LineRenderer _beltLineRenderer;
 
+    // Belt ghost mesh preview
+    private GameObject _beltGhostMesh;
+    private Material _beltGhostMaterial;
+
     // Belt support ghosts
     private GameObject _beltStartSupportGhost;
     private GameObject _beltEndSupportGhost;
@@ -743,6 +747,7 @@ public class NetworkBuildController : NetworkBehaviour
         DestroyGhost();
         DestroyGhostPool(_ghostPool);
         DestroyGhostPool(_zoopGhosts);
+        if (_beltGhostMesh != null) { Destroy(_beltGhostMesh); _beltGhostMesh = null; }
         if (_beltStartSupportGhost != null) { Destroy(_beltStartSupportGhost); _beltStartSupportGhost = null; }
         if (_beltEndSupportGhost != null) { Destroy(_beltEndSupportGhost); _beltEndSupportGhost = null; }
     }
@@ -1311,6 +1316,8 @@ public class NetworkBuildController : NetworkBehaviour
                     _beltStartSupportGhost.SetActive(false);
                 if (_beltPreviewLine != null)
                     _beltPreviewLine.SetActive(false);
+                if (_beltGhostMesh != null)
+                    _beltGhostMesh.SetActive(false);
             }
         }
         else
@@ -1319,6 +1326,8 @@ public class NetworkBuildController : NetworkBehaviour
                 _beltStartSupportGhost.SetActive(false);
             if (_beltPreviewLine != null)
                 _beltPreviewLine.SetActive(false);
+            if (_beltGhostMesh != null)
+                _beltGhostMesh.SetActive(false);
         }
 
         if (!build.Place.WasPressedThisFrame()) return;
@@ -1388,6 +1397,8 @@ public class NetworkBuildController : NetworkBehaviour
                 ApplyGhostColor(_beltStartSupportGhost, Color.red);
             if (_beltEndSupportGhost != null)
                 _beltEndSupportGhost.SetActive(false);
+            if (_beltGhostMesh != null)
+                _beltGhostMesh.SetActive(false);
 
             if (build.Remove.WasPressedThisFrame())
             {
@@ -1395,6 +1406,8 @@ public class NetworkBuildController : NetworkBehaviour
                 _beltSupportHeightOffset = 0f;
                 if (_beltPreviewLine != null)
                     _beltPreviewLine.SetActive(false);
+                if (_beltGhostMesh != null)
+                    _beltGhostMesh.SetActive(false);
                 HideSupportGhosts();
             }
             return;
@@ -1577,9 +1590,22 @@ public class NetworkBuildController : NetworkBehaviour
             if (_beltEndSupportGhost != null && _beltEndSupportGhost.activeSelf)
                 ApplyGhostColor(_beltEndSupportGhost, color);
 
-            // Preview line (at anchor height) -- all modes use waypoints
+            // Ghost mesh preview (at anchor height)
             {
                 var waypoints = BeltRouteBuilder.Build(_beltStartPos, startDir, endPos, endDir, _beltRoutingMode);
+
+                if (_beltGhostMesh == null)
+                {
+                    _beltGhostMesh = new GameObject("BeltGhostMesh");
+                    _beltGhostMesh.layer = PhysicsLayers.Decal;
+                }
+                _beltGhostMesh.SetActive(true);
+
+                var ghostMat = EnsureBeltGhostMaterial();
+                ghostMat.color = isValid ? new Color(0f, 1f, 0f, 0.5f) : new Color(1f, 0f, 0f, 0.5f);
+                BeltSplineMeshBaker.BakeMesh(_beltGhostMesh, waypoints, ghostMat);
+
+                // Also update line renderer for backup visibility
                 float routeLen = BeltRouteBuilder.ComputeRouteLength(waypoints);
                 for (int i = 0; i < 30; i++)
                 {
@@ -1608,6 +1634,8 @@ public class NetworkBuildController : NetworkBehaviour
                 _beltState = BeltPlacementState.Idle;
                 _beltSupportHeightOffset = 0f;
                 _beltPreviewLine.SetActive(false);
+                if (_beltGhostMesh != null)
+                    _beltGhostMesh.SetActive(false);
                 HideSupportGhosts();
             }
 
@@ -1621,6 +1649,8 @@ public class NetworkBuildController : NetworkBehaviour
             _beltSupportHeightOffset = 0f;
             if (_beltPreviewLine != null)
                 _beltPreviewLine.SetActive(false);
+            if (_beltGhostMesh != null)
+                _beltGhostMesh.SetActive(false);
             HideSupportGhosts();
         }
     }
@@ -2093,6 +2123,8 @@ public class NetworkBuildController : NetworkBehaviour
         _beltSupportHeightOffset = 0f;
         if (_beltPreviewLine != null)
             _beltPreviewLine.SetActive(false);
+        if (_beltGhostMesh != null)
+            _beltGhostMesh.SetActive(false);
         if (_beltStartSupportGhost != null) _beltStartSupportGhost.SetActive(false);
         if (_beltEndSupportGhost != null) _beltEndSupportGhost.SetActive(false);
         DestroyGhost();
@@ -2221,6 +2253,15 @@ public class NetworkBuildController : NetworkBehaviour
         var anchor = supportGhost.GetComponentInChildren<BeltSnapAnchor>();
         if (anchor != null)
             anchor.transform.localPosition = new Vector3(anchor.transform.localPosition.x, 1f + heightOffset, anchor.transform.localPosition.z);
+    }
+
+    private Material EnsureBeltGhostMaterial()
+    {
+        if (_beltGhostMaterial != null) return _beltGhostMaterial;
+        var shader = Shader.Find("Sprites/Default");
+        _beltGhostMaterial = new Material(shader);
+        _beltGhostMaterial.color = new Color(0f, 1f, 0f, 0.5f);
+        return _beltGhostMaterial;
     }
 
     private void HideSupportGhosts()
