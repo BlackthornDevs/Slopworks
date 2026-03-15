@@ -324,4 +324,134 @@ public class BeltNetworkTests
         Assert.IsTrue(a.IsEmpty);
         Assert.AreEqual(2, b.ItemCount);
     }
+
+    // -- Generalized connections (IItemSource / IItemDestination) --
+
+    private MachineDefinitionSO CreateMachineDefinition()
+    {
+        var def = UnityEngine.ScriptableObject.CreateInstance<MachineDefinitionSO>();
+        def.machineId = "test_smelter";
+        def.machineType = "smelter";
+        def.size = UnityEngine.Vector2Int.one;
+        def.inputBufferSize = 1;
+        def.outputBufferSize = 1;
+        def.processingSpeed = 1f;
+        return def;
+    }
+
+    [Test]
+    public void Connect_SourceAndDestination_IsConnectedReturnsTrue()
+    {
+        var network = new BeltNetwork();
+        var belt = CreateBelt();
+        var source = new BeltOutputAdapter(belt);
+        var def = CreateMachineDefinition();
+        var machine = new Machine(def);
+        var dest = new MachineInputAdapter(machine, 0);
+
+        network.Connect(source, dest);
+
+        Assert.AreEqual(1, network.ConnectionCount);
+    }
+
+    [Test]
+    public void Tick_BeltToMachine_TransfersItem()
+    {
+        var network = new BeltNetwork();
+        var belt = CreateBelt();
+        PlaceItemAtEnd(belt, IronOre);
+
+        var def = CreateMachineDefinition();
+        var machine = new Machine(def);
+
+        var source = new BeltOutputAdapter(belt);
+        var dest = new MachineInputAdapter(machine, 0);
+
+        network.Connect(source, dest);
+        network.Tick();
+
+        Assert.IsTrue(belt.IsEmpty, "Belt should be empty after transfer");
+        var inputSlot = machine.GetInput(0);
+        Assert.IsFalse(inputSlot.IsEmpty, "Machine input should have an item");
+        Assert.AreEqual(IronOre, inputSlot.item.definitionId);
+    }
+
+    [Test]
+    public void Tick_MachineToBelt_TransfersItem()
+    {
+        var network = new BeltNetwork();
+        var belt = CreateBelt();
+        var def = CreateMachineDefinition();
+        var machine = new Machine(def);
+
+        // Force an item into machine output
+        machine.ForceOutput(0, ItemInstance.Create(IronOre), 1);
+
+        var source = new MachineOutputAdapter(machine, 0);
+        var dest = new BeltInputAdapter(belt);
+
+        network.Connect(source, dest);
+        network.Tick();
+
+        Assert.IsTrue(machine.GetOutput(0).IsEmpty, "Machine output should be empty after transfer");
+        Assert.AreEqual(1, belt.ItemCount, "Belt should have one item");
+    }
+
+    [Test]
+    public void Tick_BeltToStorage_TransfersItem()
+    {
+        var network = new BeltNetwork();
+        var belt = CreateBelt();
+        PlaceItemAtEnd(belt, IronOre);
+
+        var storage = new StorageContainer(1, 10);
+        var source = new BeltOutputAdapter(belt);
+
+        network.Connect(source, storage);
+        network.Tick();
+
+        Assert.IsTrue(belt.IsEmpty, "Belt should be empty after transfer");
+        Assert.AreEqual(1, storage.GetTotalItemCount(), "Storage should have one item");
+        Assert.AreEqual(IronOre, storage.GetSlot(0).item.definitionId);
+    }
+
+    [Test]
+    public void Tick_StorageToBelt_TransfersItem()
+    {
+        var network = new BeltNetwork();
+        var belt = CreateBelt();
+
+        var storage = new StorageContainer(1, 10);
+        storage.TryInsert(IronOre);
+
+        var dest = new BeltInputAdapter(belt);
+
+        network.Connect(storage, dest);
+        network.Tick();
+
+        Assert.IsTrue(storage.IsEmpty, "Storage should be empty after transfer");
+        Assert.AreEqual(1, belt.ItemCount, "Belt should have one item");
+    }
+
+    [Test]
+    public void Tick_GeneralizedConnection_HoldsItemOnReject()
+    {
+        var network = new BeltNetwork();
+        var belt = CreateBelt();
+        PlaceItemAtEnd(belt, IronOre);
+
+        // Storage with 1 slot, max stack 1 -- fill it so it rejects
+        var storage = new StorageContainer(1, 1);
+        storage.TryInsert(CopperOre);
+        Assert.IsTrue(storage.IsFull, "Storage should be full before test");
+
+        var source = new BeltOutputAdapter(belt);
+
+        network.Connect(source, storage);
+        network.Tick();
+
+        // Item was extracted from belt but storage rejected it -- held in transit
+        Assert.IsTrue(belt.IsEmpty, "Item should be extracted from belt");
+        Assert.AreEqual(1, storage.GetTotalItemCount(), "Storage should still have only the original item");
+    }
 }
